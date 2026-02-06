@@ -399,7 +399,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     }
 
     // Compute P/S and P/E with (now hopefully available) mcap
-    if (ex.mcap && ex.mcap > 0) {
+    // Only compute if exchange has meaningful volume (not dead)
+    if (ex.mcap && ex.mcap > 0 && (ex.total24h || 0) > 0) {
       if (ex.annualizedFees && ex.annualizedFees > 0) {
         ex.psRatio = ex.mcap / ex.annualizedFees
       }
@@ -409,12 +410,70 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     }
   }
 
-  enrichedExchanges.sort(
+  // ── PASS 3: Deduplicate exchanges sharing the same token (geckoId) ──
+  // e.g. dYdX V4 + dYdX V3, GMX V2 + GMX V1, Synthetix v1+v2 + V3
+  // Keep the highest-volume version, aggregate volumes from siblings
+
+  const geckoIdGroups = new Map<string, EnrichedExchange[]>()
+  const deduped: EnrichedExchange[] = []
+
+  for (const ex of enrichedExchanges) {
+    if (ex.geckoId) {
+      if (!geckoIdGroups.has(ex.geckoId)) geckoIdGroups.set(ex.geckoId, [])
+      geckoIdGroups.get(ex.geckoId)!.push(ex)
+    } else {
+      deduped.push(ex)
+    }
+  }
+
+  for (const [, group] of geckoIdGroups) {
+    // Sort by 24h volume desc — primary is the most active version
+    group.sort((a, b) => (b.total24h || 0) - (a.total24h || 0))
+    const primary = { ...group[0] }
+
+    // Aggregate volumes and fees from all versions
+    for (let i = 1; i < group.length; i++) {
+      const sibling = group[i]
+      primary.total24h = (primary.total24h || 0) + (sibling.total24h || 0)
+      primary.total7d = (primary.total7d || 0) + (sibling.total7d || 0)
+      primary.total30d = (primary.total30d || 0) + (sibling.total30d || 0)
+      if (sibling.openInterest > (primary.openInterest || 0)) {
+        primary.openInterest = sibling.openInterest
+      }
+      if (sibling.perpPairsCount != null) {
+        primary.perpPairsCount = (primary.perpPairsCount || 0) + sibling.perpPairsCount
+      }
+      if (sibling.feeData?.total24h) {
+        primary.feeData = primary.feeData || {} as any
+        primary.feeData!.total24h = (primary.feeData?.total24h || 0) + sibling.feeData.total24h
+      }
+    }
+
+    // Recompute P/S, P/E with aggregated fees
+    const aggFees24h = primary.feeData?.total24h || 0
+    if (aggFees24h > 0) {
+      primary.annualizedFees = aggFees24h * 365
+      primary.annualizedRevenue = aggFees24h * 0.3 * 365
+      if (primary.mcap && primary.mcap > 0 && (primary.total24h || 0) > 0) {
+        primary.psRatio = primary.mcap / primary.annualizedFees!
+        primary.peRatio = primary.mcap / primary.annualizedRevenue!
+      }
+    }
+
+    // Recompute volume ratios
+    const vol24 = primary.total24h || 0
+    primary.volumeToTvl = primary.tvl && primary.tvl > 0 ? vol24 / primary.tvl : null
+    primary.volumeToOI = primary.openInterest > 0 ? vol24 / primary.openInterest : null
+
+    deduped.push(primary)
+  }
+
+  deduped.sort(
     (a, b) => (b.total24h || 0) - (a.total24h || 0)
   )
 
-  const tokenExchanges = enrichedExchanges.filter((e) => e.hasToken)
-  const noTokenExchanges = enrichedExchanges.filter((e) => !e.hasToken)
+  const tokenExchanges = deduped.filter((e) => e.hasToken)
+  const noTokenExchanges = deduped.filter((e) => !e.hasToken)
 
   const tokenGroup = buildGroupStats('With Token', tokenExchanges)
   const noTokenGroup = buildGroupStats('Without Token', noTokenExchanges)
@@ -423,7 +482,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     derivativesOverview.totalDataChart || []
   ).map(([date, value]) => ({ date: date * 1000, value }))
 
-  const topExchangeNames = enrichedExchanges.slice(0, 8).map((e) => e.name)
+  const topExchangeNames = deduped.slice(0, 8).map((e) => e.name)
 
   // Use cgMarketData for sparkline token prices too
   const topTokenPrices = cgMarketData
@@ -432,7 +491,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     dexOverview: derivativesOverview,
     protocols: derivativeProtocols,
     feeOverview,
-    enrichedExchanges,
+    enrichedExchanges: deduped,
     tokenGroup,
     noTokenGroup,
     historicalVolume,
