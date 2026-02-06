@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import type { EnrichedExchange } from '../../types'
 import { formatUSD, formatPercent, formatNumber, percentClass, classNames } from '../../utils/format'
 
@@ -20,11 +21,12 @@ const columns: ColumnDef[] = [
   { key: 'total24h', label: '24h Volume', sortable: true, align: 'right' },
   { key: 'total7d', label: '7d Volume', sortable: true, align: 'right' },
   { key: 'total30d', label: '30d Volume', sortable: true, align: 'right' },
-  { key: 'tvl', label: 'TVL', sortable: true, align: 'right' },
+  { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' as const },
+  { key: 'perpPairsCount', label: 'Pairs', sortable: true, align: 'right' as const },
   { key: 'change_1d', label: '1d Change', sortable: true, align: 'right' },
   { key: 'change_7d', label: '7d Change', sortable: true, align: 'right' },
   { key: 'chainCount', label: 'Chains', sortable: true, align: 'right' },
-  { key: 'volumeToTvl', label: 'Vol/TVL', sortable: true, align: 'right' },
+  { key: 'volumeToOI', label: 'Vol/OI', sortable: true, align: 'right' as const },
 ]
 
 function getSortValue(exchange: EnrichedExchange, key: string): number | string {
@@ -37,16 +39,18 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
       return exchange.total7d ?? -Infinity
     case 'total30d':
       return exchange.total30d ?? -Infinity
-    case 'tvl':
-      return exchange.tvl ?? -Infinity
+    case 'openInterest':
+      return exchange.openInterest ?? -Infinity
     case 'change_1d':
       return exchange.change_1d ?? -Infinity
     case 'change_7d':
       return exchange.change_7d ?? -Infinity
     case 'chainCount':
       return exchange.chainCount ?? 0
-    case 'volumeToTvl':
-      return exchange.volumeToTvl ?? -Infinity
+    case 'volumeToOI':
+      return exchange.volumeToOI ?? -Infinity
+    case 'perpPairsCount':
+      return exchange.perpPairsCount ?? -Infinity
     default:
       return 0
   }
@@ -98,7 +102,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         Exchange Rankings
       </h2>
       <p className="font-sans text-sm text-ink-muted mb-6">
-        Top decentralised exchanges by 24-hour trading volume
+        Top perpetual exchanges by 24-hour trading volume
       </p>
 
       <div className="overflow-x-auto border border-rule bg-paper">
@@ -138,7 +142,9 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                 {/* Name + Token Badge */}
                 <td className="px-3 font-sans text-sm font-medium text-ink whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    <span>{exchange.displayName || exchange.name}</span>
+                    <Link to={`/exchange/${exchange.slug}?cgId=${exchange.cgExchangeId || ''}`} className="hover:underline" style={{color: '#2e5e8e'}}>
+                      {exchange.displayName || exchange.name}
+                    </Link>
                     {exchange.hasToken ? (
                       <span className="tag-token">{exchange.tokenSymbol}</span>
                     ) : (
@@ -168,10 +174,17 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                     : '\u2014'}
                 </td>
 
-                {/* TVL */}
+                {/* Open Interest */}
                 <td className="px-3 text-right">
-                  {exchange.tvl != null && exchange.tvl > 0
-                    ? formatUSD(exchange.tvl, true)
+                  {exchange.openInterest != null && exchange.openInterest > 0
+                    ? formatUSD(exchange.openInterest, true)
+                    : '\u2014'}
+                </td>
+
+                {/* Pairs */}
+                <td className="px-3 text-right">
+                  {exchange.perpPairsCount != null
+                    ? formatNumber(exchange.perpPairsCount)
                     : '\u2014'}
                 </td>
 
@@ -196,10 +209,10 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   {formatNumber(exchange.chainCount)}
                 </td>
 
-                {/* Vol/TVL */}
+                {/* Vol/OI */}
                 <td className="px-3 text-right">
-                  {exchange.volumeToTvl != null
-                    ? exchange.volumeToTvl.toFixed(2)
+                  {exchange.volumeToOI != null
+                    ? exchange.volumeToOI.toFixed(2)
                     : '\u2014'}
                 </td>
               </tr>

@@ -71,9 +71,9 @@ export function HistoricalVolumeChart({ data }: Props) {
 
   return (
     <div className="chart-container">
-      <h3 className="chart-title">Aggregate DEX Volume</h3>
+      <h3 className="chart-title">Aggregate Perpetuals Volume</h3>
       <p className="chart-subtitle">
-        Daily trading volume across all decentralised exchanges, USD
+        Daily trading volume across perpetual exchanges, USD
       </p>
       <ResponsiveContainer width="100%" height={400}>
         <AreaChart

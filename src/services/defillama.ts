@@ -6,11 +6,11 @@ import type {
   TokenGroupStats,
   HistoricalDataPoint,
   DashboardData,
-  CoinGeckoMarketData,
 } from '../types'
-
-const LLAMA_BASE = 'https://api.llama.fi'
-const GECKO_BASE = 'https://api.coingecko.com/api/v3'
+import type { DerivativesSummary } from '../types/profile'
+import { LLAMA_BASE } from '../config/api'
+import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices } from './coingecko'
+import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 
 async function fetchJSON<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -18,9 +18,9 @@ async function fetchJSON<T>(url: string): Promise<T> {
   return res.json()
 }
 
-export async function fetchDexOverview(): Promise<DexOverview> {
+export async function fetchDerivativesOverview(): Promise<DexOverview> {
   return fetchJSON<DexOverview>(
-    `${LLAMA_BASE}/overview/dexs?excludeTotalDataChartBreakdown=true`
+    `${LLAMA_BASE}/overview/derivatives?excludeTotalDataChartBreakdown=true`
   )
 }
 
@@ -34,18 +34,10 @@ export async function fetchFeeOverview(): Promise<FeeOverview> {
   )
 }
 
-export async function fetchTopTokenPrices(
-  geckoIds: string[]
-): Promise<CoinGeckoMarketData[]> {
-  if (geckoIds.length === 0) return []
-  const ids = geckoIds.slice(0, 50).join(',')
-  try {
-    return await fetchJSON<CoinGeckoMarketData[]>(
-      `${GECKO_BASE}/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=50&page=1&sparkline=true&price_change_percentage=7d,30d`
-    )
-  } catch {
-    return []
-  }
+export async function fetchDerivativesSummary(slug: string): Promise<DerivativesSummary> {
+  return fetchJSON<DerivativesSummary>(
+    `${LLAMA_BASE}/summary/derivatives/${slug}?excludeTotalDataChartBreakdown=true`
+  )
 }
 
 function median(values: number[]): number {
@@ -96,46 +88,65 @@ function buildGroupStats(
         .filter((e) => e.volumeToTvl != null && isFinite(e.volumeToTvl!))
         .map((e) => e.volumeToTvl!)
     ),
+    totalOI: exchanges.reduce((s, e) => s + (e.openInterest || 0), 0),
+    avgVolumeToOI: avg(
+      exchanges
+        .filter((e) => e.volumeToOI != null && isFinite(e.volumeToOI!))
+        .map((e) => e.volumeToOI!)
+    ),
     exchanges,
   }
 }
 
 export async function fetchDashboardData(): Promise<DashboardData> {
-  const [dexOverview, protocols, feeOverview] = await Promise.all([
-    fetchDexOverview(),
+  const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers] = await Promise.all([
+    fetchDerivativesOverview(),
     fetchProtocols(),
     fetchFeeOverview(),
+    fetchCGDerivativesExchanges(),
+    fetchBTCPrice(),
+    fetchCGDerivativesTickers(),
   ])
 
-  // Build protocol lookup by name (lowercase)
+  // Build protocol lookup
   const protocolMap = new Map<string, ProtocolInfo>()
-  const dexProtocols = protocols.filter(
-    (p) => p.category === 'Dexes' || p.category === 'Dexs'
+  const derivativeProtocols = protocols.filter(
+    (p) => p.category === 'Derivatives' || p.category === 'Dexes' || p.category === 'Dexs'
   )
-  for (const p of dexProtocols) {
+  for (const p of derivativeProtocols) {
     protocolMap.set(p.name.toLowerCase(), p)
     protocolMap.set(p.slug.toLowerCase(), p)
   }
 
   // Build fee lookup
-  const feeMap = new Map<string, (typeof feeOverview.protocols)[0]>()
-  for (const f of (feeOverview.protocols || [])) {
+  const feeMap = new Map<string, FeeOverview['protocols'][0]>()
+  for (const f of feeOverview.protocols || []) {
     if (f.name) feeMap.set(f.name.toLowerCase(), f)
     if (f.slug) feeMap.set(f.slug.toLowerCase(), f)
   }
 
-  // Filter to actual DEXes and enrich
-  const dexOnly = (dexOverview.protocols || []).filter(
-    (p) => p.category === 'Dexs' || p.category === 'Dexes'
-  )
+  // Build CoinGecko exchange map
+  const cgMap = buildCGExchangeMap(cgExchanges)
 
-  const enrichedExchanges: EnrichedExchange[] = dexOnly.map((dex) => {
+  // Top funding rate tickers
+  const topFundingRates = cgTickers
+    .filter((t) => t.contract_type === 'perpetual' && t.funding_rate != null)
+    .sort((a, b) => Math.abs(b.funding_rate) - Math.abs(a.funding_rate))
+    .slice(0, 30)
+
+  const allProtocols = derivativesOverview.protocols || []
+
+  let totalOpenInterest = 0
+
+  const enrichedExchanges: EnrichedExchange[] = allProtocols.map((dex) => {
     const protInfo =
       protocolMap.get(dex.name.toLowerCase()) ||
       protocolMap.get(dex.slug?.toLowerCase())
     const feeInfo =
       feeMap.get(dex.name.toLowerCase()) ||
       feeMap.get(dex.slug?.toLowerCase())
+
+    const cgMatch = matchCGExchange(dex.slug, dex.name, cgMap)
 
     const hasToken = !!(
       protInfo &&
@@ -145,6 +156,21 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     )
     const tvl = protInfo?.tvl || 0
     const vol24 = dex.total24h || 0
+    const mcap = protInfo?.mcap || null
+
+    const oiBtc = cgMatch?.open_interest_btc || 0
+    const openInterest = oiBtc * btcPrice
+    totalOpenInterest += openInterest
+
+    const perpPairsCount = cgMatch?.number_of_perpetual_pairs ?? null
+    const futuresPairsCount = cgMatch?.number_of_futures_pairs ?? null
+
+    const fees24h = feeInfo?.total24h || 0
+    const revenue24h = (feeInfo as any)?.revenue24h || fees24h * 0.3
+    const annualizedFees = fees24h > 0 ? fees24h * 365 : null
+    const annualizedRevenue = revenue24h > 0 ? revenue24h * 365 : null
+    const peRatio = mcap && annualizedRevenue && annualizedRevenue > 0 ? mcap / annualizedRevenue : null
+    const psRatio = mcap && annualizedFees && annualizedFees > 0 ? mcap / annualizedFees : null
 
     return {
       ...dex,
@@ -152,14 +178,22 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       tokenSymbol: hasToken ? protInfo!.symbol : null,
       geckoId: protInfo?.gecko_id || null,
       tvl,
-      mcap: protInfo?.mcap || null,
+      mcap,
       chainCount: dex.chains?.length || 1,
       volumeToTvl: tvl > 0 ? vol24 / tvl : null,
       feeData: feeInfo || undefined,
+      openInterest,
+      perpPairsCount,
+      futuresPairsCount,
+      cgExchangeId: cgMatch?.id || null,
+      volumeToOI: openInterest > 0 ? vol24 / openInterest : null,
+      annualizedFees,
+      annualizedRevenue,
+      peRatio,
+      psRatio,
     }
   })
 
-  // Sort by 24h volume
   enrichedExchanges.sort(
     (a, b) => (b.total24h || 0) - (a.total24h || 0)
   )
@@ -170,12 +204,10 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const tokenGroup = buildGroupStats('With Token', tokenExchanges)
   const noTokenGroup = buildGroupStats('Without Token', noTokenExchanges)
 
-  // Parse historical volume
   const historicalVolume: HistoricalDataPoint[] = (
-    dexOverview.totalDataChart || []
+    derivativesOverview.totalDataChart || []
   ).map(([date, value]) => ({ date: date * 1000, value }))
 
-  // Get gecko IDs for top token exchanges
   const geckoIds = tokenExchanges
     .filter((e) => e.geckoId)
     .slice(0, 30)
@@ -184,13 +216,15 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const topTokenPrices = await fetchTopTokenPrices(geckoIds)
 
   return {
-    dexOverview,
-    protocols: dexProtocols,
+    dexOverview: derivativesOverview,
+    protocols: derivativeProtocols,
     feeOverview,
     enrichedExchanges,
     tokenGroup,
     noTokenGroup,
     historicalVolume,
     topTokenPrices,
+    totalOpenInterest,
+    topFundingRates,
   }
 }

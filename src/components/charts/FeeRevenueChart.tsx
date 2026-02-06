@@ -128,7 +128,7 @@ export function FeeRevenueChart({ exchanges }: Props) {
       <div className="chart-container">
         <h3 className="chart-title">Fee Revenue Analysis</h3>
         <p className="chart-subtitle">
-          Protocol fee generation and capital efficiency, 24-hour snapshot
+          Perpetual exchange fee generation and capital efficiency, 24-hour snapshot
         </p>
         <p className="font-sans text-sm text-ink-muted py-12 text-center">
           No fee data available.

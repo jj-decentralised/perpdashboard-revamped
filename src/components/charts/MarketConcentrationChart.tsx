@@ -261,7 +261,7 @@ export function MarketConcentrationChart({ exchanges }: Props) {
     <div className="chart-container">
       <h3 className="chart-title">Market Concentration</h3>
       <p className="chart-subtitle">
-        Volume distribution and competitive dynamics across decentralised exchanges
+        Volume distribution and competitive dynamics across perpetual exchanges
       </p>
 
       {/* Stacked percentage bar */}

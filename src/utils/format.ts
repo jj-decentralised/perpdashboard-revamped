@@ -51,3 +51,19 @@ export function percentClass(value: number | null | undefined): string {
 export function classNames(...classes: (string | false | undefined)[]): string {
   return classes.filter(Boolean).join(' ')
 }
+
+export function formatFundingRate(value: number | null | undefined): string {
+  if (value == null || !isFinite(value)) return '—'
+  return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(4)}%`
+}
+
+export function formatMultiple(value: number | null | undefined): string {
+  if (value == null || !isFinite(value)) return '—'
+  if (value > 1000) return '>1000x'
+  return `${value.toFixed(1)}x`
+}
+
+export function fundingRateClass(value: number | null | undefined): string {
+  if (value == null) return ''
+  return value >= 0 ? 'positive' : 'negative'
+}

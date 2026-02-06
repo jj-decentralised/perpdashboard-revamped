@@ -48,9 +48,9 @@ function buildComparisonRows(
       noTokenValue: formatUSD(noTokenGroup.totalVolume30d, true),
     },
     {
-      label: 'Total TVL',
-      tokenValue: formatUSD(tokenGroup.totalTvl, true),
-      noTokenValue: formatUSD(noTokenGroup.totalTvl, true),
+      label: 'Total Open Interest',
+      tokenValue: formatUSD(tokenGroup.totalOI, true),
+      noTokenValue: formatUSD(noTokenGroup.totalOI, true),
     },
     {
       label: 'Median 24h Volume',
@@ -92,9 +92,9 @@ function buildComparisonRows(
       noTokenValue: formatNumber(noTokenGroup.avgChainCount, 1),
     },
     {
-      label: 'Volume/TVL Ratio',
-      tokenValue: formatNumber(tokenGroup.avgVolumeToTvl, 2),
-      noTokenValue: formatNumber(noTokenGroup.avgVolumeToTvl, 2),
+      label: 'Volume/OI Ratio',
+      tokenValue: formatNumber(tokenGroup.avgVolumeToOI, 2),
+      noTokenValue: formatNumber(noTokenGroup.avgVolumeToOI, 2),
     },
   ]
 }
@@ -107,9 +107,9 @@ function buildBarData(tokenGroup: TokenGroupStats, noTokenGroup: TokenGroupStats
       'Without Token': noTokenGroup.totalVolume24h,
     },
     {
-      metric: 'TVL',
-      'With Token': tokenGroup.totalTvl,
-      'Without Token': noTokenGroup.totalTvl,
+      metric: 'Open Interest',
+      'With Token': tokenGroup.totalOI,
+      'Without Token': noTokenGroup.totalOI,
     },
     {
       metric: 'Fees 24h',
@@ -125,16 +125,16 @@ function deriveObservation(
 ): string {
   const parts: string[] = []
 
-  // Volume-to-TVL comparison
+  // Volume-to-OI comparison
   const vtlLeader =
-    tokenGroup.avgVolumeToTvl > noTokenGroup.avgVolumeToTvl
+    tokenGroup.avgVolumeToOI > noTokenGroup.avgVolumeToOI
       ? 'token-bearing'
       : 'non-token'
-  const vtlDiff = Math.abs(tokenGroup.avgVolumeToTvl - noTokenGroup.avgVolumeToTvl)
+  const vtlDiff = Math.abs(tokenGroup.avgVolumeToOI - noTokenGroup.avgVolumeToOI)
   parts.push(
     `Exchanges with governance tokens show a ${vtlLeader === 'token-bearing' ? 'higher' : 'lower'} ` +
-    `volume-to-TVL ratio (${formatNumber(tokenGroup.avgVolumeToTvl, 2)} vs. ` +
-    `${formatNumber(noTokenGroup.avgVolumeToTvl, 2)}), suggesting ` +
+    `volume-to-OI ratio (${formatNumber(tokenGroup.avgVolumeToOI, 2)} vs. ` +
+    `${formatNumber(noTokenGroup.avgVolumeToOI, 2)}), suggesting ` +
     `${vtlLeader === 'token-bearing' ? 'more capital-efficient trading activity' : 'comparatively lower capital turnover'}.`,
   )
 

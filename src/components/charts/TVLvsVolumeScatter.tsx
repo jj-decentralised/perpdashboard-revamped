@@ -19,7 +19,7 @@ interface Props {
 
 interface ScatterPoint {
   name: string
-  tvl: number
+  oi: number
   volume: number
   hasToken: boolean
   tokenSymbol: string | null
@@ -53,7 +53,7 @@ function CustomTooltip({
     >
       <p style={{ ...TOOLTIP_STYLE.labelStyle, margin: 0 }}>{point.name}</p>
       <p style={{ margin: 0, color: COLORS.inkLight }}>
-        TVL: {formatUSD(point.tvl, true)}
+        OI: {formatUSD(point.oi, true)}
       </p>
       <p style={{ margin: 0, color: COLORS.inkLight }}>
         24h Volume: {formatUSD(point.volume, true)}
@@ -73,13 +73,13 @@ function CustomTooltip({
 export function TVLvsVolumeScatter({ exchanges }: Props) {
   const { withToken, withoutToken } = useMemo(() => {
     const valid = exchanges
-      .filter((e) => (e.total24h ?? 0) > 0 && e.tvl > 0)
+      .filter((e) => (e.total24h ?? 0) > 0 && e.openInterest > 0)
       .sort((a, b) => (b.total24h ?? 0) - (a.total24h ?? 0))
       .slice(0, 100)
 
     const toPoint = (e: EnrichedExchange): ScatterPoint => ({
       name: e.name,
-      tvl: e.tvl,
+      oi: e.openInterest,
       volume: e.total24h ?? 0,
       hasToken: e.hasToken,
       tokenSymbol: e.tokenSymbol,
@@ -101,9 +101,9 @@ export function TVLvsVolumeScatter({ exchanges }: Props) {
 
   return (
     <div className="chart-container">
-      <h3 className="chart-title">Capital Efficiency: TVL vs Volume</h3>
+      <h3 className="chart-title">Capital Efficiency: OI vs Volume</h3>
       <p className="chart-subtitle">
-        Relationship between locked capital and trading activity — size indicates multi-chain presence
+        Relationship between open interest and trading activity — size indicates multi-chain presence
       </p>
 
       <ResponsiveContainer width="100%" height={400}>
@@ -113,9 +113,9 @@ export function TVLvsVolumeScatter({ exchanges }: Props) {
             strokeDasharray={GRID_STYLE.strokeDasharray}
           />
           <XAxis
-            dataKey="tvl"
+            dataKey="oi"
             type="number"
-            name="TVL"
+            name="Open Interest"
             scale="log"
             domain={['auto', 'auto']}
             tickFormatter={formatAxisTick}
@@ -123,7 +123,7 @@ export function TVLvsVolumeScatter({ exchanges }: Props) {
             tickLine={false}
             axisLine={{ stroke: COLORS.rule }}
             label={{
-              value: 'Total Value Locked (USD)',
+              value: 'Open Interest (USD)',
               position: 'insideBottom',
               offset: -16,
               style: { ...AXIS_STYLE, fill: COLORS.inkMuted },

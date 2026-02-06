@@ -21,8 +21,6 @@ export function KPIHeader({ data }: Props) {
   const withToken = enrichedExchanges.filter((e) => e.hasToken).length
   const withoutToken = enrichedExchanges.length - withToken
 
-  const totalTvl = enrichedExchanges.reduce((sum, e) => sum + (e.tvl ?? 0), 0)
-
   const totalFees24h = feeOverview?.total24h ?? 0
 
   const kpis: {
@@ -47,8 +45,12 @@ export function KPIHeader({ data }: Props) {
       sublabel: `${formatNumber(withToken)} with token / ${formatNumber(withoutToken)} without`,
     },
     {
-      label: 'Total DEX TVL',
-      value: formatUSD(totalTvl, true),
+      label: 'Total Open Interest',
+      value: formatUSD(data.totalOpenInterest, true),
+    },
+    {
+      label: 'Perp Pairs',
+      value: formatNumber(enrichedExchanges.reduce((s, e) => s + (e.perpPairsCount || 0), 0)),
     },
     {
       label: 'Total 24h Fees',
@@ -68,11 +70,11 @@ export function KPIHeader({ data }: Props) {
           {currentDateFormatted()}
         </p>
         <h1 className="font-serif text-4xl font-bold text-ink leading-tight tracking-tight">
-          DEX Economics Monitor
+          Perpetual Exchange Analytics
         </h1>
         <div className="border-t border-rule mt-3 pt-2">
           <p className="font-serif text-sm text-ink-light italic">
-            Decentralised Exchange Analytics — Historical Performance &amp; Token Classification
+            Perpetual Derivatives Analytics — Open Interest, Volume &amp; Token Classification
           </p>
         </div>
       </div>

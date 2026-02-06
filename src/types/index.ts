@@ -1,3 +1,5 @@
+import type { CGDerivativeTicker } from './coingecko'
+
 export interface DexProtocol {
   defillamaId: string
   name: string
@@ -49,6 +51,15 @@ export interface EnrichedExchange extends DexProtocol {
   chainCount: number
   volumeToTvl: number | null
   feeData?: FeeProtocol
+  openInterest: number
+  perpPairsCount: number | null
+  futuresPairsCount: number | null
+  cgExchangeId: string | null
+  volumeToOI: number | null
+  annualizedFees: number | null
+  annualizedRevenue: number | null
+  peRatio: number | null
+  psRatio: number | null
 }
 
 export interface FeeProtocol {
@@ -59,6 +70,9 @@ export interface FeeProtocol {
   total30d: number | null
   total1y: number | null
   totalAllTime: number | null
+  revenue24h?: number | null
+  revenue7d?: number | null
+  revenue30d?: number | null
   change_1d: number | null
   change_7d: number | null
   change_1m: number | null
@@ -105,6 +119,8 @@ export interface TokenGroupStats {
   medianVolume24h: number
   totalFees24h: number
   avgVolumeToTvl: number
+  totalOI: number
+  avgVolumeToOI: number
   exchanges: EnrichedExchange[]
 }
 
@@ -130,4 +146,6 @@ export interface DashboardData {
   noTokenGroup: TokenGroupStats
   historicalVolume: HistoricalDataPoint[]
   topTokenPrices: CoinGeckoMarketData[]
+  totalOpenInterest: number
+  topFundingRates: CGDerivativeTicker[]
 }

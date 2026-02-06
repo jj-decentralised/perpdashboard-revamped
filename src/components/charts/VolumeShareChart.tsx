@@ -183,7 +183,7 @@ export function VolumeShareChart({ exchanges }: Props) {
     <div className="chart-container">
       <h3 className="chart-title">Market Share</h3>
       <p className="chart-subtitle">
-        24-hour volume distribution among top exchanges
+        24-hour volume distribution among top perpetual exchanges
       </p>
       <ResponsiveContainer width="100%" height={400}>
         <PieChart>

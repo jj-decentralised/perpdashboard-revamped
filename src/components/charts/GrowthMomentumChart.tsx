@@ -123,7 +123,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
     <div className="chart-container">
       <h3 className="chart-title">Growth Momentum</h3>
       <p className="chart-subtitle">
-        Comparative growth dynamics — tokenised vs non-tokenised exchanges
+        Comparative growth dynamics — tokenised vs non-tokenised perpetual exchanges
       </p>
 
       {/* Grouped bar chart */}
