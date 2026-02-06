@@ -329,13 +329,22 @@ export default function ExchangeProfilePage() {
 
   const exchangeName = data.exchange?.name || data.summary?.name || slug || 'Exchange'
   const description = data.summary?.description || data.exchange?.description || ''
-  const totalOI = data.exchange?.open_interest_btc
-    ? `${formatNumber(data.exchange.open_interest_btc)} BTC`
-    : '\u2014'
-  const perpPairs = data.exchange?.number_of_perpetual_pairs ?? '\u2014'
-  const futuresPairs = data.exchange?.number_of_futures_pairs ?? '\u2014'
   const chains = data.summary?.chains || []
   const hasPrice = volumePriceData.some((d) => d.price != null && d.price > 0)
+
+  // Derive KPIs from available data
+  const latestVolume = data.historicalVolume.length > 0
+    ? data.historicalVolume[data.historicalVolume.length - 1].value
+    : null
+  const latestFees = data.feeHistory.length > 0
+    ? data.feeHistory[data.feeHistory.length - 1].value
+    : null
+  const latestRevenue = data.revenueHistory.length > 0
+    ? data.revenueHistory[data.revenueHistory.length - 1].value
+    : null
+  const hasOI = data.exchange?.open_interest_btc != null && data.exchange.open_interest_btc > 0
+  const hasPerpPairs = data.exchange?.number_of_perpetual_pairs != null && data.exchange.number_of_perpetual_pairs > 0
+  const hasFuturesPairs = data.exchange?.number_of_futures_pairs != null && data.exchange.number_of_futures_pairs > 0
 
   return (
     <div className="min-h-screen bg-paper">
@@ -367,28 +376,52 @@ export default function ExchangeProfilePage() {
             )}
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-4">
-              <div className="kpi-card">
-                <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Open Interest</p>
-                <p className="font-mono text-lg font-bold text-ink">{totalOI}</p>
-              </div>
-              <div className="kpi-card">
-                <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Perp Pairs</p>
-                <p className="font-mono text-lg font-bold text-ink">{perpPairs}</p>
-              </div>
-              <div className="kpi-card">
-                <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Futures Pairs</p>
-                <p className="font-mono text-lg font-bold text-ink">{futuresPairs}</p>
-              </div>
+              {latestVolume != null && latestVolume > 0 && (
+                <div className="kpi-card">
+                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">24h Volume</p>
+                  <p className="font-mono text-lg font-bold text-ink">{formatUSD(latestVolume, true)}</p>
+                </div>
+              )}
+              {latestFees != null && latestFees > 0 && (
+                <div className="kpi-card">
+                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Daily Fees</p>
+                  <p className="font-mono text-lg font-bold text-ink">{formatUSD(latestFees, true)}</p>
+                </div>
+              )}
+              {latestRevenue != null && latestRevenue > 0 && (
+                <div className="kpi-card">
+                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Daily Revenue</p>
+                  <p className="font-mono text-lg font-bold text-ink">{formatUSD(latestRevenue, true)}</p>
+                </div>
+              )}
+              {hasOI && (
+                <div className="kpi-card">
+                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Open Interest</p>
+                  <p className="font-mono text-lg font-bold text-ink">{formatNumber(data.exchange!.open_interest_btc)} BTC</p>
+                </div>
+              )}
+              {hasPerpPairs && (
+                <div className="kpi-card">
+                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Perp Pairs</p>
+                  <p className="font-mono text-lg font-bold text-ink">{formatNumber(data.exchange!.number_of_perpetual_pairs)}</p>
+                </div>
+              )}
+              {hasFuturesPairs && (
+                <div className="kpi-card">
+                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Futures Pairs</p>
+                  <p className="font-mono text-lg font-bold text-ink">{formatNumber(data.exchange!.number_of_futures_pairs)}</p>
+                </div>
+              )}
               <div className="kpi-card">
                 <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Chains</p>
                 <p className="font-mono text-lg font-bold text-ink">
                   {chains.length > 0 ? chains.join(', ') : '\u2014'}
                 </p>
               </div>
-              {data.exchange?.url && (
+              {(data.exchange?.url || data.summary?.url) && (
                 <div className="kpi-card">
                   <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Website</p>
-                  <a href={data.exchange.url} target="_blank" rel="noopener noreferrer"
+                  <a href={data.exchange?.url || data.summary?.url} target="_blank" rel="noopener noreferrer"
                     className="font-sans text-sm font-semibold hover:underline" style={{ color: COLORS.blue }}>Visit</a>
                 </div>
               )}
