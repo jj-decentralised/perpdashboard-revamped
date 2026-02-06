@@ -68,3 +68,10 @@ export function fundingRateClass(value: number | null | undefined): string {
   if (value == null) return ''
   return value >= 0 ? 'positive' : 'negative'
 }
+
+export function formatBPS(value: number | null | undefined): string {
+  if (value == null || !isFinite(value)) return '—'
+  if (value < 0.1) return `${value.toFixed(2)} bps`
+  if (value < 10) return `${value.toFixed(1)} bps`
+  return `${value.toFixed(0)} bps`
+}
