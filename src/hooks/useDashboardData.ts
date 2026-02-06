@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
 import { fetchDashboardData } from '../services/defillama'
 
@@ -12,8 +12,13 @@ export function useDashboardData(): UseDashboardDataReturn {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const fetchedRef = useRef(false)
 
   useEffect(() => {
+    // Prevent duplicate fetches (StrictMode or re-renders)
+    if (fetchedRef.current) return
+    fetchedRef.current = true
+
     let cancelled = false
 
     async function load() {

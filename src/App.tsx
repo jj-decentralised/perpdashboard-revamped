@@ -1,5 +1,6 @@
 import { useDashboardData } from './hooks/useDashboardData'
 import { LoadingSkeleton, ErrorDisplay } from './components/LoadingSkeleton'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { KPIHeader } from './components/charts/KPIHeader'
 import { HistoricalVolumeChart } from './components/charts/HistoricalVolumeChart'
 import { TokenComparisonPanel } from './components/charts/TokenComparisonPanel'
@@ -24,61 +25,85 @@ export default function App() {
     <div className="min-h-screen bg-paper">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Masthead & KPIs */}
-        <KPIHeader data={data} />
+        <ErrorBoundary fallbackLabel="Dashboard header">
+          <KPIHeader data={data} />
+        </ErrorBoundary>
 
         {/* Section 1: Aggregate Volume History */}
         <section className="section-rule">
-          <HistoricalVolumeChart data={data.historicalVolume} />
+          <ErrorBoundary fallbackLabel="Historical volume chart">
+            <HistoricalVolumeChart data={data.historicalVolume} />
+          </ErrorBoundary>
         </section>
 
         {/* Section 2: Token Classification — the core analytical thesis */}
         <section className="section-rule-heavy">
-          <TokenComparisonPanel
-            tokenGroup={data.tokenGroup}
-            noTokenGroup={data.noTokenGroup}
-          />
+          <ErrorBoundary fallbackLabel="Token comparison">
+            <TokenComparisonPanel
+              tokenGroup={data.tokenGroup}
+              noTokenGroup={data.noTokenGroup}
+            />
+          </ErrorBoundary>
         </section>
 
         {/* Section 3: Market Structure — share & concentration */}
         <section className="section-rule">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <VolumeShareChart exchanges={data.enrichedExchanges} />
-            <MarketConcentrationChart exchanges={data.enrichedExchanges} />
+            <ErrorBoundary fallbackLabel="Volume share chart">
+              <VolumeShareChart exchanges={data.enrichedExchanges} />
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="Market concentration">
+              <MarketConcentrationChart exchanges={data.enrichedExchanges} />
+            </ErrorBoundary>
           </div>
         </section>
 
         {/* Section 4: Volume by Chain */}
         <section className="section-rule">
-          <VolumeByChainChart exchanges={data.enrichedExchanges} />
+          <ErrorBoundary fallbackLabel="Volume by chain">
+            <VolumeByChainChart exchanges={data.enrichedExchanges} />
+          </ErrorBoundary>
         </section>
 
         {/* Section 5: Capital Efficiency & Fees */}
         <section className="section-rule">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TVLvsVolumeScatter exchanges={data.enrichedExchanges} />
-            <FeeRevenueChart exchanges={data.enrichedExchanges} />
+            <ErrorBoundary fallbackLabel="TVL vs Volume scatter">
+              <TVLvsVolumeScatter exchanges={data.enrichedExchanges} />
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="Fee revenue chart">
+              <FeeRevenueChart exchanges={data.enrichedExchanges} />
+            </ErrorBoundary>
           </div>
         </section>
 
         {/* Section 6: Growth & Volatility */}
         <section className="section-rule">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <GrowthMomentumChart exchanges={data.enrichedExchanges} />
-            <ChainDiversityChart exchanges={data.enrichedExchanges} />
+            <ErrorBoundary fallbackLabel="Growth momentum">
+              <GrowthMomentumChart exchanges={data.enrichedExchanges} />
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="Chain diversity">
+              <ChainDiversityChart exchanges={data.enrichedExchanges} />
+            </ErrorBoundary>
           </div>
         </section>
 
         {/* Section 7: DEX Governance Token Prices */}
         <section className="section-rule">
-          <TokenPriceTable
-            tokenPrices={data.topTokenPrices}
-            exchanges={data.enrichedExchanges}
-          />
+          <ErrorBoundary fallbackLabel="Token prices">
+            <TokenPriceTable
+              tokenPrices={data.topTokenPrices}
+              exchanges={data.enrichedExchanges}
+            />
+          </ErrorBoundary>
         </section>
 
         {/* Section 8: Full Rankings Table */}
         <section className="section-rule-heavy">
-          <ExchangeRankingsTable exchanges={data.enrichedExchanges} />
+          <ErrorBoundary fallbackLabel="Exchange rankings">
+            <ExchangeRankingsTable exchanges={data.enrichedExchanges} />
+          </ErrorBoundary>
         </section>
 
         {/* Footer */}

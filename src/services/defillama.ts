@@ -119,13 +119,13 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
   // Build fee lookup
   const feeMap = new Map<string, (typeof feeOverview.protocols)[0]>()
-  for (const f of feeOverview.protocols) {
-    feeMap.set(f.name.toLowerCase(), f)
-    feeMap.set(f.slug?.toLowerCase(), f)
+  for (const f of (feeOverview.protocols || [])) {
+    if (f.name) feeMap.set(f.name.toLowerCase(), f)
+    if (f.slug) feeMap.set(f.slug.toLowerCase(), f)
   }
 
   // Filter to actual DEXes and enrich
-  const dexOnly = dexOverview.protocols.filter(
+  const dexOnly = (dexOverview.protocols || []).filter(
     (p) => p.category === 'Dexs' || p.category === 'Dexes'
   )
 

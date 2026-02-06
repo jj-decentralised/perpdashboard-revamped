@@ -1,4 +1,5 @@
-export function formatUSD(value: number, compact = false): string {
+export function formatUSD(value: number | null | undefined, compact = false): string {
+  if (value == null || !isFinite(value)) return '$0'
   if (compact) {
     if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`
@@ -19,7 +20,8 @@ export function formatPercent(value: number | null | undefined): string {
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
 }
 
-export function formatNumber(value: number, decimals = 0): string {
+export function formatNumber(value: number | null | undefined, decimals = 0): string {
+  if (value == null || !isFinite(value)) return '0'
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,

@@ -23,7 +23,7 @@ export function KPIHeader({ data }: Props) {
 
   const totalTvl = enrichedExchanges.reduce((sum, e) => sum + (e.tvl ?? 0), 0)
 
-  const totalFees24h = feeOverview.total24h
+  const totalFees24h = feeOverview?.total24h ?? 0
 
   const kpis: {
     label: string
