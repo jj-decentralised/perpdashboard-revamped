@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans text-ink bg-paper leading-relaxed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-serif tracking-tight;
+  }
+}
+
+@layer components {
+  .section-rule {
+    @apply border-t border-rule pt-8 mt-10;
+  }
+
+  .section-rule-heavy {
+    @apply border-t-2 border-ink pt-8 mt-10;
+  }
+
+  .kpi-card {
+    @apply border border-rule p-5;
+  }
+
+  .data-table th {
+    @apply text-left text-xs font-sans font-semibold uppercase tracking-wider text-ink-muted border-b-2 border-ink pb-2;
+  }
+
+  .data-table td {
+    @apply text-sm font-mono py-2.5 border-b border-rule;
+  }
+
+  .chart-container {
+    @apply bg-paper border border-rule p-6;
+  }
+
+  .chart-title {
+    @apply font-serif text-lg font-bold text-ink mb-1;
+  }
+
+  .chart-subtitle {
+    @apply font-sans text-sm text-ink-muted mb-6;
+  }
+
+  .tag-token {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-mono font-medium bg-paper-alt text-ink-light border border-rule;
+  }
+
+  .tag-no-token {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-mono text-ink-muted border border-rule-dark border-dashed;
+  }
+
+  .positive {
+    @apply text-accent-green;
+  }
+
+  .negative {
+    @apply text-accent-red;
+  }
+
+  .loading-pulse {
+    @apply animate-pulse bg-paper-alt rounded;
+  }
+}
