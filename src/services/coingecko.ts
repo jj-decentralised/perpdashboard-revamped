@@ -72,6 +72,42 @@ export async function fetchCoinMarketChart(geckoId: string, days = 365): Promise
   }
 }
 
+// Full coins list for symbol → id mapping (lightweight, ~500KB)
+export interface CoinListEntry {
+  id: string
+  symbol: string
+  name: string
+}
+
+export async function fetchCoinsList(): Promise<CoinListEntry[]> {
+  try {
+    return await fetchGeckoJSON<CoinListEntry[]>(
+      `${GECKO_BASE}/coins/list`
+    )
+  } catch {
+    return []
+  }
+}
+
+// Batch fetch market data including mcap (up to 250 IDs per call)
+export async function fetchCoinMarkets(geckoIds: string[]): Promise<CoinGeckoMarketData[]> {
+  if (geckoIds.length === 0) return []
+  // CoinGecko supports up to 250 ids per request
+  const results: CoinGeckoMarketData[] = []
+  for (let i = 0; i < geckoIds.length; i += 250) {
+    const batch = geckoIds.slice(i, i + 250).join(',')
+    try {
+      const data = await fetchGeckoJSON<CoinGeckoMarketData[]>(
+        `${GECKO_BASE}/coins/markets?vs_currency=usd&ids=${batch}&order=market_cap_desc&per_page=250&page=1&sparkline=true&price_change_percentage=7d,30d`
+      )
+      results.push(...data)
+    } catch {
+      // continue with other batches
+    }
+  }
+  return results
+}
+
 // Token details (supply, FDV, etc.)
 export async function fetchCoinDetail(geckoId: string): Promise<any | null> {
   try {
