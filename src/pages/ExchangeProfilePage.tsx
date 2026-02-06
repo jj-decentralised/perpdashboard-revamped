@@ -19,7 +19,7 @@ import { useExchangeProfile } from '../hooks/useExchangeProfile'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../utils/chartTheme'
 import { formatUSD, formatDateShort, formatFundingRate, formatNumber, formatPercent, formatMultiple, percentClass, classNames } from '../utils/format'
-import type { CGDerivativeTicker } from '../types/coingecko'
+import type { CGExchangeTicker } from '../types/coingecko'
 import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint } from '../types/profile'
 
 function ProfileSkeleton() {
@@ -254,10 +254,10 @@ export default function ExchangeProfilePage() {
   const tickerChartData = useMemo(() => {
     if (!data?.tickers?.length) return []
     return data.tickers
-      .filter((t: CGDerivativeTicker) => t.open_interest_usd > 0)
-      .sort((a: CGDerivativeTicker, b: CGDerivativeTicker) => b.open_interest_usd - a.open_interest_usd)
+      .filter((t: CGExchangeTicker) => t.open_interest_usd > 0)
+      .sort((a: CGExchangeTicker, b: CGExchangeTicker) => b.open_interest_usd - a.open_interest_usd)
       .slice(0, 20)
-      .map((t: CGDerivativeTicker) => ({
+      .map((t: CGExchangeTicker) => ({
         label: `${t.base}/${t.target}`,
         oi: t.open_interest_usd,
         fundingRate: t.funding_rate,

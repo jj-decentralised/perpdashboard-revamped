@@ -54,7 +54,8 @@ export function classNames(...classes: (string | false | undefined)[]): string {
 
 export function formatFundingRate(value: number | null | undefined): string {
   if (value == null || !isFinite(value)) return '—'
-  return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(4)}%`
+  // CoinGecko funding_rate is already a percentage (0.01 = 0.01%)
+  return `${value >= 0 ? '+' : ''}${value.toFixed(4)}%`
 }
 
 export function formatMultiple(value: number | null | undefined): string {

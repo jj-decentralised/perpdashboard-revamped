@@ -1,5 +1,5 @@
 import type { HistoricalDataPoint, EnrichedExchange } from './index'
-import type { CGDerivativeTicker, CGExchangeDetail } from './coingecko'
+import type { CGExchangeTicker, CGExchangeDetail } from './coingecko'
 
 export interface DerivativesSummary {
   id: string
@@ -83,7 +83,7 @@ export interface ComparableExchange {
 export interface ExchangeProfileData {
   summary: DerivativesSummary | null
   historicalVolume: HistoricalDataPoint[]
-  tickers: CGDerivativeTicker[]
+  tickers: CGExchangeTicker[]
   exchange: CGExchangeDetail | null
   // Enriched fields
   tokenInfo: TokenInfo | null

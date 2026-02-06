@@ -261,9 +261,16 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   // Build CoinGecko exchange map
   const cgMap = buildCGExchangeMap(cgExchanges)
 
-  // Top funding rate tickers
+  // Top funding rate tickers — filter outliers (|rate| > 1% is garbage data)
   const topFundingRates = cgTickers
-    .filter((t) => t.contract_type === 'perpetual' && t.funding_rate != null)
+    .filter((t) =>
+      t.contract_type === 'perpetual' &&
+      t.funding_rate != null &&
+      isFinite(t.funding_rate) &&
+      Math.abs(t.funding_rate) <= 1 &&
+      t.symbol &&
+      t.market
+    )
     .sort((a, b) => Math.abs(b.funding_rate) - Math.abs(a.funding_rate))
     .slice(0, 30)
 
