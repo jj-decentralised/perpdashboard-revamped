@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
-import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList } from '../services/coingecko'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, fetchFeeOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 
@@ -169,14 +169,23 @@ function buildTreasury(treasuryData: any): TreasuryInfo | null {
   }
 }
 
+// Resolve geckoId for a comparable exchange slug
+function resolveCompGeckoId(compSlug: string): string | null {
+  const s = compSlug?.toLowerCase() || ''
+  if (SLUG_TO_GECKO_TOKEN[s]) return SLUG_TO_GECKO_TOKEN[s]
+  const stripped = s.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|trade|pro|omni|markets?|interface|digital|terminal|labs)$/i, '').trim()
+  if (stripped !== s && SLUG_TO_GECKO_TOKEN[stripped]) return SLUG_TO_GECKO_TOKEN[stripped]
+  return null
+}
+
 function buildComparables(
   slug: string,
   chains: string[],
   volume24h: number,
   mcap: number | null,
   allProtocols: any[],
-  protocolMap: Map<string, any>,
-  feeMap: Map<string, any>
+  feeMap: Map<string, any>,
+  mcapMap: Map<string, number>
 ): ComparableExchange[] {
   const comparables: ComparableExchange[] = []
   const chainsSet = new Set(chains.map((c) => c.toLowerCase()))
@@ -198,9 +207,12 @@ function buildComparables(
       if (ratio >= 0.3 && ratio <= 3) reasons.push('Similar volume')
     }
 
+    // Resolve token + mcap for this comparable
+    const compGeckoId = resolveCompGeckoId(dex.slug)
+    const dexMcap = compGeckoId ? (mcapMap.get(compGeckoId) || null) : null
+    const hasToken = !!compGeckoId
+
     // Similar valuation
-    const protInfo = protocolMap.get(dex.name?.toLowerCase()) || protocolMap.get(dex.slug?.toLowerCase())
-    const dexMcap = protInfo?.mcap || null
     if (mcap && dexMcap && mcap > 0) {
       const valRatio = dexMcap / mcap
       if (valRatio >= 0.2 && valRatio <= 5) reasons.push('Similar valuation')
@@ -210,10 +222,16 @@ function buildComparables(
 
     const feeInfo = feeMap.get(dex.name?.toLowerCase()) || feeMap.get(dex.slug?.toLowerCase())
     const fees24h = feeInfo?.total24h || 0
-    const hasToken = !!(protInfo?.symbol && protInfo.symbol !== '-' && protInfo.symbol !== '')
 
     const annualFees = fees24h * 365
     const annualRev = annualFees * 0.3
+
+    // Derive token symbol from geckoId slug (best effort)
+    let tokenSymbol: string | null = null
+    if (hasToken && compGeckoId) {
+      // Use the fee/protocol info if available, otherwise derive from slug
+      tokenSymbol = feeInfo?.tokenSymbol || null
+    }
 
     comparables.push({
       name: dex.displayName || dex.name,
@@ -222,7 +240,7 @@ function buildComparables(
       openInterest: 0,
       chains: dex.chains || [],
       hasToken,
-      tokenSymbol: hasToken ? protInfo.symbol : null,
+      tokenSymbol,
       mcap: dexMcap,
       peRatio: dexMcap && annualRev > 0 ? dexMcap / annualRev : null,
       psRatio: dexMcap && annualFees > 0 ? dexMcap / annualFees : null,
@@ -265,13 +283,14 @@ export function useExchangeProfile(
 
         // Phase 1: Core data (parallel)
         // Use lightweight derivatives overview (excludeBreakdown) for comparables — saves ~7MB vs old approach
-        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, cgExchangesList] = await Promise.all([
+        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, feeOverview, cgExchangesList] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
           fetchFeeSummary(slug!).catch(() => null),
           fetchRevenueSummary(slug!).catch(() => null),
           fetchTreasury(slug!).catch(() => null),
           fetchDerivativesOverview(true).catch(() => null),
+          fetchFeeOverview().catch(() => null),
           !cgId ? fetchCGDerivativesExchanges().catch(() => []) : Promise.resolve([]),
         ])
 
@@ -364,7 +383,7 @@ export function useExchangeProfile(
         const quarterlyData = buildQuarterlyData(historicalVolume, feeHistory)
         const treasury = buildTreasury(treasuryData)
 
-        // Build comparables from derivatives overview only (no heavy protocol/fee fetches)
+        // Build comparables with fee + mcap data
         const allDerivProtocols = derivativesOverview?.protocols || []
         const chains = summary?.chains || []
         const vol24h = allDerivProtocols.find(
@@ -372,15 +391,44 @@ export function useExchangeProfile(
         )?.total24h || 0
         const currentMcap = tokenInfo?.marketCap || null
 
-        // Build lightweight comparables using just derivatives data
+        // Build fee lookup from fee overview
+        const compFeeMap = new Map<string, any>()
+        for (const f of feeOverview?.protocols || []) {
+          if (f.name) compFeeMap.set(f.name.toLowerCase(), f)
+          if (f.slug) compFeeMap.set(f.slug.toLowerCase(), f)
+        }
+
+        // Collect geckoIds from comparable candidates so we can batch-fetch mcap
+        const compGeckoIds = new Set<string>()
+        for (const dex of allDerivProtocols) {
+          if ((dex.slug || dex.name)?.toLowerCase() === slug!.toLowerCase()) continue
+          if (!dex.total24h || dex.total24h <= 0) continue
+          const gid = resolveCompGeckoId(dex.slug)
+          if (gid) compGeckoIds.add(gid)
+        }
+        // Also include main exchange's geckoId (already fetched)
+        if (geckoId) compGeckoIds.delete(geckoId) // don't re-fetch
+
+        // Batch fetch mcap for comparable exchanges
+        const compMarketData = compGeckoIds.size > 0
+          ? await fetchCoinMarkets([...compGeckoIds]).catch(() => [])
+          : []
+
+        // Build geckoId → mcap lookup (include main exchange's mcap too)
+        const compMcapMap = new Map<string, number>()
+        for (const coin of compMarketData) {
+          if (coin.market_cap > 0) compMcapMap.set(coin.id, coin.market_cap)
+        }
+        if (geckoId && tokenInfo?.marketCap) compMcapMap.set(geckoId, tokenInfo.marketCap)
+
         const comparables = buildComparables(
           slug!,
           chains,
           vol24h,
           currentMcap,
           allDerivProtocols,
-          new Map(), // No separate protocol data needed
-          new Map()  // No separate fee data needed
+          compFeeMap,
+          compMcapMap
         )
 
         const profileData: ExchangeProfileData = {
