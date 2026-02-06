@@ -132,55 +132,72 @@ function buildGroupStats(
 }
 
 // Manual mapping: DefiLlama exchange slug → CoinGecko TOKEN id
-// This bridges the gap when DefiLlama /protocols has no gecko_id
+// Keys include ACTUAL DefiLlama derivatives slugs (e.g. "hyperliquid-perps")
+// plus base names for slug-stripping fallback (e.g. "hyperliquid")
+// Only includes CoinGecko IDs that have been verified to exist
 export const SLUG_TO_GECKO_TOKEN: Record<string, string> = {
+  // ── Top exchanges (actual DefiLlama slugs + base names) ──
+  'hyperliquid-perps': 'hyperliquid',
   'hyperliquid': 'hyperliquid',
-  'dydx': 'dydx-chain',
-  'dydx-v4': 'dydx-chain',
-  'jupiter-perps': 'jupiter-exchange-solana',
+  'aster-perps': 'aster-2',
+  'aster': 'aster-2',
   'jupiter-perpetual-exchange': 'jupiter-exchange-solana',
-  'gmx': 'gmx',
+  'jupiter-perps': 'jupiter-exchange-solana',
+  'jupiter': 'jupiter-exchange-solana',
+  'dydx-v4': 'dydx-chain',
+  'dydx': 'dydx-chain',
+  'gmx-v2-perps': 'gmx',
   'gmx-v2': 'gmx',
-  'vertex-protocol': 'vertex-protocol',
-  'aevo': 'aevo-exchange',
-  'drift-protocol': 'drift-protocol',
-  'kwenta': 'kwenta',
+  'gmx': 'gmx',
+  'drift-trade': 'drift-protocol',
+  'drift': 'drift-protocol',
+  'paradex-perps': 'paradex',
+  'orderly-perps': 'orderly-network',
+  'orderly': 'orderly-network',
   'gains-network': 'gains-network',
-  'synthetix': 'havven',
+  'gains': 'gains-network',
+  'aevo-perps': 'aevo-exchange',
+  'aevo': 'aevo-exchange',
+  'bluefin-pro': 'bluefin',
   'bluefin': 'bluefin',
-  'mux-protocol': 'mux-protocol',
-  'apollox': 'apollox-2',
-  'flash-trade': 'flash-trade',
+  'vertex-protocol': 'vertex-protocol',
+  'vertex': 'vertex-protocol',
+  'myx-finance': 'myx-finance',
+  'avantis': 'avantis',
+  'kiloex': 'kiloex',
+  'flex-perpetuals': 'flex-2',
+  'flex': 'flex-2',
   'flashtrade': 'flash-trade',
+  'flash-trade': 'flash-trade',
   'merkle-trade': 'merkle-trade',
   'polynomial-trade': 'polynomial-protocol',
-  'kiloex': 'kiloex',
-  'myx-finance': 'myx-finance',
-  'storm-trade': 'storm-trade',
-  'apex-protocol': 'apex-protocol-2',
-  'orderly-network': 'orderly-network',
-  'vest-exchange': 'vest-exchange',
-  'levana-perps': 'levana-protocol',
-  'tlx-finance': 'tlx',
-  'avantis': 'avantis',
-  'aster-perps': 'aster-2',
-  'backpack-perps': 'backpack-exchange',
-  'nether-fi': 'nether-fi',
+  'polynomial': 'polynomial-protocol',
+  'kwenta': 'kwenta',
+  'synthetix': 'havven',
+  'apollox': 'apollox-2',
   'holdstation-defutures': 'holdstation-2',
+  'holdstation': 'holdstation-2',
   'zeta': 'zeta-markets',
-  'vela-exchange': 'vela-token',
-  'tradoor': 'tradoor',
-  'adrena-protocol': 'adrena-protocol',
-  'flex-perpetuals': 'flex-crypto',
-  'tea-rex': 'tea-rex',
   'cyberperp': 'cyberperp',
   'metavault-trade': 'metavault-trade',
+  'metavault': 'metavault-trade',
   'amped-finance': 'amped-finance',
   'xena-finance': 'xena-finance',
-  'ostium': 'ostium',
-  'paradex': 'paradex',
-  'd8x': 'd8x',
-  'derive': 'derive-2',
+  'derive-v2': 'derive',
+  'derive': 'derive',
+  'adrena-protocol': 'adrena',
+  'adrena': 'adrena',
+  'injective-perps': 'injective-protocol',
+  'injective': 'injective-protocol',
+  'symmio': 'symmio',
+  'synfutures-v3': 'synfutures',
+  'synfutures': 'synfutures',
+  'pancakeswap-perps': 'pancakeswap-token',
+  'pancakeswap': 'pancakeswap-token',
+  'apex-omni': 'apex-protocol-2',
+  'apex': 'apex-protocol-2',
+  'lighter-perps': 'lighter',
+  'lighter': 'lighter',
 }
 
 export async function fetchDashboardData(): Promise<DashboardData> {
@@ -216,12 +233,12 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     const keys = [p.name.toLowerCase(), p.slug.toLowerCase()]
 
     const strippedName = p.name.toLowerCase()
-      .replace(/\s+(bridge|perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|network)$/i, '')
+      .replace(/\s+(bridge|perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|network|trade|pro|omni|markets?)$/i, '')
       .trim()
     if (strippedName && strippedName !== p.name.toLowerCase()) keys.push(strippedName)
 
     const strippedSlug = p.slug.toLowerCase()
-      .replace(/-(bridge|perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?)$/i, '')
+      .replace(/-(bridge|perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|trade|pro|omni|markets?|interface|digital|terminal|labs)$/i, '')
       .trim()
     if (strippedSlug && strippedSlug !== p.slug.toLowerCase()) keys.push(strippedSlug)
 
@@ -254,14 +271,14 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
   // Helper: resolve CoinGecko token ID from multiple sources
   function resolveGeckoTokenId(slug: string, name: string, protInfo: ProtocolInfo | undefined, tokenSymbol: string | null): string | null {
-    // 1. From DefiLlama protocol match
-    if (protInfo?.gecko_id) return protInfo.gecko_id
-    // 2. From manual map
+    // 1. From manual map (highest priority — curated, correct)
     const slugLower = slug?.toLowerCase() || ''
     if (SLUG_TO_GECKO_TOKEN[slugLower]) return SLUG_TO_GECKO_TOKEN[slugLower]
-    // Stripped slug
-    const stripped = slugLower.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?)$/i, '').trim()
+    // Stripped slug (remove common suffixes: -perps, -trade, -pro, -omni, -markets, etc.)
+    const stripped = slugLower.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|trade|pro|omni|markets?|interface|digital|terminal|labs)$/i, '').trim()
     if (stripped !== slugLower && SLUG_TO_GECKO_TOKEN[stripped]) return SLUG_TO_GECKO_TOKEN[stripped]
+    // 2. From DefiLlama protocol match
+    if (protInfo?.gecko_id) return protInfo.gecko_id
     // 3. From CoinGecko coins list by symbol + name similarity
     if (tokenSymbol && symbolToCoinMap.has(tokenSymbol.toLowerCase())) {
       const candidates = symbolToCoinMap.get(tokenSymbol.toLowerCase())!

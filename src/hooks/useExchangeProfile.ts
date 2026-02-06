@@ -307,34 +307,34 @@ export function useExchangeProfile(
           .map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
 
         // Phase 2: Resolve gecko token ID from multiple sources
+        // Priority: 1) manual map (curated), 2) stripped slug map, 3) summary.gecko_id, 4) coins list
         const slugLower = slug!.toLowerCase()
-        let geckoId = summary?.gecko_id || null
+        let geckoId: string | null = null
 
-        // Fallback 1: manual slug → token map
-        if (!geckoId && SLUG_TO_GECKO_TOKEN[slugLower]) {
+        // 1. Manual map — highest priority, curated and verified
+        if (SLUG_TO_GECKO_TOKEN[slugLower]) {
           geckoId = SLUG_TO_GECKO_TOKEN[slugLower]
         }
-        // Fallback 2: try stripped slug (e.g. "drift-protocol" → "drift")
+        // 2. Stripped slug fallback (e.g. "drift-trade" → "drift", "bluefin-pro" → "bluefin")
         if (!geckoId) {
-          const stripped = slugLower.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|defutures?)$/i, '').trim()
+          const stripped = slugLower.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|defutures?|trade|pro|omni|markets?|interface|digital|terminal|labs)$/i, '').trim()
           if (stripped !== slugLower && SLUG_TO_GECKO_TOKEN[stripped]) {
             geckoId = SLUG_TO_GECKO_TOKEN[stripped]
           }
         }
-        // Fallback 3: CoinGecko coins list symbol matching
+        // 3. DefiLlama summary gecko_id (sometimes wrong, so after manual map)
+        if (!geckoId && summary?.gecko_id) {
+          geckoId = summary.gecko_id
+        }
+        // 4. CoinGecko coins list — strict matching only (exact id or exact name)
         if (!geckoId) {
           try {
             const coinsList = await fetchCachedCoinsList()
             const exchangeName = (summary?.name || slug || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-            // Try matching by name similarity
+            // Only match on exact ID or exact normalized name (no substring matching)
             const match = coinsList.find((c: CoinListEntry) => {
               const coinName = c.name.toLowerCase().replace(/[^a-z0-9]/g, '')
-              return (
-                c.id.toLowerCase() === slugLower ||
-                coinName === exchangeName ||
-                coinName.includes(exchangeName) ||
-                exchangeName.includes(coinName)
-              )
+              return c.id.toLowerCase() === slugLower || coinName === exchangeName
             })
             if (match) geckoId = match.id
           } catch { /* coins list unavailable */ }
