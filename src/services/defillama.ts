@@ -6,6 +6,7 @@ import type {
   TokenGroupStats,
   HistoricalDataPoint,
   DashboardData,
+  VolumeSharePoint,
 } from '../types'
 import type { DerivativesSummary } from '../types/profile'
 import { LLAMA_BASE } from '../config/api'
@@ -20,7 +21,7 @@ async function fetchJSON<T>(url: string): Promise<T> {
 
 export async function fetchDerivativesOverview(): Promise<DexOverview> {
   return fetchJSON<DexOverview>(
-    `${LLAMA_BASE}/overview/derivatives?excludeTotalDataChartBreakdown=true`
+    `${LLAMA_BASE}/overview/derivatives`
   )
 }
 
@@ -208,6 +209,45 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     derivativesOverview.totalDataChart || []
   ).map(([date, value]) => ({ date: date * 1000, value }))
 
+  // Process breakdown data for market share over time
+  const topExchangeNames = enrichedExchanges.slice(0, 8).map((e) => e.name)
+  const breakdownRaw = derivativesOverview.totalDataChartBreakdown || []
+
+  // Sample every 7th point for performance (weekly resolution)
+  const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
+
+  const volumeShareHistory = sampled.map(([timestamp, breakdown]) => {
+    const point: VolumeSharePoint = { date: timestamp * 1000 }
+
+    // Sum all exchange volumes for this day
+    let totalDayVolume = 0
+    const exchangeVolumes: Record<string, number> = {}
+
+    for (const [exchangeName, chains] of Object.entries(breakdown)) {
+      const vol = typeof chains === 'number'
+        ? chains
+        : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
+      exchangeVolumes[exchangeName] = vol
+      totalDayVolume += vol
+    }
+
+    if (totalDayVolume === 0) {
+      for (const name of topExchangeNames) point[name] = 0
+      point['Other'] = 0
+      return point
+    }
+
+    let otherPct = 100
+    for (const name of topExchangeNames) {
+      const pct = ((exchangeVolumes[name] || 0) / totalDayVolume) * 100
+      point[name] = Math.round(pct * 100) / 100
+      otherPct -= point[name]
+    }
+    point['Other'] = Math.max(0, Math.round(otherPct * 100) / 100)
+
+    return point
+  })
+
   const geckoIds = tokenExchanges
     .filter((e) => e.geckoId)
     .slice(0, 30)
@@ -226,5 +266,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     topTokenPrices,
     totalOpenInterest,
     topFundingRates,
+    volumeShareHistory,
+    topExchangeNames,
   }
 }

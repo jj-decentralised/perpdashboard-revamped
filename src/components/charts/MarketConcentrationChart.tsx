@@ -29,7 +29,7 @@ interface BarSegment {
 function CustomTreemapContent(props: any) {
   const { x, y, width, height, name, share, hasToken } = props
 
-  if (width < 30 || height < 20) return null
+  if (!name || width < 30 || height < 20) return null
 
   const showLabel = width > 50 && height > 30
   const showShare = width > 60 && height > 44

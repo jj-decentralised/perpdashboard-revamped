@@ -85,6 +85,7 @@ export interface HistoricalDataPoint {
 
 export interface DexOverview {
   totalDataChart: [number, number][]
+  totalDataChartBreakdown?: [number, Record<string, Record<string, number>>][]
   total24h: number
   total48hto24h: number
   total7d: number
@@ -137,6 +138,11 @@ export interface CoinGeckoMarketData {
   sparkline_in_7d?: { price: number[] }
 }
 
+export interface VolumeSharePoint {
+  date: number
+  [exchangeName: string]: number
+}
+
 export interface DashboardData {
   dexOverview: DexOverview
   protocols: ProtocolInfo[]
@@ -148,4 +154,6 @@ export interface DashboardData {
   topTokenPrices: CoinGeckoMarketData[]
   totalOpenInterest: number
   topFundingRates: CGDerivativeTicker[]
+  volumeShareHistory: VolumeSharePoint[]
+  topExchangeNames: string[]
 }

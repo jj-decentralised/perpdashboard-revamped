@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import type { EnrichedExchange } from '../../types'
-import { formatUSD, formatPercent, formatNumber, percentClass, classNames } from '../../utils/format'
+import { formatUSD, formatPercent, formatNumber, formatMultiple, percentClass, classNames } from '../../utils/format'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -10,7 +10,6 @@ interface Props {
 interface ColumnDef {
   key: string
   label: string
-  shortLabel?: string
   sortable: boolean
   align: 'left' | 'right'
 }
@@ -20,13 +19,14 @@ const columns: ColumnDef[] = [
   { key: 'name', label: 'Name', sortable: true, align: 'left' },
   { key: 'total24h', label: '24h Volume', sortable: true, align: 'right' },
   { key: 'total7d', label: '7d Volume', sortable: true, align: 'right' },
-  { key: 'total30d', label: '30d Volume', sortable: true, align: 'right' },
-  { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' as const },
-  { key: 'perpPairsCount', label: 'Pairs', sortable: true, align: 'right' as const },
+  { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' },
+  { key: 'perpPairsCount', label: 'Pairs', sortable: true, align: 'right' },
+  { key: 'mcap', label: 'Mcap', sortable: true, align: 'right' },
+  { key: 'psRatio', label: 'P/S', sortable: true, align: 'right' },
+  { key: 'peRatio', label: 'P/E', sortable: true, align: 'right' },
   { key: 'change_1d', label: '1d Change', sortable: true, align: 'right' },
   { key: 'change_7d', label: '7d Change', sortable: true, align: 'right' },
-  { key: 'chainCount', label: 'Chains', sortable: true, align: 'right' },
-  { key: 'volumeToOI', label: 'Vol/OI', sortable: true, align: 'right' as const },
+  { key: 'volumeToOI', label: 'Vol/OI', sortable: true, align: 'right' },
 ]
 
 function getSortValue(exchange: EnrichedExchange, key: string): number | string {
@@ -37,10 +37,14 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
       return exchange.total24h ?? -Infinity
     case 'total7d':
       return exchange.total7d ?? -Infinity
-    case 'total30d':
-      return exchange.total30d ?? -Infinity
     case 'openInterest':
       return exchange.openInterest ?? -Infinity
+    case 'mcap':
+      return exchange.mcap ?? -Infinity
+    case 'psRatio':
+      return exchange.psRatio ?? Infinity
+    case 'peRatio':
+      return exchange.peRatio ?? Infinity
     case 'change_1d':
       return exchange.change_1d ?? -Infinity
     case 'change_7d':
@@ -59,6 +63,7 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
 export function ExchangeRankingsTable({ exchanges }: Props) {
   const [sortBy, setSortBy] = useState<string>('total24h')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [tokenFilter, setTokenFilter] = useState<'all' | 'token' | 'no-token'>('all')
 
   const handleSort = (key: string) => {
     if (key === 'rank') return
@@ -66,12 +71,19 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
       setSortDir(sortDir === 'desc' ? 'asc' : 'desc')
     } else {
       setSortBy(key)
-      setSortDir(key === 'name' ? 'asc' : 'desc')
+      // For valuation ratios, lower is "better" so default asc
+      setSortDir(key === 'name' || key === 'psRatio' || key === 'peRatio' ? 'asc' : 'desc')
     }
   }
 
+  const filteredExchanges = useMemo(() => {
+    if (tokenFilter === 'token') return exchanges.filter((e) => e.hasToken)
+    if (tokenFilter === 'no-token') return exchanges.filter((e) => !e.hasToken)
+    return exchanges
+  }, [exchanges, tokenFilter])
+
   const sortedExchanges = useMemo(() => {
-    const sorted = [...exchanges].sort((a, b) => {
+    const sorted = [...filteredExchanges].sort((a, b) => {
       const aVal = getSortValue(a, sortBy)
       const bVal = getSortValue(b, sortBy)
 
@@ -84,8 +96,8 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
       return sortDir === 'asc' ? aNum - bNum : bNum - aNum
     })
 
-    return sorted.slice(0, 40)
-  }, [exchanges, sortBy, sortDir])
+    return sorted.slice(0, 50)
+  }, [filteredExchanges, sortBy, sortDir])
 
   const sortIndicator = (key: string) => {
     if (sortBy !== key) return null
@@ -96,14 +108,58 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
     )
   }
 
+  const tokenCount = exchanges.filter((e) => e.hasToken).length
+  const noTokenCount = exchanges.length - tokenCount
+
   return (
     <section className="section-rule">
-      <h2 className="font-serif text-2xl font-bold text-ink mb-1">
-        Exchange Rankings
-      </h2>
-      <p className="font-sans text-sm text-ink-muted mb-6">
-        Top perpetual exchanges by 24-hour trading volume
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 mb-4">
+        <div>
+          <h2 className="font-serif text-2xl font-bold text-ink mb-1">
+            Exchange Rankings
+          </h2>
+          <p className="font-sans text-sm text-ink-muted">
+            Top perpetual exchanges by 24-hour trading volume
+          </p>
+        </div>
+
+        {/* Token Filter */}
+        <div className="flex items-center gap-1 font-sans text-xs">
+          <button
+            onClick={() => setTokenFilter('all')}
+            className={classNames(
+              'px-3 py-1.5 border transition-colors',
+              tokenFilter === 'all'
+                ? 'bg-ink text-paper border-ink font-semibold'
+                : 'bg-paper text-ink-muted border-rule hover:border-ink'
+            )}
+          >
+            All ({exchanges.length})
+          </button>
+          <button
+            onClick={() => setTokenFilter('token')}
+            className={classNames(
+              'px-3 py-1.5 border transition-colors',
+              tokenFilter === 'token'
+                ? 'bg-ink text-paper border-ink font-semibold'
+                : 'bg-paper text-ink-muted border-rule hover:border-ink'
+            )}
+          >
+            With Token ({tokenCount})
+          </button>
+          <button
+            onClick={() => setTokenFilter('no-token')}
+            className={classNames(
+              'px-3 py-1.5 border transition-colors',
+              tokenFilter === 'no-token'
+                ? 'bg-ink text-paper border-ink font-semibold'
+                : 'bg-paper text-ink-muted border-rule hover:border-ink'
+            )}
+          >
+            No Token ({noTokenCount})
+          </button>
+        </div>
+      </div>
 
       <div className="overflow-x-auto border border-rule bg-paper">
         <table className="data-table w-full border-collapse">
@@ -167,13 +223,6 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                     : '\u2014'}
                 </td>
 
-                {/* 30d Volume */}
-                <td className="px-3 text-right">
-                  {exchange.total30d != null
-                    ? formatUSD(exchange.total30d, true)
-                    : '\u2014'}
-                </td>
-
                 {/* Open Interest */}
                 <td className="px-3 text-right">
                   {exchange.openInterest != null && exchange.openInterest > 0
@@ -185,6 +234,27 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                 <td className="px-3 text-right">
                   {exchange.perpPairsCount != null
                     ? formatNumber(exchange.perpPairsCount)
+                    : '\u2014'}
+                </td>
+
+                {/* Market Cap */}
+                <td className="px-3 text-right">
+                  {exchange.mcap != null && exchange.mcap > 0
+                    ? formatUSD(exchange.mcap, true)
+                    : '\u2014'}
+                </td>
+
+                {/* P/S Ratio */}
+                <td className="px-3 text-right font-mono">
+                  {exchange.psRatio != null
+                    ? formatMultiple(exchange.psRatio)
+                    : '\u2014'}
+                </td>
+
+                {/* P/E Ratio */}
+                <td className="px-3 text-right font-mono">
+                  {exchange.peRatio != null
+                    ? formatMultiple(exchange.peRatio)
                     : '\u2014'}
                 </td>
 
@@ -202,11 +272,6 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   percentClass(exchange.change_7d)
                 )}>
                   {formatPercent(exchange.change_7d)}
-                </td>
-
-                {/* Chains */}
-                <td className="px-3 text-right">
-                  {formatNumber(exchange.chainCount)}
                 </td>
 
                 {/* Vol/OI */}

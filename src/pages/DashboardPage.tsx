@@ -47,16 +47,21 @@ export default function DashboardPage() {
           </ErrorBoundary>
         </section>
 
-        {/* Section 3: Market Structure */}
+        {/* Section 3: Market Share Over Time */}
         <section className="section-rule">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ErrorBoundary fallbackLabel="Volume share chart">
-              <VolumeShareChart exchanges={data.enrichedExchanges} />
-            </ErrorBoundary>
-            <ErrorBoundary fallbackLabel="Market concentration">
-              <MarketConcentrationChart exchanges={data.enrichedExchanges} />
-            </ErrorBoundary>
-          </div>
+          <ErrorBoundary fallbackLabel="Volume share chart">
+            <VolumeShareChart
+              data={data.volumeShareHistory}
+              exchangeNames={data.topExchangeNames}
+            />
+          </ErrorBoundary>
+        </section>
+
+        {/* Section 3b: Market Concentration */}
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Market concentration">
+            <MarketConcentrationChart exchanges={data.enrichedExchanges} />
+          </ErrorBoundary>
         </section>
 
         {/* Section 4: Open Interest & Funding Rates */}
