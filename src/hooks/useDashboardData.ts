@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData } from '../services/defillama'
+import { fetchDashboardData, fetchVolumeShareData } from '../services/defillama'
 
 interface UseDashboardDataReturn {
   data: DashboardData | null
@@ -15,7 +15,6 @@ export function useDashboardData(): UseDashboardDataReturn {
   const fetchedRef = useRef(false)
 
   useEffect(() => {
-    // Prevent duplicate fetches (StrictMode or re-renders)
     if (fetchedRef.current) return
     fetchedRef.current = true
 
@@ -25,18 +24,25 @@ export function useDashboardData(): UseDashboardDataReturn {
       try {
         setLoading(true)
         setError(null)
+
+        // Fast initial load (lightweight overview, no breakdown data)
         const result = await fetchDashboardData()
-        if (!cancelled) {
-          setData(result)
+        if (cancelled) return
+        setData(result)
+        setLoading(false)
+
+        // Lazy load: fetch breakdown for volume share chart in background
+        if (result.topExchangeNames.length > 0) {
+          const volumeShareHistory = await fetchVolumeShareData(result.topExchangeNames)
+          if (!cancelled && volumeShareHistory.length > 0) {
+            setData((prev) => prev ? { ...prev, volumeShareHistory } : prev)
+          }
         }
       } catch (err) {
         if (!cancelled) {
           setError(
             err instanceof Error ? err.message : 'Failed to fetch data'
           )
-        }
-      } finally {
-        if (!cancelled) {
           setLoading(false)
         }
       }

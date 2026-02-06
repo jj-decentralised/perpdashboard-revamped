@@ -10,7 +10,7 @@ import type {
 } from '../types'
 import type { DerivativesSummary } from '../types/profile'
 import { LLAMA_BASE } from '../config/api'
-import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices, fetchCoinsList, fetchCoinMarkets } from './coingecko'
+import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices, fetchCoinsList, fetchCachedCoinsList, fetchCoinMarkets } from './coingecko'
 import type { CoinListEntry } from './coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 
@@ -20,9 +20,10 @@ async function fetchJSON<T>(url: string): Promise<T> {
   return res.json()
 }
 
-export async function fetchDerivativesOverview(): Promise<DexOverview> {
+export async function fetchDerivativesOverview(excludeBreakdown = false): Promise<DexOverview> {
+  const params = excludeBreakdown ? '?excludeTotalDataChartBreakdown=true' : ''
   return fetchJSON<DexOverview>(
-    `${LLAMA_BASE}/overview/derivatives`
+    `${LLAMA_BASE}/overview/derivatives${params}`
   )
 }
 
@@ -183,15 +184,16 @@ const SLUG_TO_GECKO_TOKEN: Record<string, string> = {
 }
 
 export async function fetchDashboardData(): Promise<DashboardData> {
-  // Phase 1: Fetch all data sources in parallel (including CoinGecko coins list for symbol→id mapping)
+  // Phase 1: Fetch all data sources in parallel
+  // Use lightweight overview (exclude breakdown) for enrichment — breakdown fetched lazily
   const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers, coinsList] = await Promise.all([
-    fetchDerivativesOverview(),
+    fetchDerivativesOverview(true),
     fetchProtocols(),
     fetchFeeOverview(),
     fetchCGDerivativesExchanges(),
     fetchBTCPrice(),
     fetchCGDerivativesTickers(),
-    fetchCoinsList().catch(() => [] as CoinListEntry[]),
+    fetchCachedCoinsList(),
   ])
 
   // Build symbol → geckoId map from CoinGecko coins list
@@ -397,42 +399,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     derivativesOverview.totalDataChart || []
   ).map(([date, value]) => ({ date: date * 1000, value }))
 
-  // Process breakdown data for market share over time
   const topExchangeNames = enrichedExchanges.slice(0, 8).map((e) => e.name)
-  const breakdownRaw = derivativesOverview.totalDataChartBreakdown || []
-
-  const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
-
-  const volumeShareHistory = sampled.map(([timestamp, breakdown]) => {
-    const point: VolumeSharePoint = { date: timestamp * 1000 }
-
-    let totalDayVolume = 0
-    const exchangeVolumes: Record<string, number> = {}
-
-    for (const [exchangeName, chains] of Object.entries(breakdown)) {
-      const vol = typeof chains === 'number'
-        ? chains
-        : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
-      exchangeVolumes[exchangeName] = vol
-      totalDayVolume += vol
-    }
-
-    if (totalDayVolume === 0) {
-      for (const name of topExchangeNames) point[name] = 0
-      point['Other'] = 0
-      return point
-    }
-
-    let otherPct = 100
-    for (const name of topExchangeNames) {
-      const pct = ((exchangeVolumes[name] || 0) / totalDayVolume) * 100
-      point[name] = Math.round(pct * 100) / 100
-      otherPct -= point[name]
-    }
-    point['Other'] = Math.max(0, Math.round(otherPct * 100) / 100)
-
-    return point
-  })
 
   // Use cgMarketData for sparkline token prices too
   const topTokenPrices = cgMarketData
@@ -448,7 +415,50 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     topTokenPrices,
     totalOpenInterest,
     topFundingRates,
-    volumeShareHistory,
+    volumeShareHistory: [] as VolumeSharePoint[], // Populated lazily via fetchVolumeShareData
     topExchangeNames,
+  }
+}
+
+// Separate call for breakdown data (5-10MB) — loaded lazily after initial render
+export async function fetchVolumeShareData(topNames: string[]): Promise<VolumeSharePoint[]> {
+  try {
+    const overview = await fetchDerivativesOverview(false) // Full breakdown
+    const breakdownRaw = overview.totalDataChartBreakdown || []
+
+    const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
+
+    return sampled.map(([timestamp, breakdown]) => {
+      const point: VolumeSharePoint = { date: timestamp * 1000 }
+
+      let totalDayVolume = 0
+      const exchangeVolumes: Record<string, number> = {}
+
+      for (const [exchangeName, chains] of Object.entries(breakdown)) {
+        const vol = typeof chains === 'number'
+          ? chains
+          : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
+        exchangeVolumes[exchangeName] = vol
+        totalDayVolume += vol
+      }
+
+      if (totalDayVolume === 0) {
+        for (const name of topNames) point[name] = 0
+        point['Other'] = 0
+        return point
+      }
+
+      let otherPct = 100
+      for (const name of topNames) {
+        const pct = ((exchangeVolumes[name] || 0) / totalDayVolume) * 100
+        point[name] = Math.round(pct * 100) / 100
+        otherPct -= point[name]
+      }
+      point['Other'] = Math.max(0, Math.round(otherPct * 100) / 100)
+
+      return point
+    })
+  } catch {
+    return []
   }
 }

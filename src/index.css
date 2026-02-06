@@ -28,11 +28,19 @@
   }
 
   .data-table th {
-    @apply text-left text-xs font-sans font-semibold uppercase tracking-wider text-ink-muted border-b-2 border-ink pb-2;
+    @apply text-left text-[11px] font-sans font-semibold uppercase tracking-widest text-ink-muted border-b-2 border-ink py-3 px-4;
   }
 
   .data-table td {
-    @apply text-sm font-mono py-2.5 border-b border-rule;
+    @apply text-sm font-mono py-3.5 px-4 border-b border-rule;
+  }
+
+  .data-table tbody tr {
+    @apply transition-colors duration-75;
+  }
+
+  .data-table tbody tr:hover {
+    @apply bg-paper-alt;
   }
 
   .chart-container {

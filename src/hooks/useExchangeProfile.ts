@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, fetchProtocols, fetchFeeOverview } from '../services/defillama'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview } from '../services/defillama'
 import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 
@@ -263,16 +263,14 @@ export function useExchangeProfile(
         setError(null)
 
         // Phase 1: Core data (parallel)
-        // Also fetch CG exchanges list when cgId is missing so we can match by name
-        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, protocols, feeOverview, cgExchangesList] = await Promise.all([
+        // Use lightweight derivatives overview (excludeBreakdown) for comparables — saves ~7MB vs old approach
+        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, cgExchangesList] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
           fetchFeeSummary(slug!).catch(() => null),
           fetchRevenueSummary(slug!).catch(() => null),
           fetchTreasury(slug!).catch(() => null),
-          fetchDerivativesOverview().catch(() => null),
-          fetchProtocols().catch(() => []),
-          fetchFeeOverview().catch(() => ({ protocols: [], total24h: 0, total7d: 0, total30d: 0 })),
+          fetchDerivativesOverview(true).catch(() => null),
           !cgId ? fetchCGDerivativesExchanges().catch(() => []) : Promise.resolve([]),
         ])
 
@@ -333,34 +331,23 @@ export function useExchangeProfile(
         const quarterlyData = buildQuarterlyData(historicalVolume, feeHistory)
         const treasury = buildTreasury(treasuryData)
 
-        // Build comparables
-        const protocolMap = new Map<string, any>()
-        for (const p of (protocols as any[])) {
-          if (p.name) protocolMap.set(p.name.toLowerCase(), p)
-          if (p.slug) protocolMap.set(p.slug.toLowerCase(), p)
-        }
-        const feeMap = new Map<string, any>()
-        for (const f of feeOverview.protocols || []) {
-          if (f.name) feeMap.set(f.name.toLowerCase(), f)
-          if (f.slug) feeMap.set(f.slug.toLowerCase(), f)
-        }
-
+        // Build comparables from derivatives overview only (no heavy protocol/fee fetches)
         const allDerivProtocols = derivativesOverview?.protocols || []
         const chains = summary?.chains || []
         const vol24h = allDerivProtocols.find(
           (p: any) => p.slug?.toLowerCase() === slug!.toLowerCase() || p.name?.toLowerCase() === slug!.toLowerCase()
         )?.total24h || 0
-        const protInfo = protocolMap.get(slug!.toLowerCase())
-        const currentMcap = tokenInfo?.marketCap || protInfo?.mcap || null
+        const currentMcap = tokenInfo?.marketCap || null
 
+        // Build lightweight comparables using just derivatives data
         const comparables = buildComparables(
           slug!,
           chains,
           vol24h,
           currentMcap,
           allDerivProtocols,
-          protocolMap,
-          feeMap
+          new Map(), // No separate protocol data needed
+          new Map()  // No separate fee data needed
         )
 
         const profileData: ExchangeProfileData = {

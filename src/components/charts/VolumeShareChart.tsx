@@ -76,12 +76,8 @@ export function VolumeShareChart({ data, exchangeNames }: Props) {
     return (
       <div className="chart-container">
         <h3 className="chart-title">Market Share Over Time</h3>
-        <p className="chart-subtitle">
-          Historical volume share among top perpetual exchanges
-        </p>
-        <p className="font-sans text-sm text-ink-muted py-12 text-center">
-          No historical breakdown data available.
-        </p>
+        <p className="chart-subtitle">Loading historical breakdown data...</p>
+        <div className="loading-pulse h-80" />
       </div>
     )
   }

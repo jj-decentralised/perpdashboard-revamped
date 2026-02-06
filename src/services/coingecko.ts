@@ -89,6 +89,30 @@ export async function fetchCoinsList(): Promise<CoinListEntry[]> {
   }
 }
 
+// Cached version — stores in localStorage for 24h to avoid 500KB re-download
+const COINS_CACHE_KEY = 'cg_coins_list'
+const COINS_CACHE_TS_KEY = 'cg_coins_list_ts'
+const COINS_CACHE_TTL = 86400000 // 24 hours
+
+export async function fetchCachedCoinsList(): Promise<CoinListEntry[]> {
+  try {
+    const cached = localStorage.getItem(COINS_CACHE_KEY)
+    const ts = localStorage.getItem(COINS_CACHE_TS_KEY)
+    if (cached && ts && Date.now() - Number(ts) < COINS_CACHE_TTL) {
+      return JSON.parse(cached)
+    }
+  } catch { /* localStorage unavailable or corrupt */ }
+
+  const data = await fetchCoinsList()
+  if (data.length > 0) {
+    try {
+      localStorage.setItem(COINS_CACHE_KEY, JSON.stringify(data))
+      localStorage.setItem(COINS_CACHE_TS_KEY, String(Date.now()))
+    } catch { /* quota exceeded */ }
+  }
+  return data
+}
+
 // Batch fetch market data including mcap (up to 250 IDs per call)
 export async function fetchCoinMarkets(geckoIds: string[]): Promise<CoinGeckoMarketData[]> {
   if (geckoIds.length === 0) return []

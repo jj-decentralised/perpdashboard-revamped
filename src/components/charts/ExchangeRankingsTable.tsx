@@ -171,7 +171,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   className={classNames(
                     col.align === 'right' && 'text-right',
                     col.sortable && 'cursor-pointer select-none hover:text-ink',
-                    'sticky top-0 bg-paper z-10 px-3 whitespace-nowrap'
+                    'sticky top-0 bg-paper z-10 whitespace-nowrap'
                   )}
                   onClick={() => col.sortable && handleSort(col.key)}
                 >
@@ -185,101 +185,29 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
             {sortedExchanges.map((exchange, index) => (
               <tr
                 key={exchange.slug || exchange.name}
-                className={classNames(
-                  index % 2 === 1 && 'bg-paper-warm',
-                  'hover:bg-paper-alt transition-colors'
-                )}
+                className={index % 2 === 1 ? 'bg-paper-warm' : undefined}
               >
-                {/* Rank */}
-                <td className="px-3 text-ink-muted w-10">
-                  {index + 1}
-                </td>
-
-                {/* Name + Token Badge */}
-                <td className="px-3 font-sans text-sm font-medium text-ink whitespace-nowrap">
+                <td className="text-ink-muted w-10">{index + 1}</td>
+                <td className="font-sans text-sm font-medium text-ink whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     <Link to={`/exchange/${exchange.slug}?cgId=${exchange.cgExchangeId || ''}`} className="hover:underline" style={{color: '#2e5e8e'}}>
                       {exchange.displayName || exchange.name}
                     </Link>
-                    {exchange.hasToken ? (
+                    {exchange.hasToken && (
                       <span className="tag-token">{exchange.tokenSymbol}</span>
-                    ) : (
-                      <span className="text-ink-muted">&mdash;</span>
                     )}
                   </div>
                 </td>
-
-                {/* 24h Volume */}
-                <td className="px-3 text-right">
-                  {exchange.total24h != null
-                    ? formatUSD(exchange.total24h, true)
-                    : '\u2014'}
-                </td>
-
-                {/* 7d Volume */}
-                <td className="px-3 text-right">
-                  {exchange.total7d != null
-                    ? formatUSD(exchange.total7d, true)
-                    : '\u2014'}
-                </td>
-
-                {/* Open Interest */}
-                <td className="px-3 text-right">
-                  {exchange.openInterest != null && exchange.openInterest > 0
-                    ? formatUSD(exchange.openInterest, true)
-                    : '\u2014'}
-                </td>
-
-                {/* Pairs */}
-                <td className="px-3 text-right">
-                  {exchange.perpPairsCount != null
-                    ? formatNumber(exchange.perpPairsCount)
-                    : '\u2014'}
-                </td>
-
-                {/* Market Cap */}
-                <td className="px-3 text-right">
-                  {exchange.mcap != null && exchange.mcap > 0
-                    ? formatUSD(exchange.mcap, true)
-                    : '\u2014'}
-                </td>
-
-                {/* P/S Ratio */}
-                <td className="px-3 text-right font-mono">
-                  {exchange.psRatio != null
-                    ? formatMultiple(exchange.psRatio)
-                    : '\u2014'}
-                </td>
-
-                {/* P/E Ratio */}
-                <td className="px-3 text-right font-mono">
-                  {exchange.peRatio != null
-                    ? formatMultiple(exchange.peRatio)
-                    : '\u2014'}
-                </td>
-
-                {/* 1d Change */}
-                <td className={classNames(
-                  'px-3 text-right',
-                  percentClass(exchange.change_1d)
-                )}>
-                  {formatPercent(exchange.change_1d)}
-                </td>
-
-                {/* 7d Change */}
-                <td className={classNames(
-                  'px-3 text-right',
-                  percentClass(exchange.change_7d)
-                )}>
-                  {formatPercent(exchange.change_7d)}
-                </td>
-
-                {/* Vol/OI */}
-                <td className="px-3 text-right">
-                  {exchange.volumeToOI != null
-                    ? exchange.volumeToOI.toFixed(2)
-                    : '\u2014'}
-                </td>
+                <td className="text-right">{exchange.total24h != null ? formatUSD(exchange.total24h, true) : '\u2014'}</td>
+                <td className="text-right">{exchange.total7d != null ? formatUSD(exchange.total7d, true) : '\u2014'}</td>
+                <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : '\u2014'}</td>
+                <td className="text-right">{exchange.perpPairsCount != null ? formatNumber(exchange.perpPairsCount) : '\u2014'}</td>
+                <td className="text-right">{exchange.mcap && exchange.mcap > 0 ? formatUSD(exchange.mcap, true) : '\u2014'}</td>
+                <td className="text-right">{exchange.psRatio != null ? formatMultiple(exchange.psRatio) : '\u2014'}</td>
+                <td className="text-right">{exchange.peRatio != null ? formatMultiple(exchange.peRatio) : '\u2014'}</td>
+                <td className={classNames('text-right', percentClass(exchange.change_1d))}>{formatPercent(exchange.change_1d)}</td>
+                <td className={classNames('text-right', percentClass(exchange.change_7d))}>{formatPercent(exchange.change_7d)}</td>
+                <td className="text-right">{exchange.volumeToOI != null ? exchange.volumeToOI.toFixed(2) : '\u2014'}</td>
               </tr>
             ))}
           </tbody>
