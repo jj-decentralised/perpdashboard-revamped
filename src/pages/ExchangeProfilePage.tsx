@@ -271,6 +271,46 @@ export default function ExchangeProfilePage() {
     return data.historicalPE.filter((p) => (p.pe != null && p.pe > 0 && p.pe < 500) || (p.ps != null && p.ps > 0 && p.ps < 500))
   }, [data?.historicalPE])
 
+  // Historical fee/revenue data — merge into single series, weekly smoothing
+  const feeRevenueData = useMemo(() => {
+    if (!data?.feeHistory?.length && !data?.revenueHistory?.length) return []
+
+    const revMap = new Map<number, number>()
+    for (const r of data?.revenueHistory || []) {
+      const dayKey = Math.floor(r.date / 86400000) * 86400000
+      revMap.set(dayKey, r.value)
+    }
+
+    // Use fee history as base, attach revenue
+    const raw = (data?.feeHistory || []).map((f) => {
+      const dayKey = Math.floor(f.date / 86400000) * 86400000
+      return { date: f.date, fees: f.value, revenue: revMap.get(dayKey) || 0 }
+    })
+
+    // 7-day rolling average for smoother chart
+    if (raw.length < 7) return raw
+    const smoothed: typeof raw = []
+    for (let i = 6; i < raw.length; i++) {
+      let sumFee = 0, sumRev = 0
+      for (let j = i - 6; j <= i; j++) {
+        sumFee += raw[j].fees
+        sumRev += raw[j].revenue
+      }
+      smoothed.push({
+        date: raw[i].date,
+        fees: sumFee / 7,
+        revenue: sumRev / 7,
+      })
+    }
+    // Sample weekly for performance if > 365 points
+    if (smoothed.length > 365) {
+      return smoothed.filter((_, i) => i % 7 === 0 || i === smoothed.length - 1)
+    }
+    return smoothed
+  }, [data?.feeHistory, data?.revenueHistory])
+
+  const hasRevenueData = feeRevenueData.some((d) => d.revenue > 0)
+
   if (loading) return <ProfileSkeleton />
 
   if (error || !data) {
@@ -411,6 +451,69 @@ export default function ExchangeProfilePage() {
                   </span>
                 </div>
               )}
+            </section>
+          </ErrorBoundary>
+        )}
+
+        {/* Historical Fees & Revenue */}
+        {feeRevenueData.length > 3 && (
+          <ErrorBoundary fallbackLabel="Fee & revenue history">
+            <section className="section-rule">
+              <h3 className="chart-title">
+                Historical Fees{hasRevenueData ? ' & Revenue' : ''}
+              </h3>
+              <p className="chart-subtitle">
+                7-day rolling average of daily {hasRevenueData ? 'fees and protocol revenue' : 'fee generation'}
+              </p>
+              <ResponsiveContainer width="100%" height={340}>
+                <AreaChart data={feeRevenueData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="feeGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.12} />
+                      <stop offset="95%" stopColor={COLORS.ink} stopOpacity={0.01} />
+                    </linearGradient>
+                    <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={COLORS.green} stopOpacity={0.15} />
+                      <stop offset="95%" stopColor={COLORS.green} stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                  <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false}
+                    axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
+                  <YAxis tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
+                  <Tooltip content={({ active, payload, label }: any) => {
+                    if (!active || !payload?.length) return null
+                    return (
+                      <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
+                        <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
+                        {payload.map((entry: any) => (
+                          <p key={entry.name} style={{ margin: 0, color: entry.color || COLORS.inkLight, fontSize: 12 }}>
+                            {entry.name === 'fees' ? 'Fees' : 'Revenue'}: {formatUSD(entry.value, true)}
+                          </p>
+                        ))}
+                      </div>
+                    )
+                  }} />
+                  <Area type="monotone" dataKey="fees" name="fees" stroke={COLORS.ink} strokeWidth={1.5}
+                    fill="url(#feeGrad)" animationDuration={800} />
+                  {hasRevenueData && (
+                    <Area type="monotone" dataKey="revenue" name="revenue" stroke={COLORS.green} strokeWidth={1.5}
+                      fill="url(#revGrad)" animationDuration={800} />
+                  )}
+                </AreaChart>
+              </ResponsiveContainer>
+              <div className="flex items-center gap-4 mt-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
+                  <span className="font-sans text-[11px] text-ink-muted">Daily Fees (7d avg)</span>
+                </span>
+                {hasRevenueData && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.green }} />
+                    <span className="font-sans text-[11px] text-ink-muted">Daily Revenue (7d avg)</span>
+                  </span>
+                )}
+              </div>
             </section>
           </ErrorBoundary>
         )}

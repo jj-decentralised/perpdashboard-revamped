@@ -139,14 +139,36 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     fetchCGDerivativesTickers(),
   ])
 
-  // Build protocol lookup
+  // Build protocol lookup — use ALL protocols so mcap matching is broad
+  // (e.g. Hyperliquid is listed as "Bridge" category, not "Derivatives")
   const protocolMap = new Map<string, ProtocolInfo>()
   const derivativeProtocols = protocols.filter(
     (p) => p.category === 'Derivatives' || p.category === 'Dexes' || p.category === 'Dexs'
   )
-  for (const p of derivativeProtocols) {
-    protocolMap.set(p.name.toLowerCase(), p)
-    protocolMap.set(p.slug.toLowerCase(), p)
+
+  // Insert all protocols, preferring entries with mcap data
+  for (const p of protocols) {
+    const keys = [p.name.toLowerCase(), p.slug.toLowerCase()]
+
+    // Stripped name: "Hyperliquid Bridge" → "hyperliquid", "Gains Network Protocol" → "gains network"
+    const strippedName = p.name.toLowerCase()
+      .replace(/\s+(bridge|perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|network)$/i, '')
+      .trim()
+    if (strippedName && strippedName !== p.name.toLowerCase()) keys.push(strippedName)
+
+    const strippedSlug = p.slug.toLowerCase()
+      .replace(/-(bridge|perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?)$/i, '')
+      .trim()
+    if (strippedSlug && strippedSlug !== p.slug.toLowerCase()) keys.push(strippedSlug)
+
+    for (const key of keys) {
+      if (!key) continue
+      const existing = protocolMap.get(key)
+      // Prefer entries that have mcap
+      if (!existing || (p.mcap && p.mcap > 0 && (!existing.mcap || p.mcap > existing.mcap))) {
+        protocolMap.set(key, p)
+      }
+    }
   }
 
   // Build fee lookup

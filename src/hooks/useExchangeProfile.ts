@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
 import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, fetchProtocols, fetchFeeOverview } from '../services/defillama'
-import { fetchCGExchangeDetail, fetchCoinMarketChart, fetchCoinDetail } from '../services/coingecko'
+import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail } from '../services/coingecko'
+import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 
 interface UseExchangeProfileReturn {
   data: ExchangeProfileData | null
@@ -262,7 +263,8 @@ export function useExchangeProfile(
         setError(null)
 
         // Phase 1: Core data (parallel)
-        const [summary, cgDetail, feeSummary, revenueSummary, treasuryData, derivativesOverview, protocols, feeOverview] = await Promise.all([
+        // Also fetch CG exchanges list when cgId is missing so we can match by name
+        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, protocols, feeOverview, cgExchangesList] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
           fetchFeeSummary(slug!).catch(() => null),
@@ -271,9 +273,21 @@ export function useExchangeProfile(
           fetchDerivativesOverview().catch(() => null),
           fetchProtocols().catch(() => []),
           fetchFeeOverview().catch(() => ({ protocols: [], total24h: 0, total7d: 0, total30d: 0 })),
+          !cgId ? fetchCGDerivativesExchanges().catch(() => []) : Promise.resolve([]),
         ])
 
         if (cancelled) return
+
+        // If no direct cgId, try to find matching CG exchange by name/slug
+        let cgDetail = cgDetailDirect
+        if (!cgDetail && cgExchangesList.length > 0) {
+          const cgMap = buildCGExchangeMap(cgExchangesList)
+          const exchangeName = summary?.name || slug || ''
+          const matched = matchCGExchange(slug!, exchangeName, cgMap)
+          if (matched) {
+            cgDetail = await fetchCGExchangeDetail(matched.id).catch(() => null)
+          }
+        }
 
         // Historical volume
         const historicalVolume: HistoricalDataPoint[] = (
