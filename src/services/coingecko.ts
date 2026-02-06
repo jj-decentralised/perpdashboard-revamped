@@ -60,3 +60,25 @@ export async function fetchTopTokenPrices(geckoIds: string[]): Promise<CoinGecko
     return []
   }
 }
+
+// Historical price + market cap chart
+export async function fetchCoinMarketChart(geckoId: string, days = 365): Promise<{ prices: [number, number][]; market_caps: [number, number][] }> {
+  try {
+    return await fetchGeckoJSON<{ prices: [number, number][]; market_caps: [number, number][] }>(
+      `${GECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`
+    )
+  } catch {
+    return { prices: [], market_caps: [] }
+  }
+}
+
+// Token details (supply, FDV, etc.)
+export async function fetchCoinDetail(geckoId: string): Promise<any | null> {
+  try {
+    return await fetchGeckoJSON<any>(
+      `${GECKO_BASE}/coins/${geckoId}?localization=false&tickers=false&community_data=false&developer_data=false`
+    )
+  } catch {
+    return null
+  }
+}

@@ -2,8 +2,10 @@ import React, { useMemo } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import {
   ResponsiveContainer,
+  ComposedChart,
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -11,12 +13,14 @@ import {
   BarChart,
   Bar,
   Cell,
+  LineChart,
 } from 'recharts'
 import { useExchangeProfile } from '../hooks/useExchangeProfile'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../utils/chartTheme'
-import { formatUSD, formatDateShort, formatFundingRate, formatNumber } from '../utils/format'
+import { formatUSD, formatDateShort, formatFundingRate, formatNumber, formatPercent, formatMultiple, percentClass, classNames } from '../utils/format'
 import type { CGDerivativeTicker } from '../types/coingecko'
+import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint } from '../types/profile'
 
 function ProfileSkeleton() {
   return (
@@ -35,31 +39,194 @@ function ProfileSkeleton() {
   )
 }
 
-function VolumeTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: number }) {
+function fmtAxis(v: number): string {
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`
+  return `$${v.toFixed(0)}`
+}
+
+function VolumeWithPriceTooltip({ active, payload, label }: any) {
   if (!active || !payload || !payload.length) return null
   return (
     <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
       <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
-      <p style={{ margin: 0, color: COLORS.inkLight }}>
-        Volume: {formatUSD(payload[0].value, true)}
-      </p>
+      {payload.map((entry: any) => (
+        <p key={entry.name} style={{ margin: 0, color: entry.color || COLORS.inkLight, fontSize: 12 }}>
+          {entry.name}: {entry.name === 'price' ? `$${entry.value?.toFixed(4)}` : formatUSD(entry.value, true)}
+        </p>
+      ))}
     </div>
   )
 }
 
-function TickerTooltip({ active, payload }: { active?: boolean; payload?: any[] }) {
+function PETooltip({ active, payload, label }: any) {
   if (!active || !payload || !payload.length) return null
-  const d = payload[0].payload as { label: string; oi: number; fundingRate: number }
+  const d = payload[0]?.payload as HistoricalPEPoint
+  if (!d) return null
   return (
-    <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.6 }}>
-      <p style={TOOLTIP_STYLE.labelStyle}>{d.label}</p>
-      <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>
-        Open Interest: {formatUSD(d.oi, true)}
-      </p>
-      <p style={{ margin: 0, color: d.fundingRate >= 0 ? COLORS.green : COLORS.red, fontSize: 12 }}>
-        Funding: {formatFundingRate(d.fundingRate)}
-      </p>
+    <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
+      <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
+      <p style={{ margin: 0, color: COLORS.blue, fontSize: 12 }}>P/E: {d.pe != null ? formatMultiple(d.pe) : '\u2014'}</p>
+      <p style={{ margin: 0, color: COLORS.inkMuted, fontSize: 12 }}>P/S: {d.ps != null ? formatMultiple(d.ps) : '\u2014'}</p>
+      <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>Price: ${d.price?.toFixed(4)}</p>
+      <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>Mcap: {formatUSD(d.mcap, true)}</p>
     </div>
+  )
+}
+
+// --- Token Info Section ---
+function TokenInfoSection({ info }: { info: TokenInfo }) {
+  return (
+    <ErrorBoundary fallbackLabel="Token info">
+      <section className="section-rule">
+        <h3 className="chart-title">Governance Token — {info.symbol}</h3>
+        <p className="chart-subtitle">{info.name}</p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-4">
+          <div className="kpi-card">
+            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Price</p>
+            <p className="font-mono text-lg font-bold text-ink">${info.currentPrice.toFixed(info.currentPrice < 1 ? 6 : 2)}</p>
+            <p className={classNames('font-mono text-xs', percentClass(info.priceChange24h))}>
+              {formatPercent(info.priceChange24h)} (24h)
+            </p>
+          </div>
+          <div className="kpi-card">
+            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Market Cap</p>
+            <p className="font-mono text-lg font-bold text-ink">{formatUSD(info.marketCap, true)}</p>
+          </div>
+          <div className="kpi-card">
+            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">FDV</p>
+            <p className="font-mono text-lg font-bold text-ink">{formatUSD(info.fdv, true)}</p>
+          </div>
+          <div className="kpi-card">
+            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Circ. Supply</p>
+            <p className="font-mono text-lg font-bold text-ink">{formatNumber(info.circulatingSupply)}</p>
+            {info.totalSupply > 0 && (
+              <p className="font-mono text-xs text-ink-muted">{((info.circulatingSupply / info.totalSupply) * 100).toFixed(1)}% of total</p>
+            )}
+          </div>
+          <div className="kpi-card">
+            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">ATH</p>
+            <p className="font-mono text-lg font-bold text-ink">${info.ath.toFixed(info.ath < 1 ? 6 : 2)}</p>
+            <p className="font-mono text-xs text-ink-muted">{info.athDate ? new Date(info.athDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''}</p>
+          </div>
+          <div className="kpi-card">
+            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Price Changes</p>
+            <div className="space-y-0.5">
+              <p className={classNames('font-mono text-xs', percentClass(info.priceChange7d))}>7d: {formatPercent(info.priceChange7d)}</p>
+              <p className={classNames('font-mono text-xs', percentClass(info.priceChange30d))}>30d: {formatPercent(info.priceChange30d)}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </ErrorBoundary>
+  )
+}
+
+// --- Treasury Section ---
+function TreasurySection({ treasury }: { treasury: TreasuryInfo }) {
+  const segments = [
+    { label: 'Own Token', value: treasury.ownTokenUsd, color: COLORS.ink },
+    { label: 'Stablecoins', value: treasury.stablecoinsUsd, color: COLORS.green },
+    { label: 'Majors (BTC/ETH)', value: treasury.majorsUsd, color: COLORS.blue },
+    { label: 'Other', value: treasury.othersUsd, color: COLORS.slate },
+  ].filter((s) => s.value > 0)
+
+  return (
+    <ErrorBoundary fallbackLabel="Treasury">
+      <section className="section-rule">
+        <h3 className="chart-title">Treasury</h3>
+        <p className="chart-subtitle">Protocol-owned assets breakdown</p>
+
+        <div className="mt-4">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="font-sans text-xs uppercase tracking-wider text-ink-muted">Total Treasury</span>
+            <span className="font-mono text-xl font-bold text-ink">{formatUSD(treasury.totalUsd, true)}</span>
+          </div>
+
+          {/* Stacked bar */}
+          <div className="flex w-full h-6 overflow-hidden border border-rule mb-3">
+            {segments.map((seg) => (
+              <div
+                key={seg.label}
+                style={{
+                  width: `${(seg.value / treasury.totalUsd) * 100}%`,
+                  backgroundColor: seg.color,
+                  opacity: 0.75,
+                  minWidth: seg.value > 0 ? 2 : 0,
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {segments.map((seg) => (
+              <div key={seg.label} className="flex items-start gap-2">
+                <span className="inline-block w-2.5 h-2.5 mt-1 flex-shrink-0" style={{ backgroundColor: seg.color, opacity: 0.75 }} />
+                <div>
+                  <p className="font-sans text-xs text-ink-muted">{seg.label}</p>
+                  <p className="font-mono text-sm font-semibold text-ink">{formatUSD(seg.value, true)}</p>
+                  <p className="font-mono text-[10px] text-ink-muted">{((seg.value / treasury.totalUsd) * 100).toFixed(1)}%</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </ErrorBoundary>
+  )
+}
+
+// --- Comparables Section ---
+function ComparablesSection({ comparables, currentSlug }: { comparables: ComparableExchange[]; currentSlug: string }) {
+  if (comparables.length === 0) return null
+  return (
+    <ErrorBoundary fallbackLabel="Comparables">
+      <section className="section-rule">
+        <h3 className="chart-title">Comparable Exchanges</h3>
+        <p className="chart-subtitle">
+          Exchanges on similar chains, volume profiles, or valuations
+        </p>
+        <div className="overflow-x-auto mt-4">
+          <table className="data-table w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="text-left">Exchange</th>
+                <th className="text-right">24h Volume</th>
+                <th className="text-right">Mcap</th>
+                <th className="text-right">P/S</th>
+                <th className="text-right">P/E</th>
+                <th className="text-right">1d Change</th>
+                <th className="text-left">Match</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparables.map((comp, i) => (
+                <tr key={comp.slug || comp.name} className={i % 2 === 1 ? 'bg-paper-warm' : ''}>
+                  <td className="font-sans text-sm font-medium whitespace-nowrap">
+                    <Link to={`/exchange/${comp.slug}`} className="hover:underline" style={{ color: COLORS.blue }}>
+                      {comp.name}
+                    </Link>
+                    {comp.hasToken && comp.tokenSymbol && (
+                      <span className="tag-token ml-2">{comp.tokenSymbol}</span>
+                    )}
+                  </td>
+                  <td className="text-right font-mono text-sm">{formatUSD(comp.volume24h, true)}</td>
+                  <td className="text-right font-mono text-sm">{comp.mcap ? formatUSD(comp.mcap, true) : '\u2014'}</td>
+                  <td className="text-right font-mono text-sm">{comp.psRatio != null ? formatMultiple(comp.psRatio) : '\u2014'}</td>
+                  <td className="text-right font-mono text-sm">{comp.peRatio != null ? formatMultiple(comp.peRatio) : '\u2014'}</td>
+                  <td className={classNames('text-right font-mono text-sm', percentClass(comp.change1d))}>
+                    {formatPercent(comp.change1d)}
+                  </td>
+                  <td className="font-sans text-[11px] text-ink-muted max-w-[180px] truncate">{comp.matchReason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </ErrorBoundary>
   )
 }
 
@@ -69,6 +236,20 @@ export default function ExchangeProfilePage() {
   const cgId = searchParams.get('cgId') || null
 
   const { data, loading, error } = useExchangeProfile(slug, cgId)
+
+  // Volume + price overlay data
+  const volumePriceData = useMemo(() => {
+    if (!data?.historicalVolume?.length) return []
+    const priceMap = new Map<number, number>()
+    for (const [ts, price] of data.priceHistory || []) {
+      const dayKey = Math.floor(ts / 86400000) * 86400000
+      priceMap.set(dayKey, price)
+    }
+    return data.historicalVolume.map((v) => {
+      const dayKey = Math.floor(v.date / 86400000) * 86400000
+      return { date: v.date, volume: v.value, price: priceMap.get(dayKey) || null }
+    })
+  }, [data?.historicalVolume, data?.priceHistory])
 
   const tickerChartData = useMemo(() => {
     if (!data?.tickers?.length) return []
@@ -84,6 +265,12 @@ export default function ExchangeProfilePage() {
       .reverse()
   }, [data?.tickers])
 
+  // Filter valid P/E data points (cap at 500x to remove noise)
+  const validPE = useMemo(() => {
+    if (!data?.historicalPE?.length) return []
+    return data.historicalPE.filter((p) => (p.pe != null && p.pe > 0 && p.pe < 500) || (p.ps != null && p.ps > 0 && p.ps < 500))
+  }, [data?.historicalPE])
+
   if (loading) return <ProfileSkeleton />
 
   if (error || !data) {
@@ -92,10 +279,7 @@ export default function ExchangeProfilePage() {
         <div className="text-center max-w-md">
           <h2 className="font-serif text-2xl font-bold mb-4">Exchange Unavailable</h2>
           <p className="text-ink-muted mb-6">{error || 'No data found for this exchange.'}</p>
-          <Link
-            to="/"
-            className="border-2 border-ink px-6 py-2 font-sans text-sm font-semibold hover:bg-ink hover:text-paper transition-colors inline-block"
-          >
+          <Link to="/" className="border-2 border-ink px-6 py-2 font-sans text-sm font-semibold hover:bg-ink hover:text-paper transition-colors inline-block">
             Back to Dashboard
           </Link>
         </div>
@@ -103,25 +287,20 @@ export default function ExchangeProfilePage() {
     )
   }
 
-  const exchangeName = data.exchange?.name || slug || 'Exchange'
+  const exchangeName = data.exchange?.name || data.summary?.name || slug || 'Exchange'
   const description = data.summary?.description || data.exchange?.description || ''
   const totalOI = data.exchange?.open_interest_btc
     ? `${formatNumber(data.exchange.open_interest_btc)} BTC`
     : '\u2014'
   const perpPairs = data.exchange?.number_of_perpetual_pairs ?? '\u2014'
   const futuresPairs = data.exchange?.number_of_futures_pairs ?? '\u2014'
-
-  const methodology = data.summary?.methodology
   const chains = data.summary?.chains || []
+  const hasPrice = volumePriceData.some((d) => d.price != null && d.price > 0)
 
   return (
     <div className="min-h-screen bg-paper">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Navigation */}
-        <Link
-          to="/"
-          className="font-sans text-sm text-ink-muted hover:text-ink transition-colors mb-6 inline-block"
-        >
+        <Link to="/" className="font-sans text-sm text-ink-muted hover:text-ink transition-colors mb-6 inline-block">
           &larr; Back to Dashboard
         </Link>
 
@@ -130,22 +309,23 @@ export default function ExchangeProfilePage() {
           <header className="border-b-2 border-ink pb-4 mb-6">
             <div className="flex items-center gap-4 mb-2">
               {data.exchange?.image && (
-                <img
-                  src={data.exchange.image}
-                  alt={exchangeName}
-                  className="w-10 h-10 rounded"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                />
+                <img src={data.exchange.image} alt={exchangeName} className="w-10 h-10 rounded"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
               )}
               <h1 className="font-serif text-3xl font-bold text-ink">{exchangeName}</h1>
+              {data.tokenInfo && (
+                <span className="tag-token text-base px-3 py-1">{data.tokenInfo.symbol}</span>
+              )}
+              {!data.tokenInfo && (
+                <span className="font-sans text-sm text-ink-muted border border-rule px-2 py-0.5">No Token</span>
+              )}
             </div>
             {description && (
               <p className="font-sans text-sm text-ink-light max-w-3xl mb-4">
-                {description.length > 300 ? description.slice(0, 300) + '...' : description}
+                {description.length > 400 ? description.slice(0, 400) + '...' : description}
               </p>
             )}
 
-            {/* Key metrics row */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-4">
               <div className="kpi-card">
                 <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Open Interest</p>
@@ -168,15 +348,8 @@ export default function ExchangeProfilePage() {
               {data.exchange?.url && (
                 <div className="kpi-card">
                   <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Website</p>
-                  <a
-                    href={data.exchange.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-sans text-sm font-semibold hover:underline"
-                    style={{ color: COLORS.blue }}
-                  >
-                    Visit
-                  </a>
+                  <a href={data.exchange.url} target="_blank" rel="noopener noreferrer"
+                    className="font-sans text-sm font-semibold hover:underline" style={{ color: COLORS.blue }}>Visit</a>
                 </div>
               )}
               {data.exchange?.year_established && (
@@ -189,110 +362,167 @@ export default function ExchangeProfilePage() {
           </header>
         </ErrorBoundary>
 
-        {/* Historical Volume */}
-        {data.historicalVolume.length > 0 && (
+        {/* Token Info */}
+        {data.tokenInfo && <TokenInfoSection info={data.tokenInfo} />}
+
+        {/* Historical Volume + Price Overlay */}
+        {volumePriceData.length > 0 && (
           <ErrorBoundary fallbackLabel="Historical volume">
             <section className="section-rule">
-              <h3 className="chart-title">Historical Volume</h3>
+              <h3 className="chart-title">
+                Historical Volume{hasPrice ? ' & Token Price' : ''}
+              </h3>
               <p className="chart-subtitle">
-                Daily trading volume over time
+                Daily trading volume{hasPrice ? ` with ${data.tokenInfo?.symbol || 'token'} price overlay` : ''}
               </p>
-              <ResponsiveContainer width="100%" height={360}>
-                <AreaChart
-                  data={data.historicalVolume}
-                  margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-                >
+              <ResponsiveContainer width="100%" height={380}>
+                <ComposedChart data={volumePriceData} margin={{ top: 8, right: hasPrice ? 60 : 8, bottom: 0, left: 0 }}>
                   <defs>
-                    <linearGradient id="profileVolumeGrad" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="profileVolGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.15} />
                       <stop offset="95%" stopColor={COLORS.ink} stopOpacity={0.01} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid
-                    vertical={false}
-                    stroke={GRID_STYLE.stroke}
-                    strokeDasharray={GRID_STYLE.strokeDasharray}
-                  />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(v: number) => formatDateShort(v)}
-                    tick={AXIS_STYLE}
-                    tickLine={false}
-                    axisLine={{ stroke: COLORS.rule }}
-                    minTickGap={60}
-                  />
-                  <YAxis
-                    tickFormatter={(v: number) =>
-                      v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` :
-                      v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` :
-                      `$${(v / 1e3).toFixed(0)}K`
-                    }
-                    tick={AXIS_STYLE}
-                    tickLine={false}
-                    axisLine={false}
-                    width={58}
-                  />
-                  <Tooltip content={<VolumeTooltip />} />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke={COLORS.ink}
-                    strokeWidth={1.5}
-                    fill="url(#profileVolumeGrad)"
-                    animationDuration={800}
-                  />
-                </AreaChart>
+                  <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                  <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
+                  <YAxis yAxisId="vol" tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
+                  {hasPrice && (
+                    <YAxis yAxisId="price" orientation="right" tickFormatter={(v: number) => `$${v < 1 ? v.toFixed(4) : v.toFixed(2)}`}
+                      tick={{ ...AXIS_STYLE, fill: COLORS.blue }} tickLine={false} axisLine={false} width={68} />
+                  )}
+                  <Tooltip content={<VolumeWithPriceTooltip />} />
+                  <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1.5}
+                    fill="url(#profileVolGrad)" animationDuration={800} />
+                  {hasPrice && (
+                    <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke={COLORS.blue} strokeWidth={1.5}
+                      dot={false} animationDuration={800} connectNulls />
+                  )}
+                </ComposedChart>
               </ResponsiveContainer>
+              {hasPrice && (
+                <div className="flex items-center gap-4 mt-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
+                    <span className="font-sans text-[11px] text-ink-muted">Volume</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
+                    <span className="font-sans text-[11px] text-ink-muted">{data.tokenInfo?.symbol || 'Token'} Price</span>
+                  </span>
+                </div>
+              )}
             </section>
           </ErrorBoundary>
         )}
+
+        {/* Historical P/E Ratio */}
+        {validPE.length > 3 && (
+          <ErrorBoundary fallbackLabel="Historical P/E">
+            <section className="section-rule">
+              <h3 className="chart-title">Historical Valuation Multiples</h3>
+              <p className="chart-subtitle">
+                P/E and P/S ratios over time — lower ratios suggest relative undervaluation
+              </p>
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={validPE} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                  <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false}
+                    axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
+                  <YAxis tickFormatter={(v: number) => `${v.toFixed(0)}x`} tick={AXIS_STYLE} tickLine={false}
+                    axisLine={false} width={48} />
+                  <Tooltip content={<PETooltip />} />
+                  <Line type="monotone" dataKey="pe" name="P/E" stroke={COLORS.blue} strokeWidth={2}
+                    dot={false} animationDuration={800} connectNulls />
+                  <Line type="monotone" dataKey="ps" name="P/S" stroke={COLORS.inkMuted} strokeWidth={1.5}
+                    dot={false} animationDuration={800} strokeDasharray="4 3" connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="flex items-center gap-4 mt-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
+                  <span className="font-sans text-[11px] text-ink-muted">P/E Ratio</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-0.5 border-t border-dashed" style={{ borderColor: COLORS.inkMuted }} />
+                  <span className="font-sans text-[11px] text-ink-muted">P/S Ratio</span>
+                </span>
+              </div>
+            </section>
+          </ErrorBoundary>
+        )}
+
+        {/* Quarterly Performance */}
+        {data.quarterlyData.length > 1 && (
+          <ErrorBoundary fallbackLabel="Quarterly performance">
+            <section className="section-rule">
+              <h3 className="chart-title">Quarterly Performance</h3>
+              <p className="chart-subtitle">
+                Volume, fees, and growth by quarter
+              </p>
+              <div className="overflow-x-auto mt-4">
+                <table className="data-table w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="text-left">Quarter</th>
+                      <th className="text-right">Total Volume</th>
+                      <th className="text-right">Avg Daily Vol</th>
+                      <th className="text-right">Peak Daily Vol</th>
+                      <th className="text-right">Total Fees</th>
+                      <th className="text-right">Est. Revenue</th>
+                      <th className="text-right">QoQ Growth</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.quarterlyData.slice(-8).reverse().map((q, i) => (
+                      <tr key={q.quarter} className={i % 2 === 1 ? 'bg-paper-warm' : ''}>
+                        <td className="font-sans text-sm font-semibold text-ink">{q.quarter}</td>
+                        <td className="text-right font-mono text-sm">{formatUSD(q.totalVolume, true)}</td>
+                        <td className="text-right font-mono text-sm text-ink-light">{formatUSD(q.avgDailyVolume, true)}</td>
+                        <td className="text-right font-mono text-sm text-ink-light">{formatUSD(q.peakDailyVolume, true)}</td>
+                        <td className="text-right font-mono text-sm">{q.totalFees > 0 ? formatUSD(q.totalFees, true) : '\u2014'}</td>
+                        <td className="text-right font-mono text-sm text-ink-light">{q.estimatedRevenue > 0 ? formatUSD(q.estimatedRevenue, true) : '\u2014'}</td>
+                        <td className={classNames('text-right font-mono text-sm', percentClass(q.growthVsLast))}>
+                          {q.growthVsLast != null ? formatPercent(q.growthVsLast) : '\u2014'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </ErrorBoundary>
+        )}
+
+        {/* Treasury */}
+        {data.treasury && <TreasurySection treasury={data.treasury} />}
 
         {/* Trading Pairs by OI */}
         {tickerChartData.length > 0 && (
           <ErrorBoundary fallbackLabel="Trading pairs">
             <section className="section-rule">
               <h3 className="chart-title">Top Trading Pairs</h3>
-              <p className="chart-subtitle">
-                Ranked by open interest — colour indicates funding rate direction
-              </p>
+              <p className="chart-subtitle">Ranked by open interest — colour indicates funding rate direction</p>
               <ResponsiveContainer width="100%" height={Math.max(400, tickerChartData.length * 24)}>
-                <BarChart
-                  data={tickerChartData}
-                  layout="vertical"
-                  margin={{ top: 8, right: 24, bottom: 0, left: 0 }}
-                >
-                  <CartesianGrid
-                    horizontal={false}
-                    stroke={GRID_STYLE.stroke}
-                    strokeDasharray={GRID_STYLE.strokeDasharray}
-                  />
-                  <XAxis
-                    type="number"
-                    tickFormatter={(v: number) =>
-                      v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` :
-                      v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` :
-                      `$${(v / 1e3).toFixed(0)}K`
-                    }
-                    tick={AXIS_STYLE}
-                    tickLine={false}
-                    axisLine={{ stroke: COLORS.rule }}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="label"
-                    width={100}
-                    tick={{ ...AXIS_STYLE, fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip content={<TickerTooltip />} cursor={{ fill: COLORS.paperAlt }} />
+                <BarChart data={tickerChartData} layout="vertical" margin={{ top: 8, right: 24, bottom: 0, left: 0 }}>
+                  <CartesianGrid horizontal={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                  <XAxis type="number" tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} />
+                  <YAxis type="category" dataKey="label" width={100} tick={{ ...AXIS_STYLE, fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <Tooltip content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const d = payload[0].payload
+                    return (
+                      <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.6 }}>
+                        <p style={TOOLTIP_STYLE.labelStyle}>{d.label}</p>
+                        <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>OI: {formatUSD(d.oi, true)}</p>
+                        <p style={{ margin: 0, color: d.fundingRate >= 0 ? COLORS.green : COLORS.red, fontSize: 12 }}>
+                          Funding: {formatFundingRate(d.fundingRate)}
+                        </p>
+                      </div>
+                    )
+                  }} cursor={{ fill: COLORS.paperAlt }} />
                   <Bar dataKey="oi" radius={[0, 2, 2, 0]} animationDuration={800}>
                     {tickerChartData.map((entry: { fundingRate: number }, index: number) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.fundingRate >= 0 ? COLORS.green : COLORS.red}
-                        opacity={0.75}
-                      />
+                      <Cell key={`cell-${index}`} fill={entry.fundingRate >= 0 ? COLORS.green : COLORS.red} opacity={0.75} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -311,20 +541,19 @@ export default function ExchangeProfilePage() {
           </ErrorBoundary>
         )}
 
+        {/* Comparables */}
+        <ComparablesSection comparables={data.comparables} currentSlug={slug || ''} />
+
         {/* Methodology */}
-        {methodology && Object.keys(methodology).length > 0 && (
+        {data.summary?.methodology && Object.keys(data.summary.methodology).length > 0 && (
           <ErrorBoundary fallbackLabel="Methodology">
             <section className="section-rule">
               <h3 className="chart-title">Fee Methodology</h3>
               <div className="space-y-3 mt-4">
-                {Object.entries(methodology).map(([key, value]) => (
+                {Object.entries(data.summary.methodology).map(([key, value]) => (
                   <div key={key} className="border-l-2 border-rule pl-4">
-                    <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">
-                      {key}
-                    </p>
-                    <p className="font-sans text-sm text-ink-light">
-                      {String(value)}
-                    </p>
+                    <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">{key}</p>
+                    <p className="font-sans text-sm text-ink-light">{String(value)}</p>
                   </div>
                 ))}
               </div>
@@ -332,12 +561,8 @@ export default function ExchangeProfilePage() {
           </ErrorBoundary>
         )}
 
-        {/* Footer */}
         <footer className="border-t border-rule mt-12 pt-6 pb-8">
-          <Link
-            to="/"
-            className="font-sans text-sm text-ink-muted hover:text-ink transition-colors"
-          >
+          <Link to="/" className="font-sans text-sm text-ink-muted hover:text-ink transition-colors">
             &larr; Back to Dashboard
           </Link>
         </footer>

@@ -1,13 +1,243 @@
 import { useState, useEffect, useRef } from 'react'
-import type { ExchangeProfileData } from '../types/profile'
-import type { HistoricalDataPoint } from '../types'
-import { fetchDerivativesSummary } from '../services/defillama'
-import { fetchCGExchangeDetail } from '../services/coingecko'
+import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange } from '../types/profile'
+import type { HistoricalDataPoint, EnrichedExchange } from '../types'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, fetchProtocols, fetchFeeOverview } from '../services/defillama'
+import { fetchCGExchangeDetail, fetchCoinMarketChart, fetchCoinDetail } from '../services/coingecko'
 
 interface UseExchangeProfileReturn {
   data: ExchangeProfileData | null
   loading: boolean
   error: string | null
+}
+
+function buildTokenInfo(coinData: any): TokenInfo | null {
+  if (!coinData?.market_data) return null
+  const md = coinData.market_data
+  return {
+    symbol: (coinData.symbol || '').toUpperCase(),
+    name: coinData.name || '',
+    currentPrice: md.current_price?.usd || 0,
+    marketCap: md.market_cap?.usd || 0,
+    fdv: md.fully_diluted_valuation?.usd || 0,
+    circulatingSupply: md.circulating_supply || 0,
+    totalSupply: md.total_supply || 0,
+    maxSupply: md.max_supply || null,
+    priceChange24h: md.price_change_percentage_24h || 0,
+    priceChange7d: md.price_change_percentage_7d || 0,
+    priceChange30d: md.price_change_percentage_30d || 0,
+    ath: md.ath?.usd || 0,
+    athDate: md.ath_date?.usd || '',
+    atl: md.atl?.usd || 0,
+    atlDate: md.atl_date?.usd || '',
+  }
+}
+
+function buildHistoricalPE(
+  mcapHistory: [number, number][],
+  feeHistory: HistoricalDataPoint[],
+  revenueHistory: HistoricalDataPoint[],
+  priceHistory: [number, number][]
+): HistoricalPEPoint[] {
+  if (mcapHistory.length === 0) return []
+
+  // Build fee/revenue lookup by date (rounded to day)
+  const feeMap = new Map<number, number>()
+  for (const f of feeHistory) {
+    const dayKey = Math.floor(f.date / 86400000) * 86400000
+    feeMap.set(dayKey, f.value)
+  }
+  const revMap = new Map<number, number>()
+  for (const r of revenueHistory) {
+    const dayKey = Math.floor(r.date / 86400000) * 86400000
+    revMap.set(dayKey, r.value)
+  }
+
+  // Build price lookup
+  const priceMap = new Map<number, number>()
+  for (const [ts, price] of priceHistory) {
+    const dayKey = Math.floor(ts / 86400000) * 86400000
+    priceMap.set(dayKey, price)
+  }
+
+  // Sample weekly for performance
+  const sampled = mcapHistory.filter((_, i) => i % 7 === 0 || i === mcapHistory.length - 1)
+
+  return sampled
+    .map(([ts, mcap]) => {
+      const dayKey = Math.floor(ts / 86400000) * 86400000
+      const dailyFee = feeMap.get(dayKey) || 0
+      const dailyRev = revMap.get(dayKey) || 0
+      const price = priceMap.get(dayKey) || 0
+
+      const annualizedFees = dailyFee * 365
+      const annualizedRev = dailyRev > 0 ? dailyRev * 365 : annualizedFees * 0.3
+
+      return {
+        date: ts,
+        pe: mcap > 0 && annualizedRev > 0 ? mcap / annualizedRev : null,
+        ps: mcap > 0 && annualizedFees > 0 ? mcap / annualizedFees : null,
+        price,
+        mcap,
+      }
+    })
+    .filter((p) => p.mcap > 0)
+}
+
+function buildQuarterlyData(
+  volumeHistory: HistoricalDataPoint[],
+  feeHistory: HistoricalDataPoint[]
+): QuarterlyData[] {
+  if (volumeHistory.length === 0) return []
+
+  const feeMap = new Map<number, number>()
+  for (const f of feeHistory) {
+    const dayKey = Math.floor(f.date / 86400000) * 86400000
+    feeMap.set(dayKey, f.value)
+  }
+
+  // Group by quarter
+  const quarters = new Map<string, { volumes: number[]; fees: number[] }>()
+
+  for (const point of volumeHistory) {
+    const d = new Date(point.date)
+    const q = `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`
+    if (!quarters.has(q)) quarters.set(q, { volumes: [], fees: [] })
+    const bucket = quarters.get(q)!
+    bucket.volumes.push(point.value)
+    const dayKey = Math.floor(point.date / 86400000) * 86400000
+    bucket.fees.push(feeMap.get(dayKey) || 0)
+  }
+
+  const result: QuarterlyData[] = []
+  let prevVolume: number | null = null
+
+  for (const [quarter, { volumes, fees }] of quarters) {
+    const totalVolume = volumes.reduce((s, v) => s + v, 0)
+    const totalFees = fees.reduce((s, v) => s + v, 0)
+    const growthVsLast = prevVolume != null && prevVolume > 0
+      ? ((totalVolume - prevVolume) / prevVolume) * 100
+      : null
+
+    result.push({
+      quarter,
+      totalVolume,
+      avgDailyVolume: volumes.length > 0 ? totalVolume / volumes.length : 0,
+      totalFees,
+      estimatedRevenue: totalFees * 0.3,
+      peakDailyVolume: Math.max(...volumes),
+      growthVsLast,
+    })
+
+    prevVolume = totalVolume
+  }
+
+  return result
+}
+
+function buildTreasury(treasuryData: any): TreasuryInfo | null {
+  if (!treasuryData) return null
+
+  // DefiLlama treasury format: { id, name, tokenBreakdowns, ownTokens, stablecoins, majors, others }
+  const ownToken = treasuryData.ownTokens || treasuryData.ownTokenTreasury || 0
+  const stablecoins = treasuryData.stablecoins || 0
+  const majors = treasuryData.majors || 0
+  const others = treasuryData.others || 0
+  const total = ownToken + stablecoins + majors + others
+
+  if (total === 0) {
+    // Try alternative structure
+    if (treasuryData.tvl != null) {
+      return {
+        totalUsd: treasuryData.tvl,
+        ownTokenUsd: 0,
+        stablecoinsUsd: 0,
+        majorsUsd: 0,
+        othersUsd: treasuryData.tvl,
+      }
+    }
+    return null
+  }
+
+  return {
+    totalUsd: total,
+    ownTokenUsd: ownToken,
+    stablecoinsUsd: stablecoins,
+    majorsUsd: majors,
+    othersUsd: others,
+  }
+}
+
+function buildComparables(
+  slug: string,
+  chains: string[],
+  volume24h: number,
+  mcap: number | null,
+  allProtocols: any[],
+  protocolMap: Map<string, any>,
+  feeMap: Map<string, any>
+): ComparableExchange[] {
+  const comparables: ComparableExchange[] = []
+  const chainsSet = new Set(chains.map((c) => c.toLowerCase()))
+
+  for (const dex of allProtocols) {
+    if ((dex.slug || dex.name)?.toLowerCase() === slug?.toLowerCase()) continue
+    if (!dex.total24h || dex.total24h <= 0) continue
+
+    const reasons: string[] = []
+
+    // Same chain match
+    const dexChains = (dex.chains || []).map((c: string) => c.toLowerCase())
+    const sharedChains = dexChains.filter((c: string) => chainsSet.has(c))
+    if (sharedChains.length > 0) reasons.push(`Same chain: ${sharedChains.join(', ')}`)
+
+    // Similar volume (0.3x to 3x)
+    if (volume24h > 0) {
+      const ratio = dex.total24h / volume24h
+      if (ratio >= 0.3 && ratio <= 3) reasons.push('Similar volume')
+    }
+
+    // Similar valuation
+    const protInfo = protocolMap.get(dex.name?.toLowerCase()) || protocolMap.get(dex.slug?.toLowerCase())
+    const dexMcap = protInfo?.mcap || null
+    if (mcap && dexMcap && mcap > 0) {
+      const valRatio = dexMcap / mcap
+      if (valRatio >= 0.2 && valRatio <= 5) reasons.push('Similar valuation')
+    }
+
+    if (reasons.length === 0) continue
+
+    const feeInfo = feeMap.get(dex.name?.toLowerCase()) || feeMap.get(dex.slug?.toLowerCase())
+    const fees24h = feeInfo?.total24h || 0
+    const hasToken = !!(protInfo?.symbol && protInfo.symbol !== '-' && protInfo.symbol !== '')
+
+    const annualFees = fees24h * 365
+    const annualRev = annualFees * 0.3
+
+    comparables.push({
+      name: dex.displayName || dex.name,
+      slug: dex.slug || '',
+      volume24h: dex.total24h,
+      openInterest: 0,
+      chains: dex.chains || [],
+      hasToken,
+      tokenSymbol: hasToken ? protInfo.symbol : null,
+      mcap: dexMcap,
+      peRatio: dexMcap && annualRev > 0 ? dexMcap / annualRev : null,
+      psRatio: dexMcap && annualFees > 0 ? dexMcap / annualFees : null,
+      change1d: dex.change_1d ?? null,
+      matchReason: reasons.join(' · '),
+    })
+  }
+
+  // Sort by number of match reasons, then by volume
+  comparables.sort((a, b) => {
+    const aReasons = a.matchReason.split(' · ').length
+    const bReasons = b.matchReason.split(' · ').length
+    if (bReasons !== aReasons) return bReasons - aReasons
+    return b.volume24h - a.volume24h
+  })
+
+  return comparables.slice(0, 10)
 }
 
 export function useExchangeProfile(
@@ -31,13 +261,21 @@ export function useExchangeProfile(
         setLoading(true)
         setError(null)
 
-        const [summary, cgDetail] = await Promise.all([
+        // Phase 1: Core data (parallel)
+        const [summary, cgDetail, feeSummary, revenueSummary, treasuryData, derivativesOverview, protocols, feeOverview] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
+          fetchFeeSummary(slug!).catch(() => null),
+          fetchRevenueSummary(slug!).catch(() => null),
+          fetchTreasury(slug!).catch(() => null),
+          fetchDerivativesOverview().catch(() => null),
+          fetchProtocols().catch(() => []),
+          fetchFeeOverview().catch(() => ({ protocols: [], total24h: 0, total7d: 0, total30d: 0 })),
         ])
 
         if (cancelled) return
 
+        // Historical volume
         const historicalVolume: HistoricalDataPoint[] = (
           summary?.totalDataChart || []
         )
@@ -46,11 +284,85 @@ export function useExchangeProfile(
 
         const tickers = cgDetail?.tickers || []
 
+        // Fee/revenue history
+        const feeHistory: HistoricalDataPoint[] = (feeSummary?.totalDataChart || [])
+          .filter((entry: any): entry is [number, number] => Array.isArray(entry) && entry.length === 2)
+          .map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
+
+        const revenueHistory: HistoricalDataPoint[] = (revenueSummary?.totalDataChart || [])
+          .filter((entry: any): entry is [number, number] => Array.isArray(entry) && entry.length === 2)
+          .map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
+
+        // Phase 2: Token data (if gecko_id exists)
+        const geckoId = summary?.gecko_id || null
+        let tokenInfo: TokenInfo | null = null
+        let priceHistory: [number, number][] = []
+        let mcapHistory: [number, number][] = []
+
+        if (geckoId) {
+          const [coinDetail, marketChart] = await Promise.all([
+            fetchCoinDetail(geckoId).catch(() => null),
+            fetchCoinMarketChart(geckoId, 730).catch(() => ({ prices: [], market_caps: [] })),
+          ])
+
+          if (!cancelled) {
+            tokenInfo = buildTokenInfo(coinDetail)
+            priceHistory = marketChart.prices || []
+            mcapHistory = marketChart.market_caps || []
+          }
+        }
+
+        if (cancelled) return
+
+        // Compute derived data
+        const historicalPE = buildHistoricalPE(mcapHistory, feeHistory, revenueHistory, priceHistory)
+        const quarterlyData = buildQuarterlyData(historicalVolume, feeHistory)
+        const treasury = buildTreasury(treasuryData)
+
+        // Build comparables
+        const protocolMap = new Map<string, any>()
+        for (const p of (protocols as any[])) {
+          if (p.name) protocolMap.set(p.name.toLowerCase(), p)
+          if (p.slug) protocolMap.set(p.slug.toLowerCase(), p)
+        }
+        const feeMap = new Map<string, any>()
+        for (const f of feeOverview.protocols || []) {
+          if (f.name) feeMap.set(f.name.toLowerCase(), f)
+          if (f.slug) feeMap.set(f.slug.toLowerCase(), f)
+        }
+
+        const allDerivProtocols = derivativesOverview?.protocols || []
+        const chains = summary?.chains || []
+        const vol24h = allDerivProtocols.find(
+          (p: any) => p.slug?.toLowerCase() === slug!.toLowerCase() || p.name?.toLowerCase() === slug!.toLowerCase()
+        )?.total24h || 0
+        const protInfo = protocolMap.get(slug!.toLowerCase())
+        const currentMcap = tokenInfo?.marketCap || protInfo?.mcap || null
+
+        const comparables = buildComparables(
+          slug!,
+          chains,
+          vol24h,
+          currentMcap,
+          allDerivProtocols,
+          protocolMap,
+          feeMap
+        )
+
         const profileData: ExchangeProfileData = {
           summary: summary || null,
           historicalVolume,
           tickers,
           exchange: cgDetail || null,
+          tokenInfo,
+          priceHistory,
+          mcapHistory,
+          historicalPE,
+          quarterlyData,
+          treasury,
+          comparables,
+          feeHistory,
+          revenueHistory,
         }
 
         setData(profileData)

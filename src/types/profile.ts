@@ -1,4 +1,4 @@
-import type { HistoricalDataPoint } from './index'
+import type { HistoricalDataPoint, EnrichedExchange } from './index'
 import type { CGDerivativeTicker, CGExchangeDetail } from './coingecko'
 
 export interface DerivativesSummary {
@@ -21,9 +21,78 @@ export interface DerivativesSummary {
   childProtocols?: string[]
 }
 
+export interface TokenInfo {
+  symbol: string
+  name: string
+  currentPrice: number
+  marketCap: number
+  fdv: number
+  circulatingSupply: number
+  totalSupply: number
+  maxSupply: number | null
+  priceChange24h: number
+  priceChange7d: number
+  priceChange30d: number
+  ath: number
+  athDate: string
+  atl: number
+  atlDate: string
+}
+
+export interface HistoricalPEPoint {
+  date: number
+  pe: number | null
+  ps: number | null
+  price: number
+  mcap: number
+}
+
+export interface QuarterlyData {
+  quarter: string
+  totalVolume: number
+  avgDailyVolume: number
+  totalFees: number
+  estimatedRevenue: number
+  peakDailyVolume: number
+  growthVsLast: number | null
+}
+
+export interface TreasuryInfo {
+  totalUsd: number
+  ownTokenUsd: number
+  stablecoinsUsd: number
+  majorsUsd: number
+  othersUsd: number
+}
+
+export interface ComparableExchange {
+  name: string
+  slug: string
+  volume24h: number
+  openInterest: number
+  chains: string[]
+  hasToken: boolean
+  tokenSymbol: string | null
+  mcap: number | null
+  peRatio: number | null
+  psRatio: number | null
+  change1d: number | null
+  matchReason: string
+}
+
 export interface ExchangeProfileData {
   summary: DerivativesSummary | null
   historicalVolume: HistoricalDataPoint[]
   tickers: CGDerivativeTicker[]
   exchange: CGExchangeDetail | null
+  // Enriched fields
+  tokenInfo: TokenInfo | null
+  priceHistory: [number, number][]
+  mcapHistory: [number, number][]
+  historicalPE: HistoricalPEPoint[]
+  quarterlyData: QuarterlyData[]
+  treasury: TreasuryInfo | null
+  comparables: ComparableExchange[]
+  feeHistory: HistoricalDataPoint[]
+  revenueHistory: HistoricalDataPoint[]
 }

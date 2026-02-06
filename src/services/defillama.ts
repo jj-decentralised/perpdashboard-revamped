@@ -41,6 +41,36 @@ export async function fetchDerivativesSummary(slug: string): Promise<Derivatives
   )
 }
 
+export async function fetchFeeSummary(slug: string): Promise<any | null> {
+  try {
+    return await fetchJSON<any>(
+      `${LLAMA_BASE}/summary/fees/${slug}?dataType=dailyFees`
+    )
+  } catch {
+    return null
+  }
+}
+
+export async function fetchRevenueSummary(slug: string): Promise<any | null> {
+  try {
+    return await fetchJSON<any>(
+      `${LLAMA_BASE}/summary/fees/${slug}?dataType=dailyRevenue`
+    )
+  } catch {
+    return null
+  }
+}
+
+export async function fetchTreasury(slug: string): Promise<any | null> {
+  try {
+    return await fetchJSON<any>(
+      `${LLAMA_BASE}/treasury/${slug}`
+    )
+  } catch {
+    return null
+  }
+}
+
 function median(values: number[]): number {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
