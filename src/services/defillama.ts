@@ -133,7 +133,7 @@ function buildGroupStats(
 
 // Manual mapping: DefiLlama exchange slug → CoinGecko TOKEN id
 // This bridges the gap when DefiLlama /protocols has no gecko_id
-const SLUG_TO_GECKO_TOKEN: Record<string, string> = {
+export const SLUG_TO_GECKO_TOKEN: Record<string, string> = {
   'hyperliquid': 'hyperliquid',
   'dydx': 'dydx-chain',
   'dydx-v4': 'dydx-chain',

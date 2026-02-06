@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview } from '../services/defillama'
-import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail } from '../services/coingecko'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList } from '../services/coingecko'
+import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 
 interface UseExchangeProfileReturn {
@@ -305,8 +306,40 @@ export function useExchangeProfile(
           .filter((entry: any): entry is [number, number] => Array.isArray(entry) && entry.length === 2)
           .map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
 
-        // Phase 2: Token data (if gecko_id exists)
-        const geckoId = summary?.gecko_id || null
+        // Phase 2: Resolve gecko token ID from multiple sources
+        const slugLower = slug!.toLowerCase()
+        let geckoId = summary?.gecko_id || null
+
+        // Fallback 1: manual slug → token map
+        if (!geckoId && SLUG_TO_GECKO_TOKEN[slugLower]) {
+          geckoId = SLUG_TO_GECKO_TOKEN[slugLower]
+        }
+        // Fallback 2: try stripped slug (e.g. "drift-protocol" → "drift")
+        if (!geckoId) {
+          const stripped = slugLower.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|defutures?)$/i, '').trim()
+          if (stripped !== slugLower && SLUG_TO_GECKO_TOKEN[stripped]) {
+            geckoId = SLUG_TO_GECKO_TOKEN[stripped]
+          }
+        }
+        // Fallback 3: CoinGecko coins list symbol matching
+        if (!geckoId) {
+          try {
+            const coinsList = await fetchCachedCoinsList()
+            const exchangeName = (summary?.name || slug || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+            // Try matching by name similarity
+            const match = coinsList.find((c: CoinListEntry) => {
+              const coinName = c.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+              return (
+                c.id.toLowerCase() === slugLower ||
+                coinName === exchangeName ||
+                coinName.includes(exchangeName) ||
+                exchangeName.includes(coinName)
+              )
+            })
+            if (match) geckoId = match.id
+          } catch { /* coins list unavailable */ }
+        }
+
         let tokenInfo: TokenInfo | null = null
         let priceHistory: [number, number][] = []
         let mcapHistory: [number, number][] = []
