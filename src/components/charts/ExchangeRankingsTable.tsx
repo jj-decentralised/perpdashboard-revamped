@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react'
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import type { EnrichedExchange } from '../../types'
 import { formatUSD, formatPercent, formatNumber, formatMultiple, formatBPS, percentClass, classNames } from '../../utils/format'
@@ -212,6 +212,47 @@ function EcosystemBadge({ slug }: { slug: string }) {
     >
       {eco.products.length} builders
     </span>
+  )
+}
+
+function ScrollableTable({ children }: { children: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScroll, setCanScroll] = useState(false)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const check = () => {
+      const hasMore = el.scrollWidth - el.scrollLeft - el.clientWidth > 2
+      setCanScroll(hasMore)
+    }
+    check()
+    el.addEventListener('scroll', check, { passive: true })
+    window.addEventListener('resize', check)
+    return () => {
+      el.removeEventListener('scroll', check)
+      window.removeEventListener('resize', check)
+    }
+  }, [])
+
+  return (
+    <div className="relative">
+      <div ref={scrollRef} className="overflow-x-auto border border-rule bg-paper">
+        {children}
+      </div>
+      {canScroll && (
+        <div
+          className="absolute right-0 top-0 bottom-0 w-12 pointer-events-none z-20"
+          style={{
+            background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.85) 60%, rgba(255,255,255,1))',
+          }}
+        >
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 pointer-events-none">
+            <span className="text-ink-muted text-xs animate-pulse">&rsaquo;</span>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -441,7 +482,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         </div>
       </div>
 
-      <div className="overflow-x-auto border border-rule bg-paper relative">
+      <ScrollableTable>
         <table className="data-table w-full border-collapse">
           <thead>
             <tr>
@@ -515,7 +556,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollableTable>
 
       {/* Pagination */}
       {totalPages > 1 && (

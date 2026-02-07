@@ -462,6 +462,69 @@ function TreasurySection({ treasury }: { treasury: TreasuryInfo }) {
   )
 }
 
+// --- Quarterly Table with heat-map shading ---
+function QuarterlyTable({ quarters }: { quarters: QuarterlyData[] }) {
+  const rows = quarters.slice(-8).reverse()
+
+  // Compute column maxes for heat-map intensity
+  const cols = ['totalVolume', 'avgDailyVolume', 'peakDailyVolume', 'totalFees', 'estimatedRevenue'] as const
+  const maxes = {} as Record<typeof cols[number], number>
+  for (const col of cols) {
+    maxes[col] = Math.max(...rows.map(q => q[col] || 0))
+  }
+
+  function heatBg(value: number, max: number): React.CSSProperties {
+    if (!max || !value || value <= 0) return {}
+    const ratio = value / max
+    // Green tint: peak = 0.18 opacity, lowest = 0.03
+    const alpha = 0.03 + ratio * 0.15
+    return { backgroundColor: `rgba(46, 125, 79, ${alpha})` }
+  }
+
+  return (
+    <div className="overflow-x-auto mt-4">
+      <table className="data-table w-full border-collapse">
+        <thead>
+          <tr>
+            <th className="text-left">Quarter</th>
+            <th className="text-right">Total Volume</th>
+            <th className="text-right">Avg Daily Vol</th>
+            <th className="text-right">Peak Daily Vol</th>
+            <th className="text-right">Total Fees</th>
+            <th className="text-right">Est. Revenue</th>
+            <th className="text-right">QoQ Growth</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((q) => (
+            <tr key={q.quarter}>
+              <td className="font-sans text-sm font-semibold text-ink">{q.quarter}</td>
+              <td className="text-right font-mono text-sm" style={heatBg(q.totalVolume, maxes.totalVolume)}>
+                {formatUSD(q.totalVolume, true)}
+              </td>
+              <td className="text-right font-mono text-sm" style={heatBg(q.avgDailyVolume, maxes.avgDailyVolume)}>
+                {formatUSD(q.avgDailyVolume, true)}
+              </td>
+              <td className="text-right font-mono text-sm" style={heatBg(q.peakDailyVolume, maxes.peakDailyVolume)}>
+                {formatUSD(q.peakDailyVolume, true)}
+              </td>
+              <td className="text-right font-mono text-sm" style={heatBg(q.totalFees, maxes.totalFees)}>
+                {q.totalFees > 0 ? formatUSD(q.totalFees, true) : '\u2014'}
+              </td>
+              <td className="text-right font-mono text-sm" style={heatBg(q.estimatedRevenue, maxes.estimatedRevenue)}>
+                {q.estimatedRevenue > 0 ? formatUSD(q.estimatedRevenue, true) : '\u2014'}
+              </td>
+              <td className={classNames('text-right font-mono text-sm', percentClass(q.growthVsLast))}>
+                {q.growthVsLast != null ? formatPercent(q.growthVsLast) : '\u2014'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // --- Comparables Section ---
 function ComparablesSection({ comparables, currentSlug }: { comparables: ComparableExchange[]; currentSlug: string }) {
   if (comparables.length === 0) return null
@@ -888,38 +951,9 @@ export default function ExchangeProfilePage() {
             <section className="section-rule">
               <h3 className="chart-title">Quarterly Performance</h3>
               <p className="chart-subtitle">
-                Volume, fees, and growth by quarter
+                Volume, fees, and growth by quarter — darker shading = column peak
               </p>
-              <div className="overflow-x-auto mt-4">
-                <table className="data-table w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="text-left">Quarter</th>
-                      <th className="text-right">Total Volume</th>
-                      <th className="text-right">Avg Daily Vol</th>
-                      <th className="text-right">Peak Daily Vol</th>
-                      <th className="text-right">Total Fees</th>
-                      <th className="text-right">Est. Revenue</th>
-                      <th className="text-right">QoQ Growth</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.quarterlyData.slice(-8).reverse().map((q, i) => (
-                      <tr key={q.quarter} className={i % 2 === 1 ? 'bg-paper-warm' : ''}>
-                        <td className="font-sans text-sm font-semibold text-ink">{q.quarter}</td>
-                        <td className="text-right font-mono text-sm">{formatUSD(q.totalVolume, true)}</td>
-                        <td className="text-right font-mono text-sm text-ink-light">{formatUSD(q.avgDailyVolume, true)}</td>
-                        <td className="text-right font-mono text-sm text-ink-light">{formatUSD(q.peakDailyVolume, true)}</td>
-                        <td className="text-right font-mono text-sm">{q.totalFees > 0 ? formatUSD(q.totalFees, true) : '\u2014'}</td>
-                        <td className="text-right font-mono text-sm text-ink-light">{q.estimatedRevenue > 0 ? formatUSD(q.estimatedRevenue, true) : '\u2014'}</td>
-                        <td className={classNames('text-right font-mono text-sm', percentClass(q.growthVsLast))}>
-                          {q.growthVsLast != null ? formatPercent(q.growthVsLast) : '\u2014'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <QuarterlyTable quarters={data.quarterlyData} />
             </section>
           </ErrorBoundary>
         )}
