@@ -3,6 +3,8 @@ import type { FundingRateEntry } from '../../types'
 import { COLORS } from '../../utils/chartTheme'
 import { formatUSD, formatPercent } from '../../utils/format'
 import { MetricInfo } from '../MetricInfo'
+import { CategoryFilter } from '../CategoryFilter'
+import type { CategorySelection } from '../CategoryFilter'
 
 interface Props {
   data: FundingRateEntry[]
@@ -30,12 +32,17 @@ function formatRate(rate: number | null): string {
 
 export function FundingRateHeatmap({ data }: Props) {
   const [view, setView] = useState<'heatmap' | 'arb' | 'rateAvg'>('heatmap')
+  const [category, setCategory] = useState<CategorySelection>('all')
+
+  const defiCount = data.filter(d => d.venueType === 'defi').length
+  const cefiCount = data.filter(d => d.venueType === 'cefi').length
 
   const { coins, exchanges, matrix, sentiment, arbOpportunities, rateVsAvg } = useMemo(() => {
-    if (!data || data.length === 0) return { coins: [], exchanges: [], matrix: new Map(), sentiment: null, arbOpportunities: [], rateVsAvg: [] }
+    const filtered = category === 'all' ? data : data.filter(d => d.venueType === category)
+    if (!filtered || filtered.length === 0) return { coins: [], exchanges: [], matrix: new Map(), sentiment: null, arbOpportunities: [], rateVsAvg: [] }
 
     // Filter valid entries
-    const valid = data.filter(
+    const valid = filtered.filter(
       (d) => d.baseAsset && d.marketplace && d.fundingRate != null && isFinite(d.fundingRate) && Math.abs(d.fundingRate) < 0.01
     )
 
@@ -140,7 +147,7 @@ export function FundingRateHeatmap({ data }: Props) {
     rateVsAvg.sort((a, b) => signalOrder[a.signal] - signalOrder[b.signal] || Math.abs(b.current) - Math.abs(a.current))
 
     return { coins: topCoins, exchanges: topExchanges, matrix, sentiment, arbOpportunities, rateVsAvg }
-  }, [data])
+  }, [data, category])
 
   if (!data || data.length === 0 || coins.length === 0) {
     return (
@@ -193,8 +200,16 @@ export function FundingRateHeatmap({ data }: Props) {
         </div>
       )}
 
-      {/* View toggle */}
-      <div className="flex items-center gap-1 mb-4">
+      {/* Category filter + View toggle */}
+      <div className="flex items-center gap-4 mb-4">
+        <CategoryFilter
+          selected={category}
+          onChange={setCategory}
+          defiCount={defiCount}
+          cefiCount={cefiCount}
+        />
+        <div className="w-px h-5 bg-rule" />
+        <div className="flex items-center gap-1">
         <button
           onClick={() => setView('heatmap')}
           className={view === 'heatmap' ? 'px-3 py-1.5 border bg-ink text-paper border-ink font-semibold font-sans text-xs' : 'px-3 py-1.5 border bg-paper text-ink-muted border-rule hover:border-ink font-sans text-xs cursor-pointer'}
@@ -216,6 +231,7 @@ export function FundingRateHeatmap({ data }: Props) {
         >
           Rate vs Average
         </button>
+        </div>
       </div>
 
       {view === 'heatmap' && (
@@ -294,21 +310,38 @@ export function FundingRateHeatmap({ data }: Props) {
                 <th className="text-left">Pair</th>
                 <th className="text-left">Long Exchange</th>
                 <th className="text-right">Rate</th>
+                <th className="text-right">Basis</th>
                 <th className="text-left">Short Exchange</th>
                 <th className="text-right">Rate</th>
+                <th className="text-right">Basis</th>
                 <th className="text-right">Spread</th>
                 <th className="text-right">Combined OI</th>
                 <th className="text-right">Est. 8h Funding</th>
               </tr>
             </thead>
             <tbody>
-              {arbOpportunities.slice(0, 15).map((arb, i) => (
+              {arbOpportunities.slice(0, 15).map((arb, i) => {
+                const highEntry = matrix.get(arb.coin)?.get(arb.highExchange)
+                const lowEntry = matrix.get(arb.coin)?.get(arb.lowExchange)
+                const highBasis = highEntry?.markPrice != null && highEntry?.indexPrice != null && highEntry.indexPrice !== 0
+                  ? ((highEntry.markPrice - highEntry.indexPrice) / highEntry.indexPrice) * 10000
+                  : null
+                const lowBasis = lowEntry?.markPrice != null && lowEntry?.indexPrice != null && lowEntry.indexPrice !== 0
+                  ? ((lowEntry.markPrice - lowEntry.indexPrice) / lowEntry.indexPrice) * 10000
+                  : null
+                return (
                 <tr key={arb.coin} className={i % 2 === 1 ? 'bg-paper-warm' : ''}>
                   <td className="font-mono font-bold text-ink">{arb.coin}</td>
                   <td className="font-sans text-sm">{arb.highExchange}</td>
                   <td className="text-right font-mono text-xs" style={{ color: COLORS.green }}>{formatRate(arb.highRate)}</td>
+                  <td className="text-right font-mono text-xs text-ink-muted">
+                    {highBasis != null ? `${highBasis >= 0 ? '+' : ''}${highBasis.toFixed(1)} bps` : '\u2014'}
+                  </td>
                   <td className="font-sans text-sm">{arb.lowExchange}</td>
                   <td className="text-right font-mono text-xs" style={{ color: COLORS.red }}>{formatRate(arb.lowRate)}</td>
+                  <td className="text-right font-mono text-xs text-ink-muted">
+                    {lowBasis != null ? `${lowBasis >= 0 ? '+' : ''}${lowBasis.toFixed(1)} bps` : '\u2014'}
+                  </td>
                   <td className="text-right font-mono text-xs font-bold" style={{ color: COLORS.blue }}>
                     {(arb.spread * 10000).toFixed(1)} bps
                   </td>
@@ -317,7 +350,8 @@ export function FundingRateHeatmap({ data }: Props) {
                     {formatUSD(arb.spread * arb.totalOI, true)}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
           <p className="font-sans text-[10px] text-ink-muted mt-2">

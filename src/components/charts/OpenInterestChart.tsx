@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   ResponsiveContainer,
   BarChart,
@@ -13,6 +13,7 @@ import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatUSD } from '../../utils/format'
 import { MetricInfo } from '../MetricInfo'
+import { CategoryFilter, type CategorySelection } from '../CategoryFilter'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -84,8 +85,12 @@ function CustomTooltip({
 }
 
 export function OpenInterestChart({ exchanges }: Props) {
+  const [category, setCategory] = useState<CategorySelection>('all')
+
+  const filtered = category === 'all' ? exchanges : exchanges.filter(e => e.venueType === category)
+
   const { chartData, totalOI, top5Share, tokenOI, noTokenOI, avgTurnover, chainOIData } = useMemo(() => {
-    const valid = exchanges
+    const valid = filtered
       .filter((e) => e.openInterest > 0)
       .sort((a, b) => b.openInterest - a.openInterest)
 
@@ -128,7 +133,7 @@ export function OpenInterestChart({ exchanges }: Props) {
     }).reverse()
 
     return { chartData, totalOI, top5Share, tokenOI, noTokenOI, avgTurnover, chainOIData }
-  }, [exchanges])
+  }, [filtered])
 
   if (chartData.length === 0) {
     return (
@@ -156,6 +161,15 @@ export function OpenInterestChart({ exchanges }: Props) {
         description="Open interest represents the total value of outstanding perpetual contracts. OI turnover (daily volume / open interest) shows how quickly positions are being opened and closed, while a low OI/VOL ratio signals capital is 'sticky.' Sudden OI spikes or drops often coincide with liquidation cascades and potential turning points."
         source="DefiLlama perps data for open interest by exchange. Volume and OI ratios computed from the same dataset."
       />
+
+      <div className="flex items-center gap-3 mb-4">
+        <CategoryFilter
+          selected={category}
+          onChange={setCategory}
+          defiCount={exchanges.filter(e => e.venueType === 'defi').length}
+          cefiCount={exchanges.filter(e => e.venueType === 'cefi').length}
+        />
+      </div>
 
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart

@@ -538,7 +538,7 @@ export function ValuationChart({ exchanges }: Props) {
           <strong>Methodology:</strong> P/E = Circulating Market Cap / Annualised Revenue.
           P/S = Circulating Market Cap / Annualised Fees.
           Market cap uses circulating supply (not FDV) sourced from CoinGecko.
-          Annualisation uses trailing 24h values extrapolated over 365 days (24h &times; 365).
+          Annualisation prefers trailing 30d fees &times; 12 when available; falls back to 24h &times; 365.
           Revenue is estimated as fees &times; 0.3 assumed take rate where actual protocol revenue data
           is not available from DefiLlama; when DefiLlama provides explicit revenue figures, those are
           used instead. Lower ratios suggest relative undervaluation compared to peers.

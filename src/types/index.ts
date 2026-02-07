@@ -60,6 +60,7 @@ export interface EnrichedExchange extends DexProtocol {
   annualizedRevenue: number | null
   peRatio: number | null
   psRatio: number | null
+  venueType: 'defi' | 'cefi'
 }
 
 export interface FeeProtocol {
@@ -152,6 +153,8 @@ export interface FundingRateEntry {
   fundingRate30dAverage: number | null
   openInterest: number | null
   indexPrice: number | null
+  markPrice: number | null
+  venueType: 'defi' | 'cefi'
 }
 
 export interface DashboardData {

@@ -103,14 +103,15 @@ export function DataMethodology() {
               <div>
                 <dt className="inline font-medium" style={{ color: COLORS.inkLight }}>P/E Ratio:</dt>{' '}
                 <dd className="inline">
-                  Circulating Market Cap / Annualised Revenue (24h revenue &times; 365).
-                  Revenue estimated as fees &times; 0.3 assumed take rate when not provided.
+                  Circulating Market Cap / Annualised Revenue. Annualisation prefers trailing 30d fees &times; 12
+                  when available; falls back to 24h &times; 365. Revenue estimated as fees &times; 0.3 assumed
+                  take rate when DefiLlama does not provide explicit revenue figures.
                 </dd>
               </div>
               <div>
                 <dt className="inline font-medium" style={{ color: COLORS.inkLight }}>P/S Ratio:</dt>{' '}
                 <dd className="inline">
-                  Circulating Market Cap / Annualised Fees (24h fees &times; 365).
+                  Circulating Market Cap / Annualised Fees. Uses trailing 30d &times; 12 when available.
                 </dd>
               </div>
               <div>
@@ -144,6 +145,52 @@ export function DataMethodology() {
                 </dd>
               </div>
             </dl>
+          </div>
+
+          {/* CeFi / DeFi Classification */}
+          <div>
+            <h4
+              className="font-serif text-xs font-semibold uppercase tracking-wider mb-2"
+              style={{ color: COLORS.ink }}
+            >
+              CeFi / DeFi Classification
+            </h4>
+            <div className="font-sans text-xs text-ink-light leading-relaxed space-y-1.5">
+              <p>
+                Venues are classified as <strong>DeFi</strong> (on-chain perpetual protocols: GMX, Hyperliquid,
+                dYdX, Vertex, Drift, Jupiter Perps, etc.) or <strong>CeFi</strong> (centralised exchanges:
+                Binance, Bybit, OKX, Bitget, etc.) using a maintained whitelist of ~100+ DeFi protocols.
+                Unknown venues default to CeFi.
+              </p>
+              <p>
+                <strong>Derivatives overview</strong> data from DefiLlama tracks on-chain protocols and is
+                predominantly DeFi. <strong>Funding rate</strong> data from yields/perps includes both CeFi
+                and DeFi markets. The category filter (All / DeFi / CeFi) on charts allows separate analysis
+                of each venue type.
+              </p>
+              <p>
+                <strong>Why separate?</strong> CeFi and DeFi venues have structurally different OI magnitudes,
+                funding mechanisms, and fee structures. Combining them can produce skewed averages and
+                implausibly large aggregate OI figures. Filtering by category yields more actionable insights.
+              </p>
+            </div>
+          </div>
+
+          {/* Funding Basis */}
+          <div>
+            <h4
+              className="font-serif text-xs font-semibold uppercase tracking-wider mb-2"
+              style={{ color: COLORS.ink }}
+            >
+              Funding Basis
+            </h4>
+            <p className="font-sans text-xs text-ink-light leading-relaxed">
+              The <strong>basis</strong> is computed as (mark price &minus; index price) / index price,
+              expressed in basis points. A positive basis indicates the perpetual trades at a premium
+              to spot (bullish), while a negative basis indicates a discount (bearish). Basis is shown
+              in the funding rate arbitrage table when mark and index prices are available from the
+              DeFiLlama yields/perps endpoint.
+            </p>
           </div>
 
           {/* Data Quality */}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import {
   ResponsiveContainer,
   BarChart,
@@ -18,6 +18,7 @@ import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatPercent, formatUSD, classNames } from '../../utils/format'
 import { MetricInfo } from '../MetricInfo'
+import { CategoryFilter, type CategorySelection } from '../CategoryFilter'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -120,6 +121,10 @@ interface IQRStats {
 }
 
 export function GrowthMomentumChart({ exchanges }: Props) {
+  const [category, setCategory] = useState<CategorySelection>('all')
+
+  const filtered = category === 'all' ? exchanges : exchanges.filter(e => e.venueType === category)
+
   const {
     chartData,
     tokenStdDev,
@@ -134,7 +139,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
     scatterData,
   } = useMemo(() => {
     // Filter to meaningful exchanges for growth categories
-    const meaningful = exchanges.filter((e) => (e.total24h || 0) >= MIN_VOLUME_24H)
+    const meaningful = filtered.filter((e) => (e.total24h || 0) >= MIN_VOLUME_24H)
     const tokenExchanges = meaningful.filter((e) => e.hasToken)
     const noTokenExchanges = meaningful.filter((e) => !e.hasToken)
 
@@ -170,7 +175,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
     const noTokenIQR: IQRStats = interquartileRange(noToken1dValues)
 
     // Top movers: require minimum volume AND reasonable change range
-    const validExchanges = exchanges.filter(
+    const validExchanges = filtered.filter(
       (e) =>
         e.change_1d != null &&
         isFinite(e.change_1d) &&
@@ -195,7 +200,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
     const topLosers = sorted.slice(-8).reverse().filter((e) => (e.change_1d ?? 0) < 0).map(mapToMover)
 
     // Emerging exchanges: $1M-$10M daily volume
-    const emerging = exchanges
+    const emerging = filtered
       .filter(
         (e) =>
           (e.total24h || 0) >= EMERGING_MIN_VOLUME &&
@@ -208,7 +213,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
       .map(mapToMover)
 
     // Scatter data: momentum vs size (exchanges with valid 7d change and volume)
-    const scatterData: ScatterEntry[] = exchanges
+    const scatterData: ScatterEntry[] = filtered
       .filter(
         (e) =>
           e.change_7d != null &&
@@ -238,7 +243,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
       emergingExchanges: emerging,
       scatterData,
     }
-  }, [exchanges])
+  }, [filtered])
 
   const moreVolatileGroup = tokenStdDev > noTokenStdDev ? 'Token' : 'No-Token'
   const volatilityRatio =
@@ -260,6 +265,15 @@ export function GrowthMomentumChart({ exchanges }: Props) {
         description="Realized volatility (standard deviation of daily volume changes) reveals how erratic trading activity is across exchanges. High volatility often signals speculative surges or market stress. Comparing tokenised vs non-tokenised exchange volatility highlights whether governance token incentives amplify or dampen volume swings. Median growth rates are used instead of means to prevent outlier skew."
         source="Computed from DefiLlama daily volume change data. Statistics measured across all exchanges with >$10M daily volume. Emerging exchanges ($1M-$10M) shown separately."
       />
+
+      <div className="flex items-center gap-3 mb-4">
+        <CategoryFilter
+          selected={category}
+          onChange={setCategory}
+          defiCount={exchanges.filter(e => e.venueType === 'defi').length}
+          cefiCount={exchanges.filter(e => e.venueType === 'cefi').length}
+        />
+      </div>
 
       {/* Grouped bar chart */}
       <ResponsiveContainer width="100%" height={360}>

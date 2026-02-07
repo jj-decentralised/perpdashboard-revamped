@@ -7,12 +7,14 @@ import type {
   HistoricalDataPoint,
   DashboardData,
   VolumeSharePoint,
+  FundingRateEntry,
 } from '../types'
 import type { DerivativesSummary } from '../types/profile'
 import { LLAMA_BASE } from '../config/api'
 import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices, fetchCoinsList, fetchCachedCoinsList, fetchCoinMarkets } from './coingecko'
 import type { CoinListEntry } from './coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
+import { classifyProtocol, classifyVenue } from '../utils/classification'
 
 async function fetchJSON<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -350,10 +352,15 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     const perpPairsCount = cgMatch?.number_of_perpetual_pairs ?? null
     const futuresPairsCount = cgMatch?.number_of_futures_pairs ?? null
 
+    // Annualize fees: prefer trailing 30d × 12, fall back to 24h × 365
     const fees24h = feeInfo?.total24h || 0
+    const fees30d = feeInfo?.total30d || 0
+    const annualizedFees = fees30d > 0 ? fees30d * 12
+      : fees24h > 0 ? fees24h * 365 : null
+    const revenue30d = (feeInfo as any)?.revenue30d || fees30d * 0.3
     const revenue24h = (feeInfo as any)?.revenue24h || fees24h * 0.3
-    const annualizedFees = fees24h > 0 ? fees24h * 365 : null
-    const annualizedRevenue = revenue24h > 0 ? revenue24h * 365 : null
+    const annualizedRevenue = revenue30d > 0 ? revenue30d * 12
+      : revenue24h > 0 ? revenue24h * 365 : null
 
     // Resolve geckoId from all sources
     const geckoId = hasToken ? resolveGeckoTokenId(dex.slug, dex.name, protInfo, tokenSymbol) : null
@@ -381,6 +388,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       annualizedRevenue,
       peRatio: null, // Computed in Pass 2
       psRatio: null,
+      venueType: classifyProtocol(dex.slug, dex.name, dex.chains || []),
     }
   })
 
@@ -458,20 +466,22 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       if (sibling.perpPairsCount != null) {
         primary.perpPairsCount = (primary.perpPairsCount || 0) + sibling.perpPairsCount
       }
-      if (sibling.feeData?.total24h) {
+      if (sibling.feeData?.total24h || sibling.feeData?.total30d) {
         primary.feeData = primary.feeData || {} as any
-        primary.feeData!.total24h = (primary.feeData?.total24h || 0) + sibling.feeData.total24h
+        if (sibling.feeData?.total24h) primary.feeData!.total24h = (primary.feeData?.total24h || 0) + sibling.feeData.total24h
+        if (sibling.feeData?.total30d) primary.feeData!.total30d = (primary.feeData?.total30d || 0) + (sibling.feeData?.total30d || 0)
       }
     }
 
-    // Recompute P/S, P/E with aggregated fees
+    // Recompute P/S, P/E with aggregated fees (prefer 30d × 12)
+    const aggFees30d = primary.feeData?.total30d || 0
     const aggFees24h = primary.feeData?.total24h || 0
-    if (aggFees24h > 0) {
-      primary.annualizedFees = aggFees24h * 365
-      primary.annualizedRevenue = aggFees24h * 0.3 * 365
+    if (aggFees30d > 0 || aggFees24h > 0) {
+      primary.annualizedFees = aggFees30d > 0 ? aggFees30d * 12 : aggFees24h * 365
+      primary.annualizedRevenue = (primary.annualizedFees || 0) * 0.3
       if (primary.mcap && primary.mcap > 0 && (primary.total24h || 0) > 0) {
         primary.psRatio = primary.mcap / primary.annualizedFees!
-        primary.peRatio = primary.mcap / primary.annualizedRevenue!
+        primary.peRatio = primary.annualizedRevenue! > 0 ? primary.mcap / primary.annualizedRevenue! : null
       }
     }
 
@@ -520,7 +530,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     volumeShareHistory: [] as VolumeSharePoint[], // Populated lazily via fetchVolumeShareData
     topExchangeNames,
     historicalOI,
-    fundingRateData: fundingRateData as any[],
+    fundingRateData,
     spotVolume24h: spotDexOverview.total24h,
     spotVolume7d: spotDexOverview.total7d,
     spotVolumeHistory: [], // Populated lazily via fetchSpotVolumeHistory
@@ -536,11 +546,23 @@ export async function fetchOIOverview(): Promise<{ totalDataChart: [number, numb
   }
 }
 
-// Fetch funding rate data from yields endpoint
-export async function fetchFundingRates(): Promise<any[]> {
+// Fetch funding rate data from yields endpoint, classify venues
+export async function fetchFundingRates(): Promise<FundingRateEntry[]> {
   try {
     const data = await fetchJSON<any>('https://yields.llama.fi/perps')
-    return data?.data || []
+    const raw = data?.data || []
+    return raw.map((d: any) => ({
+      marketplace: d.marketplace || '',
+      market: d.market || '',
+      baseAsset: d.baseAsset || '',
+      fundingRate: d.fundingRate ?? 0,
+      fundingRate7dAverage: d.fundingRate7dAverage ?? null,
+      fundingRate30dAverage: d.fundingRate30dAverage ?? null,
+      openInterest: d.openInterest ?? null,
+      indexPrice: d.indexPrice ?? null,
+      markPrice: d.markPrice ?? null,
+      venueType: classifyVenue(d.marketplace || ''),
+    }))
   } catch {
     return []
   }

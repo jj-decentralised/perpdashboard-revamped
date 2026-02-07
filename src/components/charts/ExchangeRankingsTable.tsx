@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { EnrichedExchange } from '../../types'
 import { formatUSD, formatPercent, formatNumber, formatMultiple, formatBPS, percentClass, classNames } from '../../utils/format'
+import { CategoryFilter, type CategorySelection } from '../CategoryFilter'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -146,12 +147,15 @@ function exportCSV(exchanges: EnrichedExchange[]) {
 }
 
 export function ExchangeRankingsTable({ exchanges }: Props) {
+  const [category, setCategory] = useState<CategorySelection>('all')
   const [sortBy, setSortBy] = useState<string>('total24h')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [tokenFilter, setTokenFilter] = useState<'all' | 'token' | 'no-token'>('all')
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
   const sectionRef = useRef<HTMLElement>(null)
+
+  const filtered = category === 'all' ? exchanges : exchanges.filter(e => e.venueType === category)
 
   const handleSort = (key: string) => {
     if (key === 'rank') return
@@ -177,7 +181,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
   }, [])
 
   const filteredExchanges = useMemo(() => {
-    let result = exchanges
+    let result = filtered
     if (tokenFilter === 'token') result = result.filter((e) => e.hasToken)
     if (tokenFilter === 'no-token') result = result.filter((e) => !e.hasToken)
     if (search.trim()) {
@@ -189,7 +193,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
       )
     }
     return result
-  }, [exchanges, tokenFilter, search])
+  }, [filtered, tokenFilter, search])
 
   const sortedExchanges = useMemo(() => {
     return [...filteredExchanges].sort((a, b) => {
@@ -218,19 +222,19 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
     )
   }
 
-  const tokenCount = exchanges.filter((e) => e.hasToken).length
-  const noTokenCount = exchanges.length - tokenCount
+  const tokenCount = filtered.filter((e) => e.hasToken).length
+  const noTokenCount = filtered.length - tokenCount
 
   // Summary stats
   const stats = useMemo(() => {
-    const withFees = exchanges.filter((e) => getDailyFees(e) != null && getDailyFees(e)! > 0)
+    const withFees = filtered.filter((e) => getDailyFees(e) != null && getDailyFees(e)! > 0)
     const takeRates = withFees.map((e) => getTakeRate(e)!).filter((v) => v != null && isFinite(v))
     const medianTakeRate = takeRates.length > 0
       ? takeRates.sort((a, b) => a - b)[Math.floor(takeRates.length / 2)]
       : null
     const totalDailyFees = withFees.reduce((sum, e) => sum + (getDailyFees(e) || 0), 0)
     return { medianTakeRate, totalDailyFees, exchangesWithFees: withFees.length }
-  }, [exchanges])
+  }, [filtered])
 
   return (
     <section className="section-rule" ref={sectionRef}>
@@ -240,7 +244,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
             Exchange Rankings
           </h2>
           <p className="font-sans text-sm text-ink-muted">
-            All {exchanges.length} perpetual exchanges by 24-hour trading volume
+            All {filtered.length} perpetual exchanges by 24-hour trading volume
           </p>
         </div>
 
@@ -255,7 +259,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                 : 'bg-paper text-ink-muted border-rule hover:border-ink'
             )}
           >
-            All ({exchanges.length})
+            All ({filtered.length})
           </button>
           <button
             onClick={() => handleFilterChange('token')}
@@ -282,7 +286,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         </div>
       </div>
 
-      {/* Search + Export */}
+      {/* Search + Category Filter + Export */}
       <div className="mb-4 flex items-center gap-3">
         <input
           type="text"
@@ -290,6 +294,12 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
           onChange={(e) => { setSearch(e.target.value); setPage(0) }}
           placeholder="Search by name, token, or chain..."
           className="w-full max-w-sm px-3 py-2 border border-rule bg-paper font-sans text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-ink transition-colors"
+        />
+        <CategoryFilter
+          selected={category}
+          onChange={setCategory}
+          defiCount={exchanges.filter(e => e.venueType === 'defi').length}
+          cefiCount={exchanges.filter(e => e.venueType === 'cefi').length}
         />
         <button
           onClick={() => exportCSV(sortedExchanges)}
@@ -321,7 +331,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         <div>
           <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">Exchanges w/ Fee Data</p>
           <p className="font-mono text-sm font-bold text-ink">
-            {stats.exchangesWithFees} / {exchanges.length}
+            {stats.exchangesWithFees} / {filtered.length}
           </p>
         </div>
       </div>
@@ -406,7 +416,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         <div className="flex items-center justify-between mt-4 font-sans text-sm">
           <p className="text-ink-muted">
             Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sortedExchanges.length)} of {sortedExchanges.length}
-            {filteredExchanges.length !== exchanges.length && ` (filtered from ${exchanges.length})`}
+            {filteredExchanges.length !== filtered.length && ` (filtered from ${filtered.length})`}
           </p>
           <div className="flex items-center gap-1">
             <button
