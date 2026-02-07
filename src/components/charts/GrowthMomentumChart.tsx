@@ -10,6 +10,9 @@ import {
   Legend,
   Cell,
   ReferenceLine,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from 'recharts'
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
@@ -35,12 +38,30 @@ const GROWTH_CATEGORIES: GrowthCategory[] = [
   { label: '30d/30d', key: 'change_30dover30d' },
 ]
 
-const MIN_VOLUME_24H = 1_000_000 // $1M minimum 24h volume
+const MIN_VOLUME_24H = 10_000_000 // $10M minimum 24h volume
+const EMERGING_MIN_VOLUME = 1_000_000 // $1M floor for emerging exchanges
 const MAX_CHANGE_DISPLAY = 300 // cap at ±300% for visual sanity
 
 function average(values: number[]): number {
   if (values.length === 0) return 0
   return values.reduce((sum, v) => sum + v, 0) / values.length
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+function interquartileRange(values: number[]): { q1: number; q3: number; iqr: number } {
+  if (values.length < 4) return { q1: 0, q3: 0, iqr: 0 }
+  const sorted = [...values].sort((a, b) => a - b)
+  const lowerHalf = sorted.slice(0, Math.floor(sorted.length / 2))
+  const upperHalf = sorted.slice(Math.ceil(sorted.length / 2))
+  const q1 = median(lowerHalf)
+  const q3 = median(upperHalf)
+  return { q1, q3, iqr: q3 - q1 }
 }
 
 function standardDeviation(values: number[]): number {
@@ -83,14 +104,41 @@ interface MoverEntry {
   rawVolume: number
 }
 
+interface ScatterEntry {
+  name: string
+  volume24h: number
+  growth7d: number
+  openInterest: number
+  hasToken: boolean
+  tokenSymbol: string | null
+}
+
+interface IQRStats {
+  q1: number
+  q3: number
+  iqr: number
+}
+
 export function GrowthMomentumChart({ exchanges }: Props) {
-  const { chartData, tokenStdDev, noTokenStdDev, topGainers, topLosers } = useMemo(() => {
+  const {
+    chartData,
+    tokenStdDev,
+    noTokenStdDev,
+    tokenMedian1d,
+    noTokenMedian1d,
+    tokenIQR,
+    noTokenIQR,
+    topGainers,
+    topLosers,
+    emergingExchanges,
+    scatterData,
+  } = useMemo(() => {
     // Filter to meaningful exchanges for growth categories
     const meaningful = exchanges.filter((e) => (e.total24h || 0) >= MIN_VOLUME_24H)
     const tokenExchanges = meaningful.filter((e) => e.hasToken)
     const noTokenExchanges = meaningful.filter((e) => !e.hasToken)
 
-    // Build grouped bar data
+    // Build grouped bar data using medians
     const chartData = GROWTH_CATEGORIES.map(({ label, key }) => {
       const tokenValues = tokenExchanges
         .map((e) => e[key])
@@ -101,12 +149,12 @@ export function GrowthMomentumChart({ exchanges }: Props) {
 
       return {
         category: label,
-        Token: tokenValues.length > 0 ? average(tokenValues) : 0,
-        'No Token': noTokenValues.length > 0 ? average(noTokenValues) : 0,
+        Token: tokenValues.length > 0 ? median(tokenValues) : 0,
+        'No Token': noTokenValues.length > 0 ? median(noTokenValues) : 0,
       }
     })
 
-    // Volatility: std dev of 1d changes
+    // Volatility: std dev + median + IQR of 1d changes
     const token1dValues = tokenExchanges
       .map((e) => e.change_1d)
       .filter((v): v is number => v != null && isFinite(v))
@@ -116,6 +164,10 @@ export function GrowthMomentumChart({ exchanges }: Props) {
 
     const tokenStdDev = standardDeviation(token1dValues)
     const noTokenStdDev = standardDeviation(noToken1dValues)
+    const tokenMedian1d = median(token1dValues)
+    const noTokenMedian1d = median(noToken1dValues)
+    const tokenIQR: IQRStats = interquartileRange(token1dValues)
+    const noTokenIQR: IQRStats = interquartileRange(noToken1dValues)
 
     // Top movers: require minimum volume AND reasonable change range
     const validExchanges = exchanges.filter(
@@ -142,7 +194,50 @@ export function GrowthMomentumChart({ exchanges }: Props) {
     const topGainers = sorted.slice(0, 8).filter((e) => (e.change_1d ?? 0) > 0).map(mapToMover)
     const topLosers = sorted.slice(-8).reverse().filter((e) => (e.change_1d ?? 0) < 0).map(mapToMover)
 
-    return { chartData, tokenStdDev, noTokenStdDev, topGainers, topLosers }
+    // Emerging exchanges: $1M-$10M daily volume
+    const emerging = exchanges
+      .filter(
+        (e) =>
+          (e.total24h || 0) >= EMERGING_MIN_VOLUME &&
+          (e.total24h || 0) < MIN_VOLUME_24H &&
+          e.change_7d != null &&
+          isFinite(e.change_7d)
+      )
+      .sort((a, b) => (b.change_7d ?? 0) - (a.change_7d ?? 0))
+      .slice(0, 10)
+      .map(mapToMover)
+
+    // Scatter data: momentum vs size (exchanges with valid 7d change and volume)
+    const scatterData: ScatterEntry[] = exchanges
+      .filter(
+        (e) =>
+          e.change_7d != null &&
+          isFinite(e.change_7d) &&
+          (e.total24h || 0) > 0 &&
+          Math.abs(e.change_7d) < 1000
+      )
+      .map((e) => ({
+        name: e.displayName || e.name,
+        volume24h: e.total24h || 0,
+        growth7d: e.change_7d ?? 0,
+        openInterest: e.openInterest || 0,
+        hasToken: e.hasToken,
+        tokenSymbol: e.tokenSymbol,
+      }))
+
+    return {
+      chartData,
+      tokenStdDev,
+      noTokenStdDev,
+      tokenMedian1d,
+      noTokenMedian1d,
+      tokenIQR,
+      noTokenIQR,
+      topGainers,
+      topLosers,
+      emergingExchanges: emerging,
+      scatterData,
+    }
   }, [exchanges])
 
   const moreVolatileGroup = tokenStdDev > noTokenStdDev ? 'Token' : 'No-Token'
@@ -151,15 +246,19 @@ export function GrowthMomentumChart({ exchanges }: Props) {
       ? Math.max(tokenStdDev, noTokenStdDev) / Math.min(tokenStdDev, noTokenStdDev)
       : 0
 
+  // Compute OI range for scatter dot sizing
+  const oiValues = scatterData.map((d) => d.openInterest).filter((v) => v > 0)
+  const maxOI = oiValues.length > 0 ? Math.max(...oiValues) : 1
+
   return (
     <div className="chart-container">
       <h3 className="chart-title">Growth Momentum</h3>
       <p className="chart-subtitle">
-        Comparative growth dynamics — tokenised vs non-tokenised perpetual exchanges (min. $1M daily volume)
+        Comparative growth dynamics — tokenised vs non-tokenised perpetual exchanges (min. $10M daily volume)
       </p>
       <MetricInfo
-        description="Realized volatility (standard deviation of daily volume changes) reveals how erratic trading activity is across exchanges. High volatility often signals speculative surges or market stress. Comparing tokenised vs non-tokenised exchange volatility highlights whether governance token incentives amplify or dampen volume swings."
-        source="Computed from DefiLlama daily volume change data. Standard deviation measured across all exchanges with >$1M daily volume."
+        description="Realized volatility (standard deviation of daily volume changes) reveals how erratic trading activity is across exchanges. High volatility often signals speculative surges or market stress. Comparing tokenised vs non-tokenised exchange volatility highlights whether governance token incentives amplify or dampen volume swings. Median growth rates are used instead of means to prevent outlier skew."
+        source="Computed from DefiLlama daily volume change data. Statistics measured across all exchanges with >$10M daily volume. Emerging exchanges ($1M-$10M) shown separately."
       />
 
       {/* Grouped bar chart */}
@@ -218,7 +317,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
         <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-2 font-semibold">
           1-Day Volatility Comparison
         </p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <p className="font-sans text-xs text-ink-muted">Token Std Dev</p>
             <p className="font-mono text-sm font-bold text-ink">
@@ -229,6 +328,24 @@ export function GrowthMomentumChart({ exchanges }: Props) {
             <p className="font-sans text-xs text-ink-muted">No-Token Std Dev</p>
             <p className="font-mono text-sm font-bold text-ink">
               {noTokenStdDev.toFixed(2)}%
+            </p>
+          </div>
+          <div>
+            <p className="font-sans text-xs text-ink-muted">Token Median / IQR</p>
+            <p className="font-mono text-sm font-bold text-ink">
+              {tokenMedian1d.toFixed(2)}%
+              <span className="font-sans text-xs text-ink-muted font-normal ml-1">
+                (IQR {tokenIQR.iqr.toFixed(2)}%)
+              </span>
+            </p>
+          </div>
+          <div>
+            <p className="font-sans text-xs text-ink-muted">No-Token Median / IQR</p>
+            <p className="font-mono text-sm font-bold text-ink">
+              {noTokenMedian1d.toFixed(2)}%
+              <span className="font-sans text-xs text-ink-muted font-normal ml-1">
+                (IQR {noTokenIQR.iqr.toFixed(2)}%)
+              </span>
             </p>
           </div>
           <div>
@@ -248,7 +365,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
       {/* Top Movers — horizontal bar charts */}
       <div className="mt-6">
         <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-3 font-semibold">
-          Top Movers — 24h Volume Change (exchanges with {'>'}$1M daily volume)
+          Top Movers — 24h Volume Change (exchanges with {'>'}$10M daily volume)
         </p>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Gainers */}
@@ -374,6 +491,148 @@ export function GrowthMomentumChart({ exchanges }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Emerging Exchanges — $1M-$10M daily volume */}
+      {emergingExchanges.length > 0 && (
+        <div className="mt-6">
+          <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-3 font-semibold">
+            Emerging Exchanges — 7d Volume Change ($1M–$10M daily volume)
+          </p>
+          <div className="border border-rule p-4">
+            <div className="overflow-x-auto">
+              <table className="w-full font-sans text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-ink-muted uppercase tracking-wider">
+                    <th className="pb-2 pr-4">Exchange</th>
+                    <th className="pb-2 pr-4 text-right">24h Volume</th>
+                    <th className="pb-2 pr-4 text-right">7d Change</th>
+                    <th className="pb-2 text-right">Token</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {emergingExchanges.map((ex) => (
+                    <tr key={ex.name} className="border-t border-rule">
+                      <td className="py-1.5 pr-4 font-medium">{ex.name}</td>
+                      <td className="py-1.5 pr-4 text-right font-mono text-xs">{ex.volume}</td>
+                      <td
+                        className="py-1.5 pr-4 text-right font-mono text-xs font-semibold"
+                        style={{ color: ex.change >= 0 ? COLORS.green : COLORS.red }}
+                      >
+                        {formatPercent(ex.change)}
+                      </td>
+                      <td className="py-1.5 text-right text-xs text-ink-muted">
+                        {ex.tokenSymbol || (ex.hasToken ? 'Yes' : '—')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Momentum vs Size Scatter */}
+      {scatterData.length > 0 && (
+        <div className="mt-6">
+          <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-3 font-semibold">
+            Momentum vs Size — 7d Volume Growth vs 24h Volume (dot size = open interest)
+          </p>
+          <ResponsiveContainer width="100%" height={400}>
+            <ScatterChart margin={{ top: 8, right: 24, bottom: 24, left: 8 }}>
+              <CartesianGrid
+                stroke={GRID_STYLE.stroke}
+                strokeDasharray={GRID_STYLE.strokeDasharray}
+              />
+              <XAxis
+                type="number"
+                dataKey="volume24h"
+                name="24h Volume"
+                scale="log"
+                domain={['auto', 'auto']}
+                tick={AXIS_STYLE}
+                tickLine={false}
+                axisLine={{ stroke: COLORS.rule }}
+                tickFormatter={(v: number) => formatUSD(v, true)}
+                label={{
+                  value: '24h Volume (log scale)',
+                  position: 'insideBottom',
+                  offset: -16,
+                  style: { ...AXIS_STYLE, fontSize: 10 },
+                }}
+              />
+              <YAxis
+                type="number"
+                dataKey="growth7d"
+                name="7d Growth"
+                tick={AXIS_STYLE}
+                tickLine={false}
+                axisLine={false}
+                width={58}
+                tickFormatter={(v: number) => `${v.toFixed(0)}%`}
+                label={{
+                  value: '7d Volume Growth (%)',
+                  angle: -90,
+                  position: 'insideLeft',
+                  offset: 4,
+                  style: { ...AXIS_STYLE, fontSize: 10 },
+                }}
+              />
+              <ZAxis
+                type="number"
+                dataKey="openInterest"
+                range={[30, 400]}
+                name="Open Interest"
+              />
+              <ReferenceLine y={0} stroke={COLORS.rule} strokeDasharray="3 3" />
+              <Tooltip
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0].payload as ScatterEntry
+                  return (
+                    <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.6 }}>
+                      <p style={TOOLTIP_STYLE.labelStyle}>
+                        {d.name}
+                        {d.tokenSymbol ? ` (${d.tokenSymbol})` : ''}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 12, color: COLORS.inkLight }}>
+                        24h Volume: {formatUSD(d.volume24h, true)}
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: d.growth7d >= 0 ? COLORS.green : COLORS.red,
+                        }}
+                      >
+                        7d Growth: {formatPercent(d.growth7d)}
+                      </p>
+                      {d.openInterest > 0 && (
+                        <p style={{ margin: 0, fontSize: 12, color: COLORS.inkLight }}>
+                          Open Interest: {formatUSD(d.openInterest, true)}
+                        </p>
+                      )}
+                    </div>
+                  )
+                }}
+                cursor={{ strokeDasharray: '3 3' }}
+              />
+              <Scatter data={scatterData} animationDuration={600}>
+                {scatterData.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={entry.growth7d >= 0 ? COLORS.green : COLORS.red}
+                    fillOpacity={0.6}
+                    stroke={entry.growth7d >= 0 ? COLORS.green : COLORS.red}
+                    strokeOpacity={0.8}
+                  />
+                ))}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   )
 }

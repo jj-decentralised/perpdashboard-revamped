@@ -29,10 +29,10 @@ function formatRate(rate: number | null): string {
 }
 
 export function FundingRateHeatmap({ data }: Props) {
-  const [view, setView] = useState<'heatmap' | 'arb'>('heatmap')
+  const [view, setView] = useState<'heatmap' | 'arb' | 'rateAvg'>('heatmap')
 
-  const { coins, exchanges, matrix, sentiment, arbOpportunities } = useMemo(() => {
-    if (!data || data.length === 0) return { coins: [], exchanges: [], matrix: new Map(), sentiment: null, arbOpportunities: [] }
+  const { coins, exchanges, matrix, sentiment, arbOpportunities, rateVsAvg } = useMemo(() => {
+    if (!data || data.length === 0) return { coins: [], exchanges: [], matrix: new Map(), sentiment: null, arbOpportunities: [], rateVsAvg: [] }
 
     // Filter valid entries
     const valid = data.filter(
@@ -83,7 +83,14 @@ export function FundingRateHeatmap({ data }: Props) {
       }
     }
     const avgRate = totalOI > 0 ? weightedSum / totalOI : 0
-    const sentiment = { avgRate, totalOI, positiveOI, pctPositive: totalOI > 0 ? (positiveOI / totalOI) * 100 : 50 }
+
+    // Rate dispersion: interquartile range of all funding rates
+    const allRates = valid.map((d) => d.fundingRate).sort((a, b) => a - b)
+    const q1 = allRates[Math.floor(allRates.length * 0.25)] ?? 0
+    const q3 = allRates[Math.floor(allRates.length * 0.75)] ?? 0
+    const rateDispersion = q3 - q1
+
+    const sentiment = { avgRate, totalOI, positiveOI, pctPositive: totalOI > 0 ? (positiveOI / totalOI) * 100 : 50, rateDispersion }
 
     // Funding rate arbitrage: find same coin across exchanges with largest spread
     const arbOpportunities: { coin: string; highExchange: string; highRate: number; lowExchange: string; lowRate: number; spread: number; totalOI: number }[] = []
@@ -108,7 +115,31 @@ export function FundingRateHeatmap({ data }: Props) {
     }
     arbOpportunities.sort((a, b) => b.spread - a.spread)
 
-    return { coins: topCoins, exchanges: topExchanges, matrix, sentiment, arbOpportunities }
+    // Rate vs Average: compare current rates to 7d and 30d averages
+    const rateVsAvg: { asset: string; exchange: string; current: number; avg7d: number | null; avg30d: number | null; signal: 'Elevated' | 'Depressed' | 'Normal' }[] = []
+    for (const d of valid) {
+      if (!topCoins.includes(d.baseAsset)) continue
+      const avg7d = d.fundingRate7dAverage
+      let signal: 'Elevated' | 'Depressed' | 'Normal' = 'Normal'
+      if (avg7d != null && avg7d !== 0 && isFinite(avg7d)) {
+        const ratio = d.fundingRate / avg7d
+        if (ratio > 2) signal = 'Elevated'
+        else if (ratio < 0.5) signal = 'Depressed'
+      }
+      rateVsAvg.push({
+        asset: d.baseAsset,
+        exchange: d.marketplace,
+        current: d.fundingRate,
+        avg7d,
+        avg30d: d.fundingRate30dAverage,
+        signal,
+      })
+    }
+    // Sort elevated first, then depressed, then normal
+    const signalOrder = { Elevated: 0, Depressed: 1, Normal: 2 }
+    rateVsAvg.sort((a, b) => signalOrder[a.signal] - signalOrder[b.signal] || Math.abs(b.current) - Math.abs(a.current))
+
+    return { coins: topCoins, exchanges: topExchanges, matrix, sentiment, arbOpportunities, rateVsAvg }
   }, [data])
 
   if (!data || data.length === 0 || coins.length === 0) {
@@ -136,7 +167,7 @@ export function FundingRateHeatmap({ data }: Props) {
 
       {/* Sentiment bar */}
       {sentiment && (
-        <div className="grid grid-cols-3 gap-4 mb-5 pb-4 border-b border-rule">
+        <div className="grid grid-cols-4 gap-4 mb-5 pb-4 border-b border-rule">
           <div>
             <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">OI-Weighted Avg Rate</p>
             <p className="font-mono text-sm font-bold" style={{ color: sentiment.avgRate >= 0 ? COLORS.green : COLORS.red }}>
@@ -152,6 +183,12 @@ export function FundingRateHeatmap({ data }: Props) {
           <div>
             <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">Total OI Tracked</p>
             <p className="font-mono text-sm font-bold text-ink">{formatUSD(sentiment.totalOI, true)}</p>
+          </div>
+          <div>
+            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">Rate Dispersion (IQR)</p>
+            <p className="font-mono text-sm font-bold text-ink">
+              {(sentiment.rateDispersion * 10000).toFixed(1)} bps
+            </p>
           </div>
         </div>
       )}
@@ -171,6 +208,13 @@ export function FundingRateHeatmap({ data }: Props) {
           type="button"
         >
           Arbitrage ({arbOpportunities.length})
+        </button>
+        <button
+          onClick={() => setView('rateAvg')}
+          className={view === 'rateAvg' ? 'px-3 py-1.5 border bg-ink text-paper border-ink font-semibold font-sans text-xs' : 'px-3 py-1.5 border bg-paper text-ink-muted border-rule hover:border-ink font-sans text-xs cursor-pointer'}
+          type="button"
+        >
+          Rate vs Average
         </button>
       </div>
 
@@ -254,6 +298,7 @@ export function FundingRateHeatmap({ data }: Props) {
                 <th className="text-right">Rate</th>
                 <th className="text-right">Spread</th>
                 <th className="text-right">Combined OI</th>
+                <th className="text-right">Est. 8h Funding</th>
               </tr>
             </thead>
             <tbody>
@@ -268,12 +313,64 @@ export function FundingRateHeatmap({ data }: Props) {
                     {(arb.spread * 10000).toFixed(1)} bps
                   </td>
                   <td className="text-right font-mono text-xs text-ink-muted">{formatUSD(arb.totalOI, true)}</td>
+                  <td className="text-right font-mono text-xs font-bold" style={{ color: COLORS.green }}>
+                    {formatUSD(arb.spread * arb.totalOI, true)}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="font-sans text-[10px] text-ink-muted mt-2">
-            Spread = difference between highest and lowest funding rate for the same pair across exchanges (in basis points per 8h period)
+            Spread = difference between highest and lowest funding rate for the same pair across exchanges (in basis points per 8h period).
+            Est. 8h Funding = spread &times; combined open interest.
+          </p>
+        </div>
+      )}
+
+      {view === 'rateAvg' && (
+        <div className="overflow-x-auto">
+          <table className="data-table w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="text-left">Asset</th>
+                <th className="text-left">Exchange</th>
+                <th className="text-right">Current</th>
+                <th className="text-right">7d Avg</th>
+                <th className="text-right">30d Avg</th>
+                <th className="text-center">Signal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rateVsAvg.slice(0, 50).map((row, i) => (
+                <tr key={`${row.asset}-${row.exchange}`} className={i % 2 === 1 ? 'bg-paper-warm' : ''}>
+                  <td className="font-mono font-bold text-ink">{row.asset}</td>
+                  <td className="font-sans text-sm">{row.exchange}</td>
+                  <td className="text-right font-mono text-xs" style={{ color: row.current >= 0 ? COLORS.green : COLORS.red }}>
+                    {formatRate(row.current)}
+                  </td>
+                  <td className="text-right font-mono text-xs text-ink-muted">
+                    {formatRate(row.avg7d)}
+                  </td>
+                  <td className="text-right font-mono text-xs text-ink-muted">
+                    {formatRate(row.avg30d)}
+                  </td>
+                  <td className="text-center font-sans text-xs font-semibold">
+                    {row.signal === 'Elevated' && (
+                      <span style={{ color: COLORS.red }}>Elevated</span>
+                    )}
+                    {row.signal === 'Depressed' && (
+                      <span style={{ color: COLORS.blue }}>Depressed</span>
+                    )}
+                    {row.signal === 'Normal' && (
+                      <span className="text-ink-muted">Normal</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="font-sans text-[10px] text-ink-muted mt-2">
+            Signal: Elevated = current rate &gt; 2&times; 7d average, Depressed = current rate &lt; 0.5&times; 7d average, Normal = within typical range.
           </p>
         </div>
       )}

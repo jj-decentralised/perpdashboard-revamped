@@ -17,6 +17,9 @@ import { ValuationChart } from '../components/charts/ValuationChart'
 import { HistoricalOIChart } from '../components/charts/HistoricalOIChart'
 import { FundingRateHeatmap } from '../components/charts/FundingRateHeatmap'
 import { PerpsDominanceChart } from '../components/charts/PerpsDominanceChart'
+import { VolumeGrowthChart } from '../components/charts/VolumeGrowthChart'
+import { TokenUnlockCalendar } from '../components/charts/TokenUnlockCalendar'
+import { BridgeFlowChart } from '../components/charts/BridgeFlowChart'
 import { CommandPalette } from '../components/CommandPalette'
 
 export default function DashboardPage() {
@@ -111,10 +114,24 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Section 5: Volume by Chain */}
+        {/* Section 5: Volume Growth Acceleration */}
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Volume growth chart">
+            <VolumeGrowthChart exchanges={data.enrichedExchanges} />
+          </ErrorBoundary>
+        </section>
+
+        {/* Section 5b: Volume by Chain */}
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Volume by chain">
             <VolumeByChainChart exchanges={data.enrichedExchanges} />
+          </ErrorBoundary>
+        </section>
+
+        {/* Section 5c: Bridge Flows */}
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Bridge flows">
+            <BridgeFlowChart />
           </ErrorBoundary>
         </section>
 
@@ -140,6 +157,13 @@ export default function DashboardPage() {
               <GrowthMomentumChart exchanges={data.enrichedExchanges} />
             </ErrorBoundary>
           </div>
+        </section>
+
+        {/* Section 7b: Token Unlock Calendar */}
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Token unlock calendar">
+            <TokenUnlockCalendar exchanges={data.enrichedExchanges} />
+          </ErrorBoundary>
         </section>
 
         {/* Section 8: Full Rankings Table */}

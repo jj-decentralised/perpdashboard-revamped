@@ -311,27 +311,13 @@ export default function ExchangeProfilePage() {
 
   const hasRevenueData = feeRevenueData.some((d) => d.revenue > 0)
 
-  if (loading) return <ProfileSkeleton />
-
-  if (error || !data) {
-    return (
-      <div className="min-h-screen bg-paper flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <h2 className="font-serif text-2xl font-bold mb-4">Exchange Unavailable</h2>
-          <p className="text-ink-muted mb-6">{error || 'No data found for this exchange.'}</p>
-          <Link to="/" className="border-2 border-ink px-6 py-2 font-sans text-sm font-semibold hover:bg-ink hover:text-paper transition-colors inline-block">
-            Back to Dashboard
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  const exchangeName = data.exchange?.name || data.summary?.name || slug || 'Exchange'
-  const description = data.summary?.description || data.exchange?.description || ''
-  const chains = data.summary?.chains || []
+  const exchangeName = data?.exchange?.name || data?.summary?.name || slug || 'Exchange'
+  const description = data?.summary?.description || data?.exchange?.description || ''
+  const chains = data?.summary?.chains || []
+  const hasPrice = volumePriceData.some((d) => d.price != null && d.price > 0)
 
   // SEO: update document title and meta description
+  // NOTE: This must be before any early returns to satisfy React's rules of hooks
   useEffect(() => {
     document.title = `${exchangeName} — Perpetual Exchange Analytics`
     const meta = document.querySelector('meta[name="description"]')
@@ -348,7 +334,22 @@ export default function ExchangeProfilePage() {
       document.title = 'Perpetual Exchange Analytics'
     }
   }, [exchangeName])
-  const hasPrice = volumePriceData.some((d) => d.price != null && d.price > 0)
+
+  if (loading) return <ProfileSkeleton />
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-paper flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <h2 className="font-serif text-2xl font-bold mb-4">Exchange Unavailable</h2>
+          <p className="text-ink-muted mb-6">{error || 'No data found for this exchange.'}</p>
+          <Link to="/" className="border-2 border-ink px-6 py-2 font-sans text-sm font-semibold hover:bg-ink hover:text-paper transition-colors inline-block">
+            Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   // Derive KPIs from available data
   const latestVolume = data.historicalVolume.length > 0
