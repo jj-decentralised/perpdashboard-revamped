@@ -63,7 +63,7 @@ function buildComparisonRows(
       noTokenValue: formatUSD(noTokenGroup.totalFees24h, true),
     },
     {
-      label: 'Avg Daily Change',
+      label: 'Median Daily Change',
       tokenValue: formatPercent(tokenGroup.avgChange1d),
       noTokenValue: formatPercent(noTokenGroup.avgChange1d),
       tokenRaw: tokenGroup.avgChange1d,
@@ -71,7 +71,7 @@ function buildComparisonRows(
       isPercent: true,
     },
     {
-      label: 'Avg Weekly Change',
+      label: 'Median Weekly Change',
       tokenValue: formatPercent(tokenGroup.avgChange7d),
       noTokenValue: formatPercent(noTokenGroup.avgChange7d),
       tokenRaw: tokenGroup.avgChange7d,
@@ -79,7 +79,7 @@ function buildComparisonRows(
       isPercent: true,
     },
     {
-      label: 'Avg Monthly Change',
+      label: 'Median Monthly Change',
       tokenValue: formatPercent(tokenGroup.avgChange1m),
       noTokenValue: formatPercent(noTokenGroup.avgChange1m),
       tokenRaw: tokenGroup.avgChange1m,
@@ -253,7 +253,7 @@ export function TokenComparisonPanel({ tokenGroup, noTokenGroup }: Props) {
           </tbody>
         </table>
         <p className="font-sans text-[10px] text-ink-muted px-4 py-2 border-t border-rule">
-          Change averages use winsorized means (capped at 1st/99th percentile) to limit outlier influence.
+          Change metrics use medians of exchanges with ≥$100K daily volume and ±500% cap to eliminate noise from micro-protocols.
           {' '}{tokenGroup.count + noTokenGroup.count} exchanges tracked across both groups.
         </p>
       </div>

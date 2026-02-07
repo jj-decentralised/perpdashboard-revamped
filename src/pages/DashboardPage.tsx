@@ -20,7 +20,10 @@ import { PerpsDominanceChart } from '../components/charts/PerpsDominanceChart'
 import { VolumeGrowthChart } from '../components/charts/VolumeGrowthChart'
 import { TokenUnlockCalendar } from '../components/charts/TokenUnlockCalendar'
 import { BridgeFlowChart } from '../components/charts/BridgeFlowChart'
+import { CapitalEfficiencyChart } from '../components/charts/CapitalEfficiencyChart'
+import { StablecoinComposition } from '../components/charts/StablecoinComposition'
 import { CommandPalette } from '../components/CommandPalette'
+import { DataMethodology } from '../components/DataMethodology'
 
 export default function DashboardPage() {
   const { data, loading, error } = useDashboardData()
@@ -128,11 +131,16 @@ export default function DashboardPage() {
           </ErrorBoundary>
         </section>
 
-        {/* Section 5c: Bridge Flows */}
+        {/* Section 5c: Bridge Flows & Stablecoin Liquidity */}
         <section className="section-rule">
-          <ErrorBoundary fallbackLabel="Bridge flows">
-            <BridgeFlowChart />
-          </ErrorBoundary>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ErrorBoundary fallbackLabel="Bridge flows">
+              <BridgeFlowChart />
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="Stablecoin composition">
+              <StablecoinComposition />
+            </ErrorBoundary>
+          </div>
         </section>
 
         {/* Section 6: Capital Efficiency & Fees */}
@@ -145,6 +153,13 @@ export default function DashboardPage() {
               <FeeRevenueChart exchanges={data.enrichedExchanges} />
             </ErrorBoundary>
           </div>
+        </section>
+
+        {/* Section 6b: Fee Yield & Capital Efficiency */}
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Capital efficiency">
+            <CapitalEfficiencyChart exchanges={data.enrichedExchanges} />
+          </ErrorBoundary>
         </section>
 
         {/* Section 7: Valuation & Growth */}
@@ -171,6 +186,11 @@ export default function DashboardPage() {
           <ErrorBoundary fallbackLabel="Exchange rankings">
             <ExchangeRankingsTable exchanges={data.enrichedExchanges} />
           </ErrorBoundary>
+        </section>
+
+        {/* Data Methodology */}
+        <section className="section-rule">
+          <DataMethodology />
         </section>
 
         {/* Footer */}

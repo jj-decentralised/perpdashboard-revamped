@@ -112,14 +112,15 @@ function buildGroupStats(
     totalMcap: exchanges
       .filter((e) => e.mcap)
       .reduce((s, e) => s + (e.mcap || 0), 0),
-    avgChange1d: winsorizedMean(
-      exchanges.filter((e) => e.change_1d != null).map((e) => e.change_1d!)
+    // Use median of exchanges with ≥$100K volume to avoid noise from tiny protocols
+    avgChange1d: median(
+      exchanges.filter((e) => e.change_1d != null && (e.total24h || 0) >= 100_000 && Math.abs(e.change_1d!) < 500).map((e) => e.change_1d!)
     ),
-    avgChange7d: winsorizedMean(
-      exchanges.filter((e) => e.change_7d != null).map((e) => e.change_7d!)
+    avgChange7d: median(
+      exchanges.filter((e) => e.change_7d != null && (e.total24h || 0) >= 100_000 && Math.abs(e.change_7d!) < 500).map((e) => e.change_7d!)
     ),
-    avgChange1m: winsorizedMean(
-      exchanges.filter((e) => e.change_1m != null).map((e) => e.change_1m!)
+    avgChange1m: median(
+      exchanges.filter((e) => e.change_1m != null && (e.total24h || 0) >= 100_000 && Math.abs(e.change_1m!) < 500).map((e) => e.change_1m!)
     ),
     avgChainCount: avg(exchanges.map((e) => e.chainCount)),
     medianVolume24h: median(withVolume.map((e) => e.total24h!)),
