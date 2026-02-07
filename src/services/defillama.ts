@@ -214,7 +214,7 @@ export const SLUG_TO_GECKO_TOKEN: Record<string, string> = {
 export async function fetchDashboardData(): Promise<DashboardData> {
   // Phase 1: Fetch all data sources in parallel
   // Use lightweight overview (exclude breakdown) for enrichment — breakdown fetched lazily
-  const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers, coinsList] = await Promise.all([
+  const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers, coinsList, oiOverview, fundingRateData, spotDexOverview] = await Promise.all([
     fetchDerivativesOverview(true),
     fetchProtocols(),
     fetchFeeOverview(),
@@ -222,6 +222,9 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     fetchBTCPrice(),
     fetchCGDerivativesTickers(),
     fetchCachedCoinsList(),
+    fetchOIOverview(),
+    fetchFundingRates(),
+    fetchSpotDexOverview(),
   ])
 
   // Build symbol → geckoId map from CoinGecko coins list
@@ -498,6 +501,10 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   // Use cgMarketData for sparkline token prices too
   const topTokenPrices = cgMarketData
 
+  const historicalOI: HistoricalDataPoint[] = (
+    oiOverview.totalDataChart || []
+  ).map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
+
   return {
     dexOverview: derivativesOverview,
     protocols: derivativeProtocols,
@@ -511,6 +518,39 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     topFundingRates,
     volumeShareHistory: [] as VolumeSharePoint[], // Populated lazily via fetchVolumeShareData
     topExchangeNames,
+    historicalOI,
+    fundingRateData: fundingRateData as any[],
+    spotVolume24h: spotDexOverview.total24h,
+    spotVolume7d: spotDexOverview.total7d,
+  }
+}
+
+// Fetch historical OI time series
+export async function fetchOIOverview(): Promise<{ totalDataChart: [number, number][]; protocols: any[] }> {
+  try {
+    return await fetchJSON<any>('https://api.llama.fi/overview/open-interest?excludeTotalDataChartBreakdown=true')
+  } catch {
+    return { totalDataChart: [], protocols: [] }
+  }
+}
+
+// Fetch funding rate data from yields endpoint
+export async function fetchFundingRates(): Promise<any[]> {
+  try {
+    const data = await fetchJSON<any>('https://yields.llama.fi/perps')
+    return data?.data || []
+  } catch {
+    return []
+  }
+}
+
+// Fetch spot DEX overview for perps vs spot comparison
+export async function fetchSpotDexOverview(): Promise<{ total24h: number; total7d: number; total30d: number }> {
+  try {
+    const data = await fetchJSON<any>('https://api.llama.fi/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true')
+    return { total24h: data.total24h || 0, total7d: data.total7d || 0, total30d: data.total30d || 0 }
+  } catch {
+    return { total24h: 0, total7d: 0, total30d: 0 }
   }
 }
 

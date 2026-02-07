@@ -105,6 +105,39 @@ function DashCell({ tooltip }: { tooltip?: string }) {
   )
 }
 
+function exportCSV(exchanges: EnrichedExchange[]) {
+  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', '1d Change %', '7d Change %']
+  const rows = exchanges.map((e, i) => [
+    i + 1,
+    e.displayName || e.name,
+    e.tokenSymbol || '',
+    (e.chains || []).join('; '),
+    e.total24h ?? '',
+    e.total7d ?? '',
+    e.openInterest || '',
+    getDailyFees(e) ?? '',
+    getTakeRate(e)?.toFixed(2) ?? '',
+    e.mcap ?? '',
+    e.psRatio?.toFixed(1) ?? '',
+    e.peRatio?.toFixed(1) ?? '',
+    e.change_1d?.toFixed(2) ?? '',
+    e.change_7d?.toFixed(2) ?? '',
+  ])
+  const csv = [headers, ...rows].map((row) =>
+    row.map((cell) => {
+      const str = String(cell)
+      return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str
+    }).join(',')
+  ).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `perp-exchange-rankings-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function ExchangeRankingsTable({ exchanges }: Props) {
   const [sortBy, setSortBy] = useState<string>('total24h')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -242,8 +275,8 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="mb-4">
+      {/* Search + Export */}
+      <div className="mb-4 flex items-center gap-3">
         <input
           type="text"
           value={search}
@@ -251,6 +284,17 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
           placeholder="Search by name, token, or chain..."
           className="w-full max-w-sm px-3 py-2 border border-rule bg-paper font-sans text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-ink transition-colors"
         />
+        <button
+          onClick={() => exportCSV(sortedExchanges)}
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-rule bg-paper text-ink-muted font-sans text-xs hover:border-ink hover:text-ink transition-colors cursor-pointer"
+          type="button"
+          title="Export to CSV"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          CSV
+        </button>
       </div>
 
       {/* Summary stats bar */}

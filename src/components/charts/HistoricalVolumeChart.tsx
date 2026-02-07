@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -12,6 +12,7 @@ import type { HistoricalDataPoint } from '../../types'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatUSD, formatDate } from '../../utils/format'
 import { MetricInfo } from '../MetricInfo'
+import { TimePeriodSelector, filterDataByPeriod } from '../TimePeriodSelector'
 
 interface Props {
   data: HistoricalDataPoint[]
@@ -59,16 +60,12 @@ function CustomTooltip({
 }
 
 export function HistoricalVolumeChart({ data }: Props) {
+  const [period, setPeriod] = useState('1y')
+
   const filteredData = useMemo(() => {
     if (!data || data.length === 0) return []
-
-    const fourYearsAgo = Date.now() - 4 * 365.25 * 24 * 60 * 60 * 1000
-    const recent = data.filter((d) => d.date >= fourYearsAgo)
-
-    // If filtering would leave us with less data than the full set,
-    // use the filtered subset; otherwise show everything
-    return recent.length < data.length ? recent : data
-  }, [data])
+    return filterDataByPeriod(data, period)
+  }, [data, period])
 
   return (
     <div className="chart-container">
@@ -76,10 +73,13 @@ export function HistoricalVolumeChart({ data }: Props) {
       <p className="chart-subtitle">
         Daily trading volume across perpetual exchanges, USD
       </p>
-      <MetricInfo
-        description="Aggregate perpetual volume tracks total daily trading activity across all tracked exchanges. Large divergences between perp volume and spot volume can signal increased speculation. Comparing perp and spot volume over time helps gauge trader preference for leverage vs. spot exposure."
-        source="DefiLlama perps volume data aggregated across all exchanges. Spot volume available via DefiLlama DEX overview endpoint for comparison."
-      />
+      <div className="flex items-center justify-between mb-4">
+        <MetricInfo
+          description="Aggregate perpetual volume tracks total daily trading activity across all tracked exchanges. Large divergences between perp volume and spot volume can signal increased speculation. Comparing perp and spot volume over time helps gauge trader preference for leverage vs. spot exposure."
+          source="DefiLlama perps volume data aggregated across all exchanges. Spot volume available via DefiLlama DEX overview endpoint for comparison."
+        />
+        <TimePeriodSelector selected={period} onChange={setPeriod} />
+      </div>
       <ResponsiveContainer width="100%" height={400}>
         <AreaChart
           data={filteredData}

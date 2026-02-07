@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import {
   ResponsiveContainer,
@@ -330,6 +330,24 @@ export default function ExchangeProfilePage() {
   const exchangeName = data.exchange?.name || data.summary?.name || slug || 'Exchange'
   const description = data.summary?.description || data.exchange?.description || ''
   const chains = data.summary?.chains || []
+
+  // SEO: update document title and meta description
+  useEffect(() => {
+    document.title = `${exchangeName} — Perpetual Exchange Analytics`
+    const meta = document.querySelector('meta[name="description"]')
+    const desc = `${exchangeName} perpetual derivatives analytics: volume, open interest, fees, funding rates, and valuation metrics.`
+    if (meta) {
+      meta.setAttribute('content', desc)
+    } else {
+      const newMeta = document.createElement('meta')
+      newMeta.name = 'description'
+      newMeta.content = desc
+      document.head.appendChild(newMeta)
+    }
+    return () => {
+      document.title = 'Perpetual Exchange Analytics'
+    }
+  }, [exchangeName])
   const hasPrice = volumePriceData.some((d) => d.price != null && d.price > 0)
 
   // Derive KPIs from available data

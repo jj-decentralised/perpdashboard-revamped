@@ -82,6 +82,18 @@ export function KPIHeader({ data }: Props) {
     },
   ]
 
+  // Add perps dominance KPI if spot volume data is available
+  const perpsDominance = data.spotVolume24h > 0
+    ? (dexOverview.total24h / (dexOverview.total24h + data.spotVolume24h)) * 100
+    : null
+  if (perpsDominance != null) {
+    kpis.push({
+      label: 'Perps Dominance',
+      value: `${perpsDominance.toFixed(1)}%`,
+      sublabel: `vs ${formatUSD(data.spotVolume24h, true)} spot`,
+    })
+  }
+
   return (
     <header className="bg-paper">
       {/* Masthead */}
@@ -103,7 +115,7 @@ export function KPIHeader({ data }: Props) {
       </div>
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 py-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 py-6">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="kpi-card">
             <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-2 leading-tight">

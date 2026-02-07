@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -12,6 +12,7 @@ import type { VolumeSharePoint } from '../../types'
 import { COLORS, CHART_PALETTE, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatDateShort } from '../../utils/format'
 import { MetricInfo } from '../MetricInfo'
+import { TimePeriodSelector, filterDataByPeriod } from '../TimePeriodSelector'
 
 interface Props {
   data: VolumeSharePoint[]
@@ -71,7 +72,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function VolumeShareChart({ data, exchangeNames }: Props) {
+  const [period, setPeriod] = useState('1y')
   const allNames = useMemo(() => [...exchangeNames, 'Other'], [exchangeNames])
+  const filteredData = useMemo(() => filterDataByPeriod(data || [], period), [data, period])
 
   if (!data || data.length === 0) {
     return (
@@ -89,14 +92,17 @@ export function VolumeShareChart({ data, exchangeNames }: Props) {
       <p className="chart-subtitle">
         Weekly volume share (%) among top perpetual exchanges
       </p>
-      <MetricInfo
-        description="Market share trends reveal how competitive dynamics evolve over time. Rapidly shifting shares indicate a competitive market where traders actively seek the best execution. Stable dominance by a few exchanges suggests high switching costs or strong network effects in liquidity."
-        source="DefiLlama historical volume data, aggregated weekly and computed as percentage share of total across all tracked exchanges."
-      />
+      <div className="flex items-center justify-between mb-4">
+        <MetricInfo
+          description="Market share trends reveal how competitive dynamics evolve over time. Rapidly shifting shares indicate a competitive market where traders actively seek the best execution. Stable dominance by a few exchanges suggests high switching costs or strong network effects in liquidity."
+          source="DefiLlama historical volume data, aggregated weekly and computed as percentage share of total across all tracked exchanges."
+        />
+        <TimePeriodSelector selected={period} onChange={setPeriod} />
+      </div>
 
       <ResponsiveContainer width="100%" height={400}>
         <AreaChart
-          data={data}
+          data={filteredData}
           margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
           stackOffset="none"
         >

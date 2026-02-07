@@ -143,6 +143,17 @@ export interface VolumeSharePoint {
   [exchangeName: string]: number
 }
 
+export interface FundingRateEntry {
+  marketplace: string
+  market: string
+  baseAsset: string
+  fundingRate: number
+  fundingRate7dAverage: number | null
+  fundingRate30dAverage: number | null
+  openInterest: number | null
+  indexPrice: number | null
+}
+
 export interface DashboardData {
   dexOverview: DexOverview
   protocols: ProtocolInfo[]
@@ -156,4 +167,8 @@ export interface DashboardData {
   topFundingRates: CGDerivativeTicker[]
   volumeShareHistory: VolumeSharePoint[]
   topExchangeNames: string[]
+  historicalOI: HistoricalDataPoint[]
+  fundingRateData: FundingRateEntry[]
+  spotVolume24h: number
+  spotVolume7d: number
 }

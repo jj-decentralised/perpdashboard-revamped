@@ -14,6 +14,9 @@ import { GrowthMomentumChart } from '../components/charts/GrowthMomentumChart'
 import { FundingRateChart } from '../components/charts/FundingRateChart'
 import { OpenInterestChart } from '../components/charts/OpenInterestChart'
 import { ValuationChart } from '../components/charts/ValuationChart'
+import { HistoricalOIChart } from '../components/charts/HistoricalOIChart'
+import { FundingRateHeatmap } from '../components/charts/FundingRateHeatmap'
+import { CommandPalette } from '../components/CommandPalette'
 
 export default function DashboardPage() {
   const { data, loading, error } = useDashboardData()
@@ -25,17 +28,30 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-paper">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Global Search */}
+        <div className="flex justify-end mb-4">
+          <CommandPalette exchanges={data.enrichedExchanges} />
+        </div>
+
         {/* Masthead & KPIs */}
         <ErrorBoundary fallbackLabel="Dashboard header">
           <KPIHeader data={data} />
         </ErrorBoundary>
 
-        {/* Section 1: Aggregate Volume History */}
+        {/* Section 1: Aggregate Volume & OI History */}
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Historical volume chart">
             <HistoricalVolumeChart data={data.historicalVolume} />
           </ErrorBoundary>
         </section>
+
+        {data.historicalOI.length > 0 && (
+          <section className="section-rule">
+            <ErrorBoundary fallbackLabel="Historical OI chart">
+              <HistoricalOIChart oiData={data.historicalOI} volumeData={data.historicalVolume} />
+            </ErrorBoundary>
+          </section>
+        )}
 
         {/* Section 2: Token Classification */}
         <section className="section-rule-heavy">
@@ -64,7 +80,16 @@ export default function DashboardPage() {
           </ErrorBoundary>
         </section>
 
-        {/* Section 4: Open Interest & Funding Rates */}
+        {/* Section 4: Funding Rate Heatmap */}
+        {data.fundingRateData.length > 0 && (
+          <section className="section-rule-heavy">
+            <ErrorBoundary fallbackLabel="Funding rate heatmap">
+              <FundingRateHeatmap data={data.fundingRateData} />
+            </ErrorBoundary>
+          </section>
+        )}
+
+        {/* Section 4b: Open Interest & Funding Rates (per-pair) */}
         <section className="section-rule">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ErrorBoundary fallbackLabel="Open interest chart">
