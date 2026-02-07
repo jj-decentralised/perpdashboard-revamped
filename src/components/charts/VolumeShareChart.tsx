@@ -11,6 +11,7 @@ import {
 import type { VolumeSharePoint } from '../../types'
 import { COLORS, CHART_PALETTE, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatDateShort } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   data: VolumeSharePoint[]
@@ -88,6 +89,10 @@ export function VolumeShareChart({ data, exchangeNames }: Props) {
       <p className="chart-subtitle">
         Weekly volume share (%) among top perpetual exchanges
       </p>
+      <MetricInfo
+        description="Market share trends reveal how competitive dynamics evolve over time. Rapidly shifting shares indicate a competitive market where traders actively seek the best execution. Stable dominance by a few exchanges suggests high switching costs or strong network effects in liquidity."
+        source="DefiLlama historical volume data, aggregated weekly and computed as percentage share of total across all tracked exchanges."
+      />
 
       <ResponsiveContainer width="100%" height={400}>
         <AreaChart

@@ -12,6 +12,7 @@ import {
 import type { CGDerivativeTicker } from '../../types/coingecko'
 import { COLORS, AXIS_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatFundingRate, formatUSD } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   tickers: CGDerivativeTicker[]
@@ -97,6 +98,10 @@ export function FundingRateChart({ tickers }: Props) {
       <p className="chart-subtitle">
         Top perpetual pairs by open interest — positive means longs pay shorts
       </p>
+      <MetricInfo
+        description="Funding rates show the cost of holding long/short perp positions and are a leading sentiment indicator; extreme rates signal over-leveraged markets. The basis (difference between the perp's mark price and spot price) shows whether perps trade at a premium or discount. Long-short ratios highlight whether traders are heavily long or short, helping anticipate reversals."
+        source="CoinGecko derivatives API for funding rates, mark price and index price. Basis can be computed from the difference between mark and spot prices."
+      />
 
       {stats && (
         <div className="grid grid-cols-3 gap-4 mb-5 pb-4 border-b border-rule">

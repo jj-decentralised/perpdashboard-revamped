@@ -3,6 +3,7 @@ import { ResponsiveContainer, Treemap, Tooltip, Cell } from 'recharts'
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, CHART_PALETTE } from '../../utils/chartTheme'
 import { formatUSD, formatPercent, formatNumber } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -263,6 +264,10 @@ export function MarketConcentrationChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         Volume distribution and competitive dynamics across perpetual exchanges
       </p>
+      <MetricInfo
+        description="Market concentration metrics reveal how trading volume is distributed across exchanges. The Herfindahl-Hirschman Index (HHI) quantifies concentration: below 1,500 indicates a competitive market, 1,500-2,500 is moderately concentrated, and above 2,500 is highly concentrated. High concentration means liquidation cascades on a single venue can have outsized market impact."
+        source="Computed from DefiLlama 24h volume data. HHI calculated as the sum of squared market share percentages across all active exchanges."
+      />
 
       {/* Stacked percentage bar */}
       <div className="mb-6">

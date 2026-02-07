@@ -12,6 +12,7 @@ import {
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatUSD } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -99,6 +100,10 @@ export function OpenInterestChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         Top perpetual exchanges by total open interest (USD)
       </p>
+      <MetricInfo
+        description="Open interest represents the total value of outstanding perpetual contracts. OI turnover (daily volume / open interest) shows how quickly positions are being opened and closed, while a low OI/VOL ratio signals capital is 'sticky.' Sudden OI spikes or drops often coincide with liquidation cascades and potential turning points."
+        source="DefiLlama perps data for open interest by exchange. Volume and OI ratios computed from the same dataset."
+      />
 
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart

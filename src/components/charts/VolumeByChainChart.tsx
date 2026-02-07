@@ -11,6 +11,7 @@ import {
 import type { EnrichedExchange } from '../../types'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, CHART_PALETTE } from '../../utils/chartTheme'
 import { formatUSD } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -91,6 +92,10 @@ export function VolumeByChainChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         24-hour trading volume concentration across blockchain networks
       </p>
+      <MetricInfo
+        description="Chain-level volume distribution shows where perpetual trading activity is concentrated. This helps identify which L1/L2 ecosystems are capturing the most derivatives activity and reveals infrastructure preferences. Stablecoin collateral composition on each chain further affects capital efficiency and risk profiles."
+        source="DefiLlama perps volume data broken down by chain. Chain-level stablecoin data available via DefiLlama stablecoins endpoints."
+      />
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart
           data={chartData}

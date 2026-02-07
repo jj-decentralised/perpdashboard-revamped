@@ -12,6 +12,7 @@ import {
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatUSD, formatPercent } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -143,6 +144,10 @@ export function FeeRevenueChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         Protocol fee generation and capital efficiency, 24-hour snapshot
       </p>
+      <MetricInfo
+        description="Fee revenue analysis breaks down how much each protocol earns from trading activity. The fee/volume ratio (take rate) measures capital efficiency — lower rates attract more volume but generate less revenue per trade. Comparing tokenised vs non-tokenised exchange fee structures reveals how governance token incentives affect pricing."
+        source="DefiLlama fees endpoint for 24h fee data. Take rate computed as fees / volume in basis points."
+      />
 
       <ResponsiveContainer width="100%" height={420}>
         <BarChart

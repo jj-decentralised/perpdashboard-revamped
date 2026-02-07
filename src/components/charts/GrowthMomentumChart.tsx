@@ -14,6 +14,7 @@ import {
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatPercent, formatUSD, classNames } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -156,6 +157,10 @@ export function GrowthMomentumChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         Comparative growth dynamics — tokenised vs non-tokenised perpetual exchanges (min. $1M daily volume)
       </p>
+      <MetricInfo
+        description="Realized volatility (standard deviation of daily volume changes) reveals how erratic trading activity is across exchanges. High volatility often signals speculative surges or market stress. Comparing tokenised vs non-tokenised exchange volatility highlights whether governance token incentives amplify or dampen volume swings."
+        source="Computed from DefiLlama daily volume change data. Standard deviation measured across all exchanges with >$1M daily volume."
+      />
 
       {/* Grouped bar chart */}
       <ResponsiveContainer width="100%" height={360}>

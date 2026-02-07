@@ -16,6 +16,7 @@ import {
 import type { EnrichedExchange } from '../../types'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, CHART_PALETTE } from '../../utils/chartTheme'
 import { formatUSD, formatMultiple } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -150,6 +151,10 @@ export function ValuationChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         P/E and P/S ratios for perpetual exchanges with governance tokens
       </p>
+      <MetricInfo
+        description="Valuation multiples compare a protocol's market cap to its revenue (P/E) and fees (P/S). Lower ratios suggest relative undervaluation compared to peers. Traditional finance exchange benchmarks (CME, ICE) typically trade at 20-30x P/E, providing a reference point for DeFi perpetual protocol valuations."
+        source="Market cap from CoinGecko. Revenue and fees from DefiLlama fees endpoint, annualised from trailing data."
+      />
 
       <ResponsiveContainer width="100%" height={Math.max(360, barData.length * 32)}>
         <BarChart

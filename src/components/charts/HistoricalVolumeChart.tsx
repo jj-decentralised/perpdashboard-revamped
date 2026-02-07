@@ -11,6 +11,7 @@ import {
 import type { HistoricalDataPoint } from '../../types'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatUSD, formatDate } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   data: HistoricalDataPoint[]
@@ -75,6 +76,10 @@ export function HistoricalVolumeChart({ data }: Props) {
       <p className="chart-subtitle">
         Daily trading volume across perpetual exchanges, USD
       </p>
+      <MetricInfo
+        description="Aggregate perpetual volume tracks total daily trading activity across all tracked exchanges. Large divergences between perp volume and spot volume can signal increased speculation. Comparing perp and spot volume over time helps gauge trader preference for leverage vs. spot exposure."
+        source="DefiLlama perps volume data aggregated across all exchanges. Spot volume available via DefiLlama DEX overview endpoint for comparison."
+      />
       <ResponsiveContainer width="100%" height={400}>
         <AreaChart
           data={filteredData}
