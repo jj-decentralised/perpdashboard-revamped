@@ -11,17 +11,14 @@ import { FeeRevenueChart } from '../components/charts/FeeRevenueChart'
 import { MarketConcentrationChart } from '../components/charts/MarketConcentrationChart'
 import { TVLvsVolumeScatter } from '../components/charts/TVLvsVolumeScatter'
 import { GrowthMomentumChart } from '../components/charts/GrowthMomentumChart'
-import { FundingRateChart } from '../components/charts/FundingRateChart'
 import { OpenInterestChart } from '../components/charts/OpenInterestChart'
 import { ValuationChart } from '../components/charts/ValuationChart'
 import { HistoricalOIChart } from '../components/charts/HistoricalOIChart'
-import { FundingRateHeatmap } from '../components/charts/FundingRateHeatmap'
 import { PerpsDominanceChart } from '../components/charts/PerpsDominanceChart'
 import { VolumeGrowthChart } from '../components/charts/VolumeGrowthChart'
 import { TokenUnlockCalendar } from '../components/charts/TokenUnlockCalendar'
 import { BridgeFlowChart } from '../components/charts/BridgeFlowChart'
 import { CapitalEfficiencyChart } from '../components/charts/CapitalEfficiencyChart'
-import { StablecoinComposition } from '../components/charts/StablecoinComposition'
 import { CommandPalette } from '../components/CommandPalette'
 import { DataMethodology } from '../components/DataMethodology'
 
@@ -96,25 +93,11 @@ export default function DashboardPage() {
           </ErrorBoundary>
         </section>
 
-        {/* Section 4: Funding Rate Heatmap */}
-        {data.fundingRateData.length > 0 && (
-          <section className="section-rule-heavy">
-            <ErrorBoundary fallbackLabel="Funding rate heatmap">
-              <FundingRateHeatmap data={data.fundingRateData} />
-            </ErrorBoundary>
-          </section>
-        )}
-
-        {/* Section 4b: Open Interest & Funding Rates (per-pair) */}
+        {/* Section 4: Open Interest Distribution */}
         <section className="section-rule">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ErrorBoundary fallbackLabel="Open interest chart">
-              <OpenInterestChart exchanges={data.enrichedExchanges} />
-            </ErrorBoundary>
-            <ErrorBoundary fallbackLabel="Funding rate chart">
-              <FundingRateChart tickers={data.topFundingRates} />
-            </ErrorBoundary>
-          </div>
+          <ErrorBoundary fallbackLabel="Open interest chart">
+            <OpenInterestChart exchanges={data.enrichedExchanges} />
+          </ErrorBoundary>
         </section>
 
         {/* Section 5: Volume Growth Acceleration */}
@@ -131,16 +114,11 @@ export default function DashboardPage() {
           </ErrorBoundary>
         </section>
 
-        {/* Section 5c: Bridge Flows & Stablecoin Liquidity */}
+        {/* Section 5c: Bridge Flows */}
         <section className="section-rule">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ErrorBoundary fallbackLabel="Bridge flows">
-              <BridgeFlowChart />
-            </ErrorBoundary>
-            <ErrorBoundary fallbackLabel="Stablecoin composition">
-              <StablecoinComposition />
-            </ErrorBoundary>
-          </div>
+          <ErrorBoundary fallbackLabel="Bridge flows">
+            <BridgeFlowChart />
+          </ErrorBoundary>
         </section>
 
         {/* Section 6: Capital Efficiency & Fees */}

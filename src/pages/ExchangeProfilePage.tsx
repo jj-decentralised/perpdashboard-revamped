@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import {
   ResponsiveContainer,
@@ -10,9 +10,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  BarChart,
-  Bar,
-  Cell,
   LineChart,
 } from 'recharts'
 import { useExchangeProfile } from '../hooks/useExchangeProfile'
@@ -118,6 +115,293 @@ function TokenInfoSection({ info }: { info: TokenInfo }) {
               <p className={classNames('font-mono text-xs', percentClass(info.priceChange30d))}>30d: {formatPercent(info.priceChange30d)}</p>
             </div>
           </div>
+        </div>
+      </section>
+    </ErrorBoundary>
+  )
+}
+
+// --- Token Economics Section ---
+interface EmissionData {
+  circulatingSupply: number | null
+  totalLocked: number | null
+  maxSupply: number | null
+  unlocksPerDay: number | null
+  nextEvent: any | null
+  events: any[]
+}
+
+function TokenEconomicsSection({ info, slug }: { info: TokenInfo; slug: string }) {
+  const [emissions, setEmissions] = useState<EmissionData | null>(null)
+  const [emLoading, setEmLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('https://api.llama.fi/emissions')
+        if (!res.ok) throw new Error('Failed')
+        const data = await res.json()
+        if (cancelled || !Array.isArray(data)) return
+
+        // Match by protocol name/slug
+        const slugLower = slug.toLowerCase()
+        const nameLower = info.name.toLowerCase()
+        const match = data.find((em: any) => {
+          const emName = (em.name || '').toLowerCase()
+          const emId = (em.protocolId || '').toString().toLowerCase()
+          return emName === slugLower || emId === slugLower
+            || emName === nameLower
+            || emName.includes(slugLower) || slugLower.includes(emName)
+        })
+
+        if (match) {
+          setEmissions({
+            circulatingSupply: match.circulatingSupply?.circulating || null,
+            totalLocked: match.totalLocked || null,
+            maxSupply: match.maxSupply || null,
+            unlocksPerDay: match.unlocksPerDay || null,
+            nextEvent: match.nextEvent || null,
+            events: match.events || [],
+          })
+        }
+      } catch { /* emissions unavailable */ }
+      if (!cancelled) setEmLoading(false)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [slug, info.name])
+
+  const circulating = info.circulatingSupply
+  const total = info.totalSupply || info.maxSupply || 0
+  const maxSupply = info.maxSupply || emissions?.maxSupply || total
+  const locked = emissions?.totalLocked || (total > circulating ? total - circulating : 0)
+  const circPct = maxSupply > 0 ? (circulating / maxSupply) * 100 : 0
+  const lockedPct = maxSupply > 0 ? (locked / maxSupply) * 100 : 0
+  const mcapToFdv = info.fdv > 0 ? (info.marketCap / info.fdv) * 100 : 0
+  const unlockPressure30d = emissions?.unlocksPerDay && circulating > 0
+    ? (emissions.unlocksPerDay * 30 / circulating) * 100
+    : null
+  const hasUnlockData = emissions != null && (emissions.unlocksPerDay != null || emissions.totalLocked != null)
+
+  if (total <= 0 && !hasUnlockData) return null
+
+  return (
+    <ErrorBoundary fallbackLabel="Token economics">
+      <section className="section-rule">
+        <h3 className="chart-title">Token Economics</h3>
+        <p className="chart-subtitle">Supply distribution and unlock schedule for {info.symbol}</p>
+
+        {/* Supply distribution bar */}
+        <div className="mt-4 mb-5">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="font-sans text-xs uppercase tracking-wider text-ink-muted">Supply Distribution</span>
+            <span className="font-mono text-xs text-ink-muted">
+              {maxSupply > 0 ? `Max: ${formatNumber(maxSupply)}` : `Total: ${formatNumber(total)}`}
+            </span>
+          </div>
+          <div className="flex w-full h-7 overflow-hidden border border-rule">
+            <div
+              className="relative h-full flex items-center justify-center"
+              style={{ width: `${Math.max(circPct, 1)}%`, backgroundColor: COLORS.green, opacity: 0.7 }}
+              title={`Circulating: ${formatNumber(circulating)} (${circPct.toFixed(1)}%)`}
+            >
+              {circPct > 15 && (
+                <span className="font-mono text-[10px] text-white font-bold">{circPct.toFixed(0)}%</span>
+              )}
+            </div>
+            {lockedPct > 0 && (
+              <div
+                className="relative h-full flex items-center justify-center"
+                style={{ width: `${Math.max(lockedPct, 1)}%`, backgroundColor: COLORS.ink, opacity: 0.3 }}
+                title={`Locked/Unvested: ${formatNumber(locked)} (${lockedPct.toFixed(1)}%)`}
+              >
+                {lockedPct > 15 && (
+                  <span className="font-mono text-[10px] text-ink font-bold">{lockedPct.toFixed(0)}%</span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-5 mt-2">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3" style={{ backgroundColor: COLORS.green, opacity: 0.7 }} />
+              <span className="font-sans text-[11px] text-ink-muted">
+                Circulating ({formatNumber(circulating)})
+              </span>
+            </span>
+            {locked > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3" style={{ backgroundColor: COLORS.ink, opacity: 0.3 }} />
+                <span className="font-sans text-[11px] text-ink-muted">
+                  Locked ({formatNumber(locked)})
+                </span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Key metrics grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-4 border-b border-rule">
+          <div>
+            <p className="font-sans text-xs text-ink-muted">Mcap / FDV</p>
+            <p className="font-mono text-sm font-bold text-ink">{mcapToFdv.toFixed(1)}%</p>
+          </div>
+          <div>
+            <p className="font-sans text-xs text-ink-muted">Circulating %</p>
+            <p className="font-mono text-sm font-bold text-ink">{circPct.toFixed(1)}%</p>
+          </div>
+          {unlockPressure30d != null && (
+            <div>
+              <p className="font-sans text-xs text-ink-muted">30d Unlock Pressure</p>
+              <p
+                className="font-mono text-sm font-bold"
+                style={{ color: unlockPressure30d > 5 ? COLORS.red : unlockPressure30d > 2 ? COLORS.amber : COLORS.green }}
+              >
+                {unlockPressure30d.toFixed(2)}%
+              </p>
+            </div>
+          )}
+          {emissions?.unlocksPerDay != null && emissions.unlocksPerDay > 0 && (
+            <div>
+              <p className="font-sans text-xs text-ink-muted">Daily Unlocks</p>
+              <p className="font-mono text-sm font-bold text-ink">{formatNumber(emissions.unlocksPerDay)}</p>
+              <p className="font-mono text-[10px] text-ink-muted">
+                ~{formatUSD(emissions.unlocksPerDay * info.currentPrice, true)}/day
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Next unlock event */}
+        {emissions?.nextEvent && (
+          <div className="mt-4 border-l-4 pl-4" style={{ borderLeftColor: COLORS.amber }}>
+            <p className="font-sans text-xs font-semibold text-ink-light mb-1">Next Unlock Event</p>
+            <p className="font-sans text-sm text-ink">
+              {typeof emissions.nextEvent === 'string'
+                ? emissions.nextEvent
+                : emissions.nextEvent.description || emissions.nextEvent.date || JSON.stringify(emissions.nextEvent)}
+            </p>
+          </div>
+        )}
+
+        {emLoading && (
+          <p className="font-sans text-[11px] text-ink-muted mt-3">Loading unlock schedule...</p>
+        )}
+      </section>
+    </ErrorBoundary>
+  )
+}
+
+// --- Trading Pairs Section ---
+function TradingPairsSection({ tickers }: { tickers: CGExchangeTicker[] }) {
+  const pairs = useMemo(() => {
+    return tickers
+      .filter((t) => t.open_interest_usd > 0)
+      .sort((a, b) => b.open_interest_usd - a.open_interest_usd)
+      .slice(0, 20)
+  }, [tickers])
+
+  if (pairs.length === 0) return null
+
+  const maxOI = pairs[0]?.open_interest_usd || 1
+  const totalOI = pairs.reduce((s, t) => s + t.open_interest_usd, 0)
+
+  return (
+    <ErrorBoundary fallbackLabel="Trading pairs">
+      <section className="section-rule">
+        <h3 className="chart-title">Top Trading Pairs</h3>
+        <p className="chart-subtitle">
+          {pairs.length} pairs ranked by open interest — {formatUSD(totalOI, true)} total OI
+        </p>
+
+        <div className="mt-4 space-y-1">
+          {pairs.map((t, i) => {
+            const oiPct = (t.open_interest_usd / maxOI) * 100
+            const oiShare = totalOI > 0 ? (t.open_interest_usd / totalOI) * 100 : 0
+            const isPositive = t.funding_rate >= 0
+
+            return (
+              <div
+                key={`${t.base}-${t.target}-${i}`}
+                className="relative flex items-center gap-3 py-2.5 px-3 border border-rule hover:bg-paper-alt transition-colors group"
+              >
+                {/* Rank */}
+                <span className="font-mono text-xs text-ink-muted w-5 text-right flex-shrink-0">
+                  {i + 1}
+                </span>
+
+                {/* Pair name */}
+                <div className="w-28 flex-shrink-0">
+                  <span className="font-sans text-sm font-semibold text-ink">{t.base}</span>
+                  <span className="font-sans text-sm text-ink-muted">/{t.target}</span>
+                </div>
+
+                {/* OI bar + value */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-5 bg-paper relative overflow-hidden">
+                      <div
+                        className="absolute inset-y-0 left-0 transition-all"
+                        style={{
+                          width: `${oiPct}%`,
+                          backgroundColor: isPositive ? COLORS.green : COLORS.red,
+                          opacity: 0.15,
+                        }}
+                      />
+                      <div className="absolute inset-0 flex items-center px-2">
+                        <span className="font-mono text-xs text-ink">
+                          {formatUSD(t.open_interest_usd, true)}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="font-mono text-[10px] text-ink-muted w-12 text-right flex-shrink-0">
+                      {oiShare.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Funding rate badge */}
+                <div className="w-24 flex-shrink-0 text-right">
+                  <span
+                    className="inline-block font-mono text-xs font-bold px-2 py-0.5"
+                    style={{
+                      color: isPositive ? COLORS.green : COLORS.red,
+                      backgroundColor: isPositive ? 'rgba(34,139,34,0.08)' : 'rgba(220,20,60,0.08)',
+                    }}
+                  >
+                    {formatFundingRate(t.funding_rate)}
+                  </span>
+                </div>
+
+                {/* 24h volume */}
+                <div className="w-24 flex-shrink-0 text-right hidden md:block">
+                  <span className="font-mono text-xs text-ink-light">
+                    {formatUSD(t.converted_volume?.usd || t.h24_volume || 0, true)}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Header labels */}
+        <div className="flex items-center gap-3 mt-3 px-3">
+          <span className="w-5" />
+          <span className="w-28 font-sans text-[10px] text-ink-muted uppercase tracking-wider">Pair</span>
+          <span className="flex-1 font-sans text-[10px] text-ink-muted uppercase tracking-wider">Open Interest</span>
+          <span className="w-24 text-right font-sans text-[10px] text-ink-muted uppercase tracking-wider">Funding</span>
+          <span className="w-24 text-right font-sans text-[10px] text-ink-muted uppercase tracking-wider hidden md:block">24h Vol</span>
+        </div>
+
+        <div className="flex items-center gap-4 mt-4 pt-3 border-t border-rule">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3" style={{ backgroundColor: COLORS.green, opacity: 0.15, border: `1px solid ${COLORS.green}` }} />
+            <span className="font-sans text-[11px] text-ink-muted">Positive funding (longs pay)</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3" style={{ backgroundColor: COLORS.red, opacity: 0.15, border: `1px solid ${COLORS.red}` }} />
+            <span className="font-sans text-[11px] text-ink-muted">Negative funding (shorts pay)</span>
+          </span>
         </div>
       </section>
     </ErrorBoundary>
@@ -250,20 +534,6 @@ export default function ExchangeProfilePage() {
       return { date: v.date, volume: v.value, price: priceMap.get(dayKey) || null }
     })
   }, [data?.historicalVolume, data?.priceHistory])
-
-  const tickerChartData = useMemo(() => {
-    if (!data?.tickers?.length) return []
-    return data.tickers
-      .filter((t: CGExchangeTicker) => t.open_interest_usd > 0)
-      .sort((a: CGExchangeTicker, b: CGExchangeTicker) => b.open_interest_usd - a.open_interest_usd)
-      .slice(0, 20)
-      .map((t: CGExchangeTicker) => ({
-        label: `${t.base}/${t.target}`,
-        oi: t.open_interest_usd,
-        fundingRate: t.funding_rate,
-      }))
-      .reverse()
-  }, [data?.tickers])
 
   // Filter valid P/E data points (cap at 500x to remove noise)
   const validPE = useMemo(() => {
@@ -457,6 +727,11 @@ export default function ExchangeProfilePage() {
 
         {/* Token Info */}
         {data.tokenInfo && <TokenInfoSection info={data.tokenInfo} />}
+
+        {/* Token Economics */}
+        {data.tokenInfo && slug && (
+          <TokenEconomicsSection info={data.tokenInfo} slug={slug} />
+        )}
 
         {/* Historical Volume + Price Overlay */}
         {volumePriceData.length > 0 && (
@@ -653,49 +928,7 @@ export default function ExchangeProfilePage() {
         {data.treasury && <TreasurySection treasury={data.treasury} />}
 
         {/* Trading Pairs by OI */}
-        {tickerChartData.length > 0 && (
-          <ErrorBoundary fallbackLabel="Trading pairs">
-            <section className="section-rule">
-              <h3 className="chart-title">Top Trading Pairs</h3>
-              <p className="chart-subtitle">Ranked by open interest — colour indicates funding rate direction</p>
-              <ResponsiveContainer width="100%" height={Math.max(400, tickerChartData.length * 24)}>
-                <BarChart data={tickerChartData} layout="vertical" margin={{ top: 8, right: 24, bottom: 0, left: 0 }}>
-                  <CartesianGrid horizontal={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
-                  <XAxis type="number" tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} />
-                  <YAxis type="category" dataKey="label" width={100} tick={{ ...AXIS_STYLE, fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <Tooltip content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const d = payload[0].payload
-                    return (
-                      <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.6 }}>
-                        <p style={TOOLTIP_STYLE.labelStyle}>{d.label}</p>
-                        <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>OI: {formatUSD(d.oi, true)}</p>
-                        <p style={{ margin: 0, color: d.fundingRate >= 0 ? COLORS.green : COLORS.red, fontSize: 12 }}>
-                          Funding: {formatFundingRate(d.fundingRate)}
-                        </p>
-                      </div>
-                    )
-                  }} cursor={{ fill: COLORS.paperAlt }} />
-                  <Bar dataKey="oi" radius={[0, 2, 2, 0]} animationDuration={800}>
-                    {tickerChartData.map((entry: { fundingRate: number }, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.fundingRate >= 0 ? COLORS.green : COLORS.red} opacity={0.75} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="flex items-center gap-4 mt-3">
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-2.5 h-2.5" style={{ backgroundColor: COLORS.green, opacity: 0.75 }} />
-                  <span className="font-sans text-[11px] text-ink-muted">Positive funding (longs pay)</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-2.5 h-2.5" style={{ backgroundColor: COLORS.red, opacity: 0.75 }} />
-                  <span className="font-sans text-[11px] text-ink-muted">Negative funding (shorts pay)</span>
-                </span>
-              </div>
-            </section>
-          </ErrorBoundary>
-        )}
+        {data.tickers.length > 0 && <TradingPairsSection tickers={data.tickers} />}
 
         {/* Comparables */}
         <ComparablesSection comparables={data.comparables} currentSlug={slug || ''} />
