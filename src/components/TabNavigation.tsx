@@ -36,26 +36,26 @@ interface TabNavigationProps {
 
 export function TabNavigation({ tabs, activeTab, onSelect }: TabNavigationProps) {
   return (
-    <nav className="sticky top-0 z-30 bg-paper border-b-2 border-ink -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
-      <div className="flex gap-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => onSelect(tab.id)}
-            className={`
-              relative px-5 py-3 font-sans text-sm font-medium whitespace-nowrap transition-colors duration-100
-              ${activeTab === tab.id
-                ? 'text-ink'
-                : 'text-ink-muted hover:text-ink-light'
-              }
-            `}
-          >
-            {tab.label}
-            {activeTab === tab.id && (
-              <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-ink" />
-            )}
-          </button>
-        ))}
+    <nav className="sticky top-0 z-30 bg-paper -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 border-b border-rule">
+      <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        {tabs.map(tab => {
+          const isActive = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onSelect(tab.id)}
+              className={`
+                px-5 py-2 font-sans text-sm font-semibold whitespace-nowrap transition-all duration-150 border
+                ${isActive
+                  ? 'bg-ink text-paper border-ink shadow-sm'
+                  : 'bg-paper-alt text-ink-muted border-rule hover:text-ink hover:border-ink-muted hover:bg-paper-warm'
+                }
+              `}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
     </nav>
   )
