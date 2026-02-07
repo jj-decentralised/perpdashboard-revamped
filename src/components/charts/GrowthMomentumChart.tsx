@@ -266,14 +266,15 @@ export function GrowthMomentumChart({ exchanges }: Props) {
         source="Computed from DefiLlama daily volume change data. Statistics measured across all exchanges with >$10M daily volume. Emerging exchanges ($1M-$10M) shown separately."
       />
 
-      <div className="flex items-center gap-3 mb-4">
-        <CategoryFilter
-          selected={category}
-          onChange={setCategory}
-          defiCount={exchanges.filter(e => e.venueType === 'defi').length}
-          cefiCount={exchanges.filter(e => e.venueType === 'cefi').length}
-        />
-      </div>
+      {(() => {
+        const dc = exchanges.filter(e => e.venueType === 'defi').length
+        const cc = exchanges.filter(e => e.venueType === 'cefi').length
+        return dc > 0 && cc > 0 ? (
+          <div className="flex items-center gap-3 mb-4">
+            <CategoryFilter selected={category} onChange={setCategory} defiCount={dc} cefiCount={cc} />
+          </div>
+        ) : null
+      })()}
 
       {/* Grouped bar chart */}
       <ResponsiveContainer width="100%" height={360}>

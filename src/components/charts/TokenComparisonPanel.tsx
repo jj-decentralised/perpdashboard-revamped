@@ -100,23 +100,27 @@ function buildComparisonRows(
 }
 
 function buildBarData(tokenGroup: TokenGroupStats, noTokenGroup: TokenGroupStats) {
-  return [
-    {
-      metric: 'Volume 24h',
-      'With Token': tokenGroup.totalVolume24h,
-      'Without Token': noTokenGroup.totalVolume24h,
-    },
-    {
-      metric: 'Open Interest',
-      'With Token': tokenGroup.totalOI,
-      'Without Token': noTokenGroup.totalOI,
-    },
-    {
-      metric: 'Fees 24h',
-      'With Token': tokenGroup.totalFees24h,
-      'Without Token': noTokenGroup.totalFees24h,
-    },
-  ]
+  return {
+    volumeOI: [
+      {
+        metric: 'Volume 24h',
+        'With Token': tokenGroup.totalVolume24h,
+        'Without Token': noTokenGroup.totalVolume24h,
+      },
+      {
+        metric: 'Open Interest',
+        'With Token': tokenGroup.totalOI,
+        'Without Token': noTokenGroup.totalOI,
+      },
+    ],
+    fees: [
+      {
+        metric: 'Fees 24h',
+        'With Token': tokenGroup.totalFees24h,
+        'Without Token': noTokenGroup.totalFees24h,
+      },
+    ],
+  }
 }
 
 function deriveObservation(
@@ -258,59 +262,104 @@ export function TokenComparisonPanel({ tokenGroup, noTokenGroup }: Props) {
         </p>
       </div>
 
-      {/* ── Grouped Bar Chart ── */}
+      {/* ── Grouped Bar Charts ── */}
       <div className="chart-container mb-8">
         <h3 className="chart-title">Key Metrics Comparison</h3>
         <p className="chart-subtitle">
-          Aggregate volume, TVL, and fees by token classification
+          Aggregate volume, open interest, and fees by token classification
         </p>
-        <div style={{ width: '100%', height: 340 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={barData}
-              margin={{ top: 8, right: 24, left: 16, bottom: 0 }}
-              barCategoryGap="25%"
-              barGap={4}
-            >
-              <XAxis
-                dataKey="metric"
-                tick={AXIS_STYLE}
-                axisLine={{ stroke: COLORS.rule }}
-                tickLine={false}
-              />
-              <YAxis
-                tick={AXIS_STYLE}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={yAxisTickFormatter}
-              />
-              <Tooltip
-                formatter={barTooltipFormatter}
-                contentStyle={TOOLTIP_STYLE.contentStyle}
-                labelStyle={TOOLTIP_STYLE.labelStyle}
-                cursor={{ fill: COLORS.paperAlt }}
-              />
-              <Legend
-                wrapperStyle={{
-                  fontSize: 12,
-                  fontFamily: AXIS_STYLE.fontFamily,
-                  paddingTop: 12,
-                }}
-              />
-              <Bar
-                dataKey="With Token"
-                fill={TOKEN_COLOR}
-                radius={[2, 2, 0, 0]}
-                maxBarSize={64}
-              />
-              <Bar
-                dataKey="Without Token"
-                fill={NO_TOKEN_COLOR}
-                radius={[2, 2, 0, 0]}
-                maxBarSize={64}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Volume & OI (same scale) */}
+          <div className="lg:col-span-2" style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={barData.volumeOI}
+                margin={{ top: 8, right: 24, left: 16, bottom: 0 }}
+                barCategoryGap="25%"
+                barGap={4}
+              >
+                <XAxis
+                  dataKey="metric"
+                  tick={AXIS_STYLE}
+                  axisLine={{ stroke: COLORS.rule }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={AXIS_STYLE}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={yAxisTickFormatter}
+                />
+                <Tooltip
+                  formatter={barTooltipFormatter}
+                  contentStyle={TOOLTIP_STYLE.contentStyle}
+                  labelStyle={TOOLTIP_STYLE.labelStyle}
+                  cursor={{ fill: COLORS.paperAlt }}
+                />
+                <Legend
+                  wrapperStyle={{
+                    fontSize: 12,
+                    fontFamily: AXIS_STYLE.fontFamily,
+                    paddingTop: 12,
+                  }}
+                />
+                <Bar
+                  dataKey="With Token"
+                  fill={TOKEN_COLOR}
+                  radius={[2, 2, 0, 0]}
+                  maxBarSize={64}
+                />
+                <Bar
+                  dataKey="Without Token"
+                  fill={NO_TOKEN_COLOR}
+                  radius={[2, 2, 0, 0]}
+                  maxBarSize={64}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Fees (own scale) */}
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={barData.fees}
+                margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
+                barCategoryGap="25%"
+                barGap={4}
+              >
+                <XAxis
+                  dataKey="metric"
+                  tick={AXIS_STYLE}
+                  axisLine={{ stroke: COLORS.rule }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={AXIS_STYLE}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={yAxisTickFormatter}
+                />
+                <Tooltip
+                  formatter={barTooltipFormatter}
+                  contentStyle={TOOLTIP_STYLE.contentStyle}
+                  labelStyle={TOOLTIP_STYLE.labelStyle}
+                  cursor={{ fill: COLORS.paperAlt }}
+                />
+                <Bar
+                  dataKey="With Token"
+                  fill={TOKEN_COLOR}
+                  radius={[2, 2, 0, 0]}
+                  maxBarSize={64}
+                />
+                <Bar
+                  dataKey="Without Token"
+                  fill={NO_TOKEN_COLOR}
+                  radius={[2, 2, 0, 0]}
+                  maxBarSize={64}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 

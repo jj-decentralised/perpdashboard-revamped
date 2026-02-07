@@ -18,18 +18,31 @@ interface Props {
   tickers: CGDerivativeTicker[]
 }
 
+function cleanQuote(raw: string): string {
+  return raw
+    .replace(/^[_\-\/]+/, '')       // strip leading separators
+    .replace(/_?(PERP|PERPETUAL|SWAP|MARGIN|LINEAR|INVERSE)\b/gi, '')
+    .replace(/[_\-\/]+$/, '')       // strip trailing separators
+    .replace(/_/g, '')              // collapse remaining underscores
+    .trim() || 'USD'
+}
+
 function parsePairLabel(ticker: CGDerivativeTicker): string {
-  // symbol is like "BTCUSDT", "ETHUSDT", "SOLUSDT"
+  // symbol is like "BTCUSDT", "ETHUSDT_PERP", "BTC_USDT_PERP"
   // index_id is like "BTC", "ETH", "SOL"
   const sym = ticker.symbol || ''
   const idx = ticker.index_id || ''
 
-  if (idx && sym.startsWith(idx)) {
-    const quote = sym.slice(idx.length) || 'USD'
+  if (idx && sym.toUpperCase().startsWith(idx.toUpperCase())) {
+    const quote = cleanQuote(sym.slice(idx.length))
     return `${idx}/${quote}`
   }
-  // Fallback: just use symbol
-  return sym || '???'
+  // Fallback: clean the full symbol
+  const cleaned = sym
+    .replace(/_?(PERP|PERPETUAL|SWAP)\b/gi, '')
+    .replace(/[_\-]+/g, '/')
+    .replace(/\/+$/, '')
+  return cleaned || '???'
 }
 
 function shortenMarket(market: string): string {

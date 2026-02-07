@@ -295,12 +295,13 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
           placeholder="Search by name, token, or chain..."
           className="w-full max-w-sm px-3 py-2 border border-rule bg-paper font-sans text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-ink transition-colors"
         />
-        <CategoryFilter
-          selected={category}
-          onChange={setCategory}
-          defiCount={exchanges.filter(e => e.venueType === 'defi').length}
-          cefiCount={exchanges.filter(e => e.venueType === 'cefi').length}
-        />
+        {(() => {
+          const dc = exchanges.filter(e => e.venueType === 'defi').length
+          const cc = exchanges.filter(e => e.venueType === 'cefi').length
+          return dc > 0 && cc > 0 ? (
+            <CategoryFilter selected={category} onChange={setCategory} defiCount={dc} cefiCount={cc} />
+          ) : null
+        })()}
         <button
           onClick={() => exportCSV(sortedExchanges)}
           className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-rule bg-paper text-ink-muted font-sans text-xs hover:border-ink hover:text-ink transition-colors cursor-pointer"

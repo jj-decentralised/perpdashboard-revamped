@@ -107,7 +107,7 @@ export function PerpsDominanceChart({ perpVolume, spotVolume }: Props) {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5 pb-4 border-b border-rule">
           <div>
-            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">Perps Dominance</p>
+            <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">Perps Dominance (7d avg)</p>
             <p className="font-mono text-sm font-bold text-ink">{stats.currentDominance.toFixed(1)}%</p>
           </div>
           <div>

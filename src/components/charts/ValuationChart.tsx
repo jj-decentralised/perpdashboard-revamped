@@ -211,7 +211,7 @@ function ScatterTooltip({ active, payload }: { active?: boolean; payload?: any[]
 export function ValuationChart({ exchanges }: Props) {
   const [showCategoryView, setShowCategoryView] = useState(false)
 
-  const { barData, scatterData, peStats, psStats, tokenCategory, noTokenCategory } = useMemo(() => {
+  const { barData, scatterData, peStats, psStats, tokenCategory, noTokenCategory, axisMax } = useMemo(() => {
     const valid = exchanges
       .filter(
         (e) =>
@@ -273,7 +273,12 @@ export function ValuationChart({ exchanges }: Props) {
       rows: noTokenRows,
     }
 
-    return { barData, scatterData, peStats, psStats, tokenCategory, noTokenCategory }
+    // Compute a reasonable axis max (95th percentile) to prevent outliers from squashing all bars
+    const allMultiples = [...peValues, ...psValues].sort((a, b) => a - b)
+    const p95 = allMultiples.length > 0 ? percentile(allMultiples, 95) : 100
+    const axisMax = Math.ceil(Math.max(p95 * 1.2, 10)) // at least 10x, 20% padding above p95
+
+    return { barData, scatterData, peStats, psStats, tokenCategory, noTokenCategory, axisMax }
   }, [exchanges])
 
   if (barData.length === 0) {
@@ -319,6 +324,7 @@ export function ValuationChart({ exchanges }: Props) {
             tick={AXIS_STYLE}
             tickLine={false}
             axisLine={{ stroke: COLORS.rule }}
+            domain={[0, axisMax]}
           />
           <YAxis
             type="category"

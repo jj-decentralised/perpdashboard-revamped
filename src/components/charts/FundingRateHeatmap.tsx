@@ -67,7 +67,7 @@ export function FundingRateHeatmap({ data }: Props) {
       .slice(0, 10)
       .map(([ex]) => ex)
 
-    // Build matrix: coin -> exchange -> entry
+    // Build matrix: coin -> exchange -> entry (deduplicated: one entry per coin×exchange)
     const matrix = new Map<string, Map<string, FundingRateEntry>>()
     for (const d of valid) {
       if (!topCoins.includes(d.baseAsset) || !topExchanges.includes(d.marketplace)) continue
@@ -78,11 +78,20 @@ export function FundingRateHeatmap({ data }: Props) {
       }
     }
 
-    // OI-weighted average funding rate
+    // OI-weighted average funding rate — DEDUPLICATED by (baseAsset, marketplace)
+    // Use the best entry per (baseAsset, marketplace) to avoid counting OI multiple times
+    const dedupedEntries = new Map<string, FundingRateEntry>()
+    for (const d of valid) {
+      const key = `${d.baseAsset}|${d.marketplace}`
+      const existing = dedupedEntries.get(key)
+      if (!existing || (d.openInterest || 0) > (existing.openInterest || 0)) {
+        dedupedEntries.set(key, d)
+      }
+    }
     let weightedSum = 0
     let totalOI = 0
     let positiveOI = 0
-    for (const d of valid) {
+    for (const d of dedupedEntries.values()) {
       if (d.openInterest && d.openInterest > 0) {
         weightedSum += d.fundingRate * d.openInterest
         totalOI += d.openInterest
@@ -202,13 +211,17 @@ export function FundingRateHeatmap({ data }: Props) {
 
       {/* Category filter + View toggle */}
       <div className="flex items-center gap-4 mb-4">
-        <CategoryFilter
-          selected={category}
-          onChange={setCategory}
-          defiCount={defiCount}
-          cefiCount={cefiCount}
-        />
-        <div className="w-px h-5 bg-rule" />
+        {defiCount > 0 && cefiCount > 0 && (
+          <>
+            <CategoryFilter
+              selected={category}
+              onChange={setCategory}
+              defiCount={defiCount}
+              cefiCount={cefiCount}
+            />
+            <div className="w-px h-5 bg-rule" />
+          </>
+        )}
         <div className="flex items-center gap-1">
         <button
           onClick={() => setView('heatmap')}

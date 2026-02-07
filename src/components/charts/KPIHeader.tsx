@@ -60,7 +60,7 @@ export function KPIHeader({ data }: Props) {
       change: dexOverview.change_1m,
     },
     {
-      label: 'Active Exchanges',
+      label: 'Exchanges Tracked',
       value: formatNumber(enrichedExchanges.length),
       sublabel: `${formatNumber(withToken)} with token / ${formatNumber(withoutToken)} without`,
     },
@@ -88,7 +88,7 @@ export function KPIHeader({ data }: Props) {
     : null
   if (perpsDominance != null) {
     kpis.push({
-      label: 'Perps Dominance',
+      label: 'Perps Dominance (24h)',
       value: `${perpsDominance.toFixed(1)}%`,
       sublabel: `vs ${formatUSD(data.spotVolume24h, true)} spot`,
     })
