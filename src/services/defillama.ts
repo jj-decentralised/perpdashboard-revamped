@@ -75,6 +75,16 @@ export async function fetchTreasury(slug: string): Promise<any | null> {
   }
 }
 
+export async function fetchHoldersRevenueSummary(slug: string): Promise<any | null> {
+  try {
+    return await fetchJSON<any>(
+      `${LLAMA_BASE}/summary/fees/${slug}?dataType=dailyHoldersRevenue`
+    )
+  } catch {
+    return null
+  }
+}
+
 function median(values: number[]): number {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)

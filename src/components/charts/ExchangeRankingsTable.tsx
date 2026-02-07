@@ -199,6 +199,43 @@ function DashCell({ tooltip }: { tooltip?: string }) {
   )
 }
 
+/** Token holder rights summary — compact tags for the rankings table */
+const HOLDER_RIGHTS_MAP: Record<string, { tags: string[]; tooltip: string }> = {
+  'hyperliquid-perps': { tags: ['Buyback'], tooltip: 'Assistance Fund buybacks of HYPE' },
+  gmx: { tags: ['Fee Share', 'Governance'], tooltip: '30% of fees to GMX stakers + governance voting' },
+  'gmx-v2-perps': { tags: ['Fee Share', 'Governance'], tooltip: '30% of fees to GMX stakers + governance voting' },
+  synthetix: { tags: ['Fee Share', 'Governance'], tooltip: 'Stakers earn trading fees + Spartan Council governance' },
+  'dydx-v4': { tags: ['Fee Rebate', 'Governance'], tooltip: 'Fee rebates for stakers + on-chain governance' },
+  dydx: { tags: ['Fee Rebate', 'Governance'], tooltip: 'Fee rebates for stakers + on-chain governance' },
+  'jupiter-perpetual-exchange': { tags: ['Buyback', 'Governance'], tooltip: '50% fee buyback + Active Staking Rewards' },
+  'jupiter-perps': { tags: ['Buyback', 'Governance'], tooltip: '50% fee buyback + Active Staking Rewards' },
+  'drift-trade': { tags: ['Insurance', 'Governance'], tooltip: 'Insurance fund staking + Realms governance' },
+  'vertex-protocol': { tags: ['Fee Share'], tooltip: 'USDC rewards from trading fees to VRTX stakers' },
+  'gains-network': { tags: ['Fee Share', 'Governance'], tooltip: 'GNS stakers earn trading fee share' },
+  'gains-network-perps': { tags: ['Fee Share', 'Governance'], tooltip: 'GNS stakers earn trading fee share' },
+  'aevo-perps': { tags: ['Governance'], tooltip: 'Governance voting + fee discounts for stakers' },
+  'rabbitx': { tags: ['Fee Share'], tooltip: 'RBX stakers earn portion of trading fees' },
+}
+
+function HolderRightsTags({ slug }: { slug: string }) {
+  const info = HOLDER_RIGHTS_MAP[slug]
+  if (!info) return null
+
+  return (
+    <>
+      {info.tags.map(tag => (
+        <span
+          key={tag}
+          className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-sans font-medium bg-accent-green/10 text-accent-green border border-accent-green/30 cursor-help"
+          title={info.tooltip}
+        >
+          {tag}
+        </span>
+      ))}
+    </>
+  )
+}
+
 function EcosystemBadge({ slug }: { slug: string }) {
   const eco = ECOSYSTEM_MAP[slug]
   if (!eco) return null
@@ -526,13 +563,14 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                     'sticky left-0 z-10',
                     index % 2 === 1 ? 'bg-paper-warm' : 'bg-paper'
                   )}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <Link to={`/exchange/${exchange.slug}?cgId=${exchange.cgExchangeId || ''}`} className="hover:underline" style={{ color: '#2e5e8e' }}>
                         {exchange.displayName || exchange.name}
                       </Link>
                       {exchange.hasToken && (
                         <span className="tag-token">{exchange.tokenSymbol}</span>
                       )}
+                      <HolderRightsTags slug={exchange.slug} />
                       <EcosystemBadge slug={exchange.slug} />
                       {anomaly && (
                         <span className="text-amber-600 cursor-help" title={`Data anomaly: ${anomaly}`}>&#9888;</span>
@@ -652,6 +690,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         <span><strong>P/E</strong> = Mcap / Annualized Revenue</span>
         <span><strong>{'\u2014'}</strong> = Data not available from source (hover for details)</span>
         <span><strong>&#9888;</strong> = Possible data anomaly</span>
+        <span><span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Fee Share</span> / <span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Buyback</span> = Token holder value accrual</span>
       </div>
     </section>
   )

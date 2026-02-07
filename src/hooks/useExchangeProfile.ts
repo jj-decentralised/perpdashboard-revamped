@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange } from '../types/profile'
+import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, fetchFeeOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets, fetchBTCPrice } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
@@ -291,12 +291,13 @@ export function useExchangeProfile(
 
         // Phase 1: Core data (parallel)
         // Use lightweight derivatives overview (excludeBreakdown) for comparables — saves ~7MB vs old approach
-        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, feeOverview, cgExchangesList, btcPrice] = await Promise.all([
+        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, holdersRevRaw, derivativesOverview, feeOverview, cgExchangesList, btcPrice] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
           fetchFeeSummary(slug!).catch(() => null),
           fetchRevenueSummary(slug!).catch(() => null),
           fetchTreasury(slug!).catch(() => null),
+          fetchHoldersRevenueSummary(slug!).catch(() => null),
           fetchDerivativesOverview(true).catch(() => null),
           fetchFeeOverview().catch(() => null),
           !cgId ? fetchCGDerivativesExchanges().catch(() => []) : Promise.resolve([]),
@@ -440,6 +441,19 @@ export function useExchangeProfile(
           compMcapMap
         )
 
+        // Build holders revenue data
+        let holdersRevenue: HoldersRevenueData | null = null
+        if (holdersRevRaw) {
+          const hrChart: HistoricalDataPoint[] = (holdersRevRaw.totalDataChart || [])
+            .filter((entry: any): entry is [number, number] => Array.isArray(entry) && entry.length === 2)
+            .map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
+          const hrDaily = holdersRevRaw.total24h ?? null
+          const hrTotal30d = holdersRevRaw.total30d ?? null
+          if (hrDaily != null || hrChart.length > 0) {
+            holdersRevenue = { daily: hrDaily, total30d: hrTotal30d, history: hrChart }
+          }
+        }
+
         const profileData: ExchangeProfileData = {
           summary: summary || null,
           historicalVolume,
@@ -455,6 +469,7 @@ export function useExchangeProfile(
           feeHistory,
           revenueHistory,
           btcPrice,
+          holdersRevenue,
         }
 
         setData(profileData)

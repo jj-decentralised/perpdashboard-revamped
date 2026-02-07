@@ -80,6 +80,12 @@ export interface ComparableExchange {
   matchReason: string
 }
 
+export interface HoldersRevenueData {
+  daily: number | null
+  total30d: number | null
+  history: HistoricalDataPoint[]
+}
+
 export interface ExchangeProfileData {
   summary: DerivativesSummary | null
   historicalVolume: HistoricalDataPoint[]
@@ -96,4 +102,5 @@ export interface ExchangeProfileData {
   feeHistory: HistoricalDataPoint[]
   revenueHistory: HistoricalDataPoint[]
   btcPrice: number
+  holdersRevenue: HoldersRevenueData | null
 }
