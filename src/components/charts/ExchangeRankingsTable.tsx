@@ -22,9 +22,10 @@ const columns: ColumnDef[] = [
   { key: 'total24h', label: '24h Volume', sortable: true, align: 'right' },
   { key: 'total7d', label: '7d Volume', sortable: true, align: 'right' },
   { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' },
+  { key: 'tvl', label: 'TVL', sortable: true, align: 'right', tooltip: 'Total Value Locked — deposited collateral/liquidity' },
+  { key: 'volumeToTvl', label: 'Vol/TVL', sortable: true, align: 'right', tooltip: 'Capital turnover: 24h Volume / TVL' },
   { key: 'dailyFees', label: 'Daily Fees', sortable: true, align: 'right' },
   { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
-  { key: 'volPer1MFees', label: 'Vol / $1M Fees', sortable: true, align: 'right', tooltip: 'Volume needed to generate $1M in fees' },
   { key: 'mcap', label: 'Mcap', sortable: true, align: 'right' },
   { key: 'psRatio', label: 'P/S', sortable: true, align: 'right', tooltip: 'Price-to-Sales: Mcap / Annualized Fees' },
   { key: 'peRatio', label: 'P/E', sortable: true, align: 'right', tooltip: 'Price-to-Earnings: Mcap / Annualized Revenue' },
@@ -73,6 +74,10 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
       return exchange.total7d ?? -Infinity
     case 'openInterest':
       return exchange.openInterest ?? -Infinity
+    case 'tvl':
+      return exchange.tvl ?? -Infinity
+    case 'volumeToTvl':
+      return exchange.volumeToTvl ?? -Infinity
     case 'dailyFees':
       return getDailyFees(exchange) ?? -Infinity
     case 'takeRate':
@@ -106,7 +111,7 @@ function DashCell({ tooltip }: { tooltip?: string }) {
 }
 
 function exportCSV(exchanges: EnrichedExchange[]) {
-  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', '1d Change %', '7d Change %']
+  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', '1d Change %', '7d Change %']
   const rows = exchanges.map((e, i) => [
     i + 1,
     e.displayName || e.name,
@@ -115,6 +120,8 @@ function exportCSV(exchanges: EnrichedExchange[]) {
     e.total24h ?? '',
     e.total7d ?? '',
     e.openInterest || '',
+    e.tvl || '',
+    e.volumeToTvl?.toFixed(2) ?? '',
     getDailyFees(e) ?? '',
     getTakeRate(e)?.toFixed(2) ?? '',
     e.mcap ?? '',
@@ -378,9 +385,10 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   <td className="text-right">{exchange.total24h != null ? formatUSD(exchange.total24h, true) : <DashCell />}</td>
                   <td className="text-right">{exchange.total7d != null ? formatUSD(exchange.total7d, true) : <DashCell />}</td>
                   <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : <DashCell tooltip="OI data requires CoinGecko exchange listing" />}</td>
+                  <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available from DefiLlama" />}</td>
+                  <td className="text-right font-mono text-xs">{exchange.volumeToTvl != null && isFinite(exchange.volumeToTvl) ? `${exchange.volumeToTvl.toFixed(1)}x` : <DashCell tooltip="Requires both volume and TVL data" />}</td>
                   <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : <DashCell tooltip="Fee data not tracked by DefiLlama for this exchange" />}</td>
                   <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : <DashCell tooltip="Requires both fee and volume data" />}</td>
-                  <td className="text-right font-mono text-xs">{volPer1M != null ? formatUSD(volPer1M, true) : <DashCell tooltip="Requires both fee and volume data" />}</td>
                   <td className="text-right">{exchange.mcap && exchange.mcap > 0 ? formatUSD(exchange.mcap, true) : <DashCell tooltip="No governance token or market cap data unavailable" />}</td>
                   <td className="text-right">{exchange.psRatio != null ? formatMultiple(exchange.psRatio) : <DashCell tooltip="Requires market cap and fee data" />}</td>
                   <td className="text-right">{exchange.peRatio != null ? formatMultiple(exchange.peRatio) : <DashCell tooltip="Requires market cap and revenue data" />}</td>
@@ -480,8 +488,9 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
 
       {/* Legend / footnote */}
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 font-sans text-[10px] text-ink-muted">
+        <span><strong>TVL</strong> = Total Value Locked (deposited collateral)</span>
+        <span><strong>Vol/TVL</strong> = Capital turnover (24h Volume / TVL)</span>
         <span><strong>Take Rate</strong> = Daily Fees / Daily Volume (bps)</span>
-        <span><strong>Vol / $1M Fees</strong> = Volume needed to generate $1M in fees</span>
         <span><strong>P/S</strong> = Mcap / Annualized Fees</span>
         <span><strong>P/E</strong> = Mcap / Annualized Revenue</span>
         <span><strong>{'\u2014'}</strong> = Data not available from source (hover for details)</span>

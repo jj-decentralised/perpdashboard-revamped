@@ -522,6 +522,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     fundingRateData: fundingRateData as any[],
     spotVolume24h: spotDexOverview.total24h,
     spotVolume7d: spotDexOverview.total7d,
+    spotVolumeHistory: [], // Populated lazily via fetchSpotVolumeHistory
   }
 }
 
@@ -551,6 +552,19 @@ export async function fetchSpotDexOverview(): Promise<{ total24h: number; total7
     return { total24h: data.total24h || 0, total7d: data.total7d || 0, total30d: data.total30d || 0 }
   } catch {
     return { total24h: 0, total7d: 0, total30d: 0 }
+  }
+}
+
+// Fetch historical spot DEX volume for perps/spot ratio time series (lazy loaded)
+export async function fetchSpotVolumeHistory(): Promise<HistoricalDataPoint[]> {
+  try {
+    const data = await fetchJSON<any>('https://api.llama.fi/overview/dexs?excludeTotalDataChartBreakdown=true')
+    return (data.totalDataChart || []).map(([date, value]: [number, number]) => ({
+      date: date * 1000,
+      value,
+    }))
+  } catch {
+    return []
   }
 }
 

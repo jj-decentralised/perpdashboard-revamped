@@ -171,4 +171,5 @@ export interface DashboardData {
   fundingRateData: FundingRateEntry[]
   spotVolume24h: number
   spotVolume7d: number
+  spotVolumeHistory: HistoricalDataPoint[]
 }

@@ -16,6 +16,7 @@ import { OpenInterestChart } from '../components/charts/OpenInterestChart'
 import { ValuationChart } from '../components/charts/ValuationChart'
 import { HistoricalOIChart } from '../components/charts/HistoricalOIChart'
 import { FundingRateHeatmap } from '../components/charts/FundingRateHeatmap'
+import { PerpsDominanceChart } from '../components/charts/PerpsDominanceChart'
 import { CommandPalette } from '../components/CommandPalette'
 
 export default function DashboardPage() {
@@ -49,6 +50,15 @@ export default function DashboardPage() {
           <section className="section-rule">
             <ErrorBoundary fallbackLabel="Historical OI chart">
               <HistoricalOIChart oiData={data.historicalOI} volumeData={data.historicalVolume} />
+            </ErrorBoundary>
+          </section>
+        )}
+
+        {/* Section 1c: Perps vs Spot Dominance */}
+        {data.spotVolumeHistory.length > 0 && (
+          <section className="section-rule">
+            <ErrorBoundary fallbackLabel="Perps dominance chart">
+              <PerpsDominanceChart perpVolume={data.historicalVolume} spotVolume={data.spotVolumeHistory} />
             </ErrorBoundary>
           </section>
         )}

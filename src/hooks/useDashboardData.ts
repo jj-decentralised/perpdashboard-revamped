@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData } from '../services/defillama'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory } from '../services/defillama'
 
 interface UseDashboardDataReturn {
   data: DashboardData | null
@@ -31,13 +31,28 @@ export function useDashboardData(): UseDashboardDataReturn {
         setData(result)
         setLoading(false)
 
-        // Lazy load: fetch breakdown for volume share chart in background
+        // Lazy load: fetch breakdown data and spot volume history in background
+        const lazyPromises: Promise<void>[] = []
+
         if (result.topExchangeNames.length > 0) {
-          const volumeShareHistory = await fetchVolumeShareData(result.topExchangeNames)
-          if (!cancelled && volumeShareHistory.length > 0) {
-            setData((prev) => prev ? { ...prev, volumeShareHistory } : prev)
-          }
+          lazyPromises.push(
+            fetchVolumeShareData(result.topExchangeNames).then((volumeShareHistory) => {
+              if (!cancelled && volumeShareHistory.length > 0) {
+                setData((prev) => prev ? { ...prev, volumeShareHistory } : prev)
+              }
+            })
+          )
         }
+
+        lazyPromises.push(
+          fetchSpotVolumeHistory().then((spotVolumeHistory) => {
+            if (!cancelled && spotVolumeHistory.length > 0) {
+              setData((prev) => prev ? { ...prev, spotVolumeHistory } : prev)
+            }
+          })
+        )
+
+        await Promise.all(lazyPromises)
       } catch (err) {
         if (!cancelled) {
           setError(
