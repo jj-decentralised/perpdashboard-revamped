@@ -201,34 +201,16 @@ function DashCell({ tooltip }: { tooltip?: string }) {
 
 function EcosystemBadge({ slug }: { slug: string }) {
   const eco = ECOSYSTEM_MAP[slug]
-  const [open, setOpen] = useState(false)
   if (!eco) return null
 
+  const tooltipText = `${eco.label}\n${eco.products.map(p => `• ${p}`).join('\n')}`
+
   return (
-    <span className="relative inline-block">
-      <button
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open) }}
-        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium bg-accent-blue/10 text-accent-blue border border-accent-blue/30 cursor-pointer hover:bg-accent-blue/20 transition-colors"
-        title={eco.label}
-      >
-        {eco.products.length} builders
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-paper border border-rule shadow-lg p-3">
-          <p className="font-sans text-[11px] font-semibold text-ink mb-1.5">{eco.label}</p>
-          <ul className="space-y-1">
-            {eco.products.map((p) => (
-              <li key={p} className="font-sans text-[11px] text-ink-light leading-tight">{p}</li>
-            ))}
-          </ul>
-          <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false) }}
-            className="mt-2 font-sans text-[10px] text-ink-muted hover:text-ink cursor-pointer"
-          >
-            Close
-          </button>
-        </div>
-      )}
+    <span
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium bg-accent-blue/10 text-accent-blue border border-accent-blue/30 cursor-help"
+      title={tooltipText}
+    >
+      {eco.products.length} builders
     </span>
   )
 }
