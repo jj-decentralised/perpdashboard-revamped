@@ -397,7 +397,8 @@ export default function ExchangeProfilePage() {
               {hasOI && (
                 <div className="kpi-card">
                   <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Open Interest</p>
-                  <p className="font-mono text-lg font-bold text-ink">{formatNumber(data.exchange!.open_interest_btc)} BTC</p>
+                  <p className="font-mono text-lg font-bold text-ink">{formatUSD(data.exchange!.open_interest_btc * (data.btcPrice || 60000), true)}</p>
+                  <p className="font-mono text-xs text-ink-muted">{formatNumber(data.exchange!.open_interest_btc)} BTC</p>
                 </div>
               )}
               {hasPerpPairs && (

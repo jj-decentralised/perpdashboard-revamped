@@ -82,6 +82,7 @@ function CustomTooltip({
 }
 
 export function FeeRevenueChart({ exchanges }: Props) {
+  const [useLogScale, setUseLogScale] = React.useState(false)
   const chartData = useMemo<ChartRow[]>(() => {
     return exchanges
       .filter(
@@ -149,6 +150,15 @@ export function FeeRevenueChart({ exchanges }: Props) {
         source="DefiLlama fees endpoint for 24h fee data. Take rate computed as fees / volume in basis points."
       />
 
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={() => setUseLogScale(!useLogScale)}
+          className="font-sans text-[11px] text-ink-muted border border-rule px-2 py-0.5 hover:border-ink transition-colors"
+        >
+          {useLogScale ? 'Linear scale' : 'Log scale'}
+        </button>
+      </div>
+
       <ResponsiveContainer width="100%" height={420}>
         <BarChart
           data={chartData}
@@ -171,11 +181,14 @@ export function FeeRevenueChart({ exchanges }: Props) {
             height={80}
           />
           <YAxis
+            scale={useLogScale ? 'log' : 'auto'}
+            domain={useLogScale ? ['auto', 'auto'] : [0, 'auto']}
             tickFormatter={formatCompact}
             tick={AXIS_STYLE}
             tickLine={false}
             axisLine={false}
             width={62}
+            allowDataOverflow={useLogScale}
           />
           <Tooltip
             content={<CustomTooltip />}

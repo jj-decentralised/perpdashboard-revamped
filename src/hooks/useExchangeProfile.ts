@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
 import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, fetchFeeOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
-import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets } from '../services/coingecko'
+import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets, fetchBTCPrice } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 
@@ -276,6 +276,14 @@ export function useExchangeProfile(
 
     let cancelled = false
 
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        setError('Request timed out — this exchange may not exist or the data source is unavailable.')
+        setLoading(false)
+        cancelled = true
+      }
+    }, 15000)
+
     async function load() {
       try {
         setLoading(true)
@@ -283,7 +291,7 @@ export function useExchangeProfile(
 
         // Phase 1: Core data (parallel)
         // Use lightweight derivatives overview (excludeBreakdown) for comparables — saves ~7MB vs old approach
-        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, feeOverview, cgExchangesList] = await Promise.all([
+        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, feeOverview, cgExchangesList, btcPrice] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
           fetchFeeSummary(slug!).catch(() => null),
@@ -292,6 +300,7 @@ export function useExchangeProfile(
           fetchDerivativesOverview(true).catch(() => null),
           fetchFeeOverview().catch(() => null),
           !cgId ? fetchCGDerivativesExchanges().catch(() => []) : Promise.resolve([]),
+          fetchBTCPrice().catch(() => 60000),
         ])
 
         if (cancelled) return
@@ -445,6 +454,7 @@ export function useExchangeProfile(
           comparables,
           feeHistory,
           revenueHistory,
+          btcPrice,
         }
 
         setData(profileData)
@@ -459,9 +469,10 @@ export function useExchangeProfile(
       }
     }
 
-    load()
+    load().finally(() => clearTimeout(timeout))
     return () => {
       cancelled = true
+      clearTimeout(timeout)
     }
   }, [slug, cgId])
 

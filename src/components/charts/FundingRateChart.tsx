@@ -56,9 +56,23 @@ export function FundingRateChart({ tickers }: Props) {
       }
     }
 
-    return Array.from(bestByPair.values())
+    // Sort by OI, then limit each exchange to max 3 pairs for diversity
+    const sorted = Array.from(bestByPair.values())
       .sort((a, b) => (b.open_interest || 0) - (a.open_interest || 0))
-      .slice(0, 20)
+
+    const exchangeCount = new Map<string, number>()
+    const diverse: CGDerivativeTicker[] = []
+    for (const t of sorted) {
+      const market = shortenMarket(t.market).toLowerCase()
+      const count = exchangeCount.get(market) || 0
+      if (count < 3) {
+        diverse.push(t)
+        exchangeCount.set(market, count + 1)
+      }
+      if (diverse.length >= 20) break
+    }
+
+    return diverse
       .map((t) => ({
         label: `${parsePairLabel(t)} · ${shortenMarket(t.market)}`,
         pair: parsePairLabel(t),

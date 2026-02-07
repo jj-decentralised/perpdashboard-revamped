@@ -87,6 +87,17 @@ function avg(values: number[]): number {
   return values.reduce((a, b) => a + b, 0) / values.length
 }
 
+// Winsorized mean: cap values at 1st and 99th percentile to remove outlier influence
+function winsorizedMean(values: number[]): number {
+  if (values.length === 0) return 0
+  if (values.length < 5) return avg(values) // too few to winsorize
+  const sorted = [...values].sort((a, b) => a - b)
+  const low = sorted[Math.floor(sorted.length * 0.01)]
+  const high = sorted[Math.floor(sorted.length * 0.99)]
+  const clamped = values.map((v) => Math.max(low, Math.min(high, v)))
+  return clamped.reduce((a, b) => a + b, 0) / clamped.length
+}
+
 function buildGroupStats(
   label: string,
   exchanges: EnrichedExchange[]
@@ -101,13 +112,13 @@ function buildGroupStats(
     totalMcap: exchanges
       .filter((e) => e.mcap)
       .reduce((s, e) => s + (e.mcap || 0), 0),
-    avgChange1d: avg(
+    avgChange1d: winsorizedMean(
       exchanges.filter((e) => e.change_1d != null).map((e) => e.change_1d!)
     ),
-    avgChange7d: avg(
+    avgChange7d: winsorizedMean(
       exchanges.filter((e) => e.change_7d != null).map((e) => e.change_7d!)
     ),
-    avgChange1m: avg(
+    avgChange1m: winsorizedMean(
       exchanges.filter((e) => e.change_1m != null).map((e) => e.change_1m!)
     ),
     avgChainCount: avg(exchanges.map((e) => e.chainCount)),

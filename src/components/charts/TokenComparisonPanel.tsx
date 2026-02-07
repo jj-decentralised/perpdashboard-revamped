@@ -252,6 +252,10 @@ export function TokenComparisonPanel({ tokenGroup, noTokenGroup }: Props) {
             ))}
           </tbody>
         </table>
+        <p className="font-sans text-[10px] text-ink-muted px-4 py-2 border-t border-rule">
+          Change averages use winsorized means (capped at 1st/99th percentile) to limit outlier influence.
+          {' '}{tokenGroup.count + noTokenGroup.count} exchanges tracked across both groups.
+        </p>
       </div>
 
       {/* ── Grouped Bar Chart ── */}

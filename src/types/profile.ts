@@ -95,4 +95,5 @@ export interface ExchangeProfileData {
   comparables: ComparableExchange[]
   feeHistory: HistoricalDataPoint[]
   revenueHistory: HistoricalDataPoint[]
+  btcPrice: number
 }

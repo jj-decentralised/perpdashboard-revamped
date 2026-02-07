@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import type { DashboardData } from '../../types'
 import { formatUSD, formatPercent, formatNumber, percentClass } from '../../utils/format'
 
@@ -15,8 +15,28 @@ function currentDateFormatted(): string {
   })
 }
 
+function useTimeSinceLoad() {
+  const [loadTime] = useState(() => new Date())
+  const [elapsed, setElapsed] = useState('')
+
+  useEffect(() => {
+    function update() {
+      const diff = Math.floor((Date.now() - loadTime.getTime()) / 1000)
+      if (diff < 60) setElapsed('just now')
+      else if (diff < 3600) setElapsed(`${Math.floor(diff / 60)}m ago`)
+      else setElapsed(`${Math.floor(diff / 3600)}h ago`)
+    }
+    update()
+    const interval = setInterval(update, 30000)
+    return () => clearInterval(interval)
+  }, [loadTime])
+
+  return { loadTime, elapsed }
+}
+
 export function KPIHeader({ data }: Props) {
   const { dexOverview, enrichedExchanges, feeOverview } = data
+  const { loadTime, elapsed } = useTimeSinceLoad()
 
   const withToken = enrichedExchanges.filter((e) => e.hasToken).length
   const withoutToken = enrichedExchanges.length - withToken
@@ -72,9 +92,12 @@ export function KPIHeader({ data }: Props) {
         <h1 className="font-serif text-4xl font-bold text-ink leading-tight tracking-tight">
           Perpetual Exchange Analytics
         </h1>
-        <div className="border-t border-rule mt-3 pt-2">
+        <div className="border-t border-rule mt-3 pt-2 flex items-center justify-between">
           <p className="font-serif text-sm text-ink-light italic">
             Perpetual Derivatives Analytics — Open Interest, Volume &amp; Token Classification
+          </p>
+          <p className="font-sans text-[11px] text-ink-muted" title={`Data loaded at ${loadTime.toLocaleTimeString()}`}>
+            Updated {elapsed}
           </p>
         </div>
       </div>
