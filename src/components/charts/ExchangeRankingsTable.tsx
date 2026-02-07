@@ -4,6 +4,94 @@ import type { EnrichedExchange } from '../../types'
 import { formatUSD, formatPercent, formatNumber, formatMultiple, formatBPS, percentClass, classNames } from '../../utils/format'
 import { CategoryFilter, type CategorySelection } from '../CategoryFilter'
 
+/** Ecosystem map: protocols with known third-party frontends/products built on top */
+const ECOSYSTEM_MAP: Record<string, { label: string; products: string[] }> = {
+  'hyperliquid-perps': {
+    label: 'Hyperliquid ecosystem',
+    products: [
+      'Based — trading super app (Ethena-backed)',
+      'Phantom — wallet-native perps trading',
+      'pvp.trade — Telegram trading bot',
+      'Insilico Terminal — AI trading terminal',
+      'Trade.xyz — non-crypto asset perps (HIP-3)',
+      'Tealstreet — advanced trading terminal',
+      'Rage Trade — perp screener & aggregator',
+      'Bullpen — multi-venue terminal (by Ansem)',
+      'Katoshi — copy-trading bots',
+      'Aura — social trading app',
+    ],
+  },
+  gmx: {
+    label: 'GMX ecosystem',
+    products: [
+      'MUX Protocol — perp aggregator',
+      'Stryke (Dopex) — options & liquidation protection',
+      'Puppet — copy-trading protocol',
+      'STFX — social trading vaults',
+      'GMD Protocol — GLP yield optimizer',
+      'Neutra Finance — delta-neutral GLP yield',
+    ],
+  },
+  'gmx-v2-perps': {
+    label: 'GMX ecosystem',
+    products: [
+      'MUX Protocol — perp aggregator',
+      'Puppet — copy-trading protocol',
+      'STFX — social trading vaults',
+    ],
+  },
+  synthetix: {
+    label: 'Synthetix ecosystem',
+    products: [
+      'Kwenta (Synthetix Exchange) — primary perps frontend',
+      'Polynomial — perps integrator',
+      'Derive (Lyra) — options DEX using SNX hedging',
+      'Infinex — onchain accounts gateway',
+    ],
+  },
+  'dydx-v4': {
+    label: 'dYdX ecosystem',
+    products: [
+      'Community-hosted frontends (open-source)',
+      'Typescript & Python SDKs for bot trading',
+    ],
+  },
+  'jupiter-perpetual-exchange': {
+    label: 'Jupiter Perps ecosystem',
+    products: [
+      'Kamino Finance — leveraged JLP vaults',
+      'Drift — delta-neutral JLP vaults',
+      'Solflare — wallet-native JLP access',
+    ],
+  },
+  'drift-trade': {
+    label: 'Drift ecosystem',
+    products: [
+      'SuperstakeSol — leveraged SOL staking',
+      'Circuit Finance — DeFi on Drift infra',
+      'BET — prediction markets on Drift',
+    ],
+  },
+  'vertex-protocol': {
+    label: 'Vertex ecosystem',
+    products: [
+      'Blitz — Vertex on Blast L2',
+      'Elixir — decentralized market-making (Fusion Pools)',
+      'Skate — LP vaults with boosted yields',
+    ],
+  },
+  'orderly-perps': {
+    label: 'Orderly ecosystem',
+    products: [
+      'WOOFi Pro — orderbook perps frontend',
+      'LogX Pro — AI-enhanced orderbook DEX',
+      'BTSE DEX — decentralized perps arm',
+      'AscendEX — CEX integration',
+      'REF Finance — NEAR DEX with perps',
+    ],
+  },
+}
+
 interface Props {
   exchanges: EnrichedExchange[]
 }
@@ -107,6 +195,40 @@ function DashCell({ tooltip }: { tooltip?: string }) {
       title={tooltip || 'Data not available from source'}
     >
       {'\u2014'}
+    </span>
+  )
+}
+
+function EcosystemBadge({ slug }: { slug: string }) {
+  const eco = ECOSYSTEM_MAP[slug]
+  const [open, setOpen] = useState(false)
+  if (!eco) return null
+
+  return (
+    <span className="relative inline-block">
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open) }}
+        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium bg-accent-blue/10 text-accent-blue border border-accent-blue/30 cursor-pointer hover:bg-accent-blue/20 transition-colors"
+        title={eco.label}
+      >
+        {eco.products.length} builders
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-paper border border-rule shadow-lg p-3">
+          <p className="font-sans text-[11px] font-semibold text-ink mb-1.5">{eco.label}</p>
+          <ul className="space-y-1">
+            {eco.products.map((p) => (
+              <li key={p} className="font-sans text-[11px] text-ink-light leading-tight">{p}</li>
+            ))}
+          </ul>
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false) }}
+            className="mt-2 font-sans text-[10px] text-ink-muted hover:text-ink cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      )}
     </span>
   )
 }
@@ -388,6 +510,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                       {exchange.hasToken && (
                         <span className="tag-token">{exchange.tokenSymbol}</span>
                       )}
+                      <EcosystemBadge slug={exchange.slug} />
                       {anomaly && (
                         <span className="text-amber-600 cursor-help" title={`Data anomaly: ${anomaly}`}>&#9888;</span>
                       )}
