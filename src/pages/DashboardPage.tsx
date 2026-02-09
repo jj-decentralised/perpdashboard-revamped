@@ -79,7 +79,7 @@ export default function DashboardPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <p className="font-serif text-sm font-bold text-ink">
-                Perpetual Exchange Analytics
+                Perpetual Exchanges in Numbers
               </p>
               <p className="font-sans text-xs text-ink-muted mt-1">
                 Data sourced from DefiLlama and CoinGecko APIs. Updated in

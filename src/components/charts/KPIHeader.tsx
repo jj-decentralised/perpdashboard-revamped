@@ -102,11 +102,11 @@ export function KPIHeader({ data }: Props) {
           {currentDateFormatted()}
         </p>
         <h1 className="font-serif text-4xl font-bold text-ink leading-tight tracking-tight">
-          Perpetual Exchange Analytics
+          Perpetual Exchanges in Numbers
         </h1>
         <div className="border-t border-rule mt-3 pt-2 flex items-center justify-between">
           <p className="font-serif text-sm text-ink-light italic">
-            Perpetual Derivatives Analytics — Open Interest, Volume &amp; Token Classification
+            Open Interest, Volume, Fees &amp; Token Classification
           </p>
           <p className="font-sans text-[11px] text-ink-muted" title={`Data loaded at ${loadTime.toLocaleTimeString()}`}>
             Updated {elapsed}

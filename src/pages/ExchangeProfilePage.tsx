@@ -857,7 +857,7 @@ export default function ExchangeProfilePage() {
   // SEO: update document title and meta description
   // NOTE: This must be before any early returns to satisfy React's rules of hooks
   useEffect(() => {
-    document.title = `${exchangeName} — Perpetual Exchange Analytics`
+    document.title = `${exchangeName} — Perpetual Exchanges in Numbers`
     const meta = document.querySelector('meta[name="description"]')
     const desc = `${exchangeName} perpetual derivatives analytics: volume, open interest, fees, funding rates, and valuation metrics.`
     if (meta) {
@@ -869,7 +869,7 @@ export default function ExchangeProfilePage() {
       document.head.appendChild(newMeta)
     }
     return () => {
-      document.title = 'Perpetual Exchange Analytics'
+      document.title = 'Perpetual Exchanges in Numbers'
     }
   }, [exchangeName])
 
