@@ -111,13 +111,13 @@ const columns: ColumnDef[] = [
   { key: 'total24h', label: '24h Volume', sortable: true, align: 'right' },
   { key: 'total7d', label: '7d Volume', sortable: true, align: 'right' },
   { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' },
-  { key: 'tvl', label: 'TVL', sortable: true, align: 'right', tooltip: 'Total Value Locked — deposited collateral/liquidity' },
-  { key: 'volumeToTvl', label: 'Vol/TVL', sortable: true, align: 'right', tooltip: 'Capital turnover: 24h Volume / TVL' },
-  { key: 'dailyFees', label: 'Daily Fees', sortable: true, align: 'right' },
-  { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
   { key: 'mcap', label: 'Mcap', sortable: true, align: 'right' },
   { key: 'psRatio', label: 'P/S', sortable: true, align: 'right', tooltip: 'Price-to-Sales: Mcap / Annualized Fees' },
   { key: 'peRatio', label: 'P/E', sortable: true, align: 'right', tooltip: 'Price-to-Earnings: Mcap / Annualized Revenue' },
+  { key: 'dailyFees', label: 'Daily Fees', sortable: true, align: 'right' },
+  { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
+  { key: 'tvl', label: 'TVL', sortable: true, align: 'right', tooltip: 'Total Value Locked — deposited collateral/liquidity' },
+  { key: 'volumeToTvl', label: 'Vol/TVL', sortable: true, align: 'right', tooltip: 'Capital turnover: 24h Volume / TVL' },
   { key: 'change_1d', label: '1d %', sortable: true, align: 'right' },
   { key: 'change_7d', label: '7d %', sortable: true, align: 'right' },
 ]
@@ -274,20 +274,24 @@ function ScrollableTable({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative">
+      {canScroll && (
+        <div className="flex items-center justify-end gap-1.5 mb-2 font-sans text-xs text-ink-muted">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+          </svg>
+          Scroll for more columns
+        </div>
+      )}
       <div ref={scrollRef} className="overflow-x-auto border border-rule bg-paper">
         {children}
       </div>
       {canScroll && (
         <div
-          className="absolute right-0 top-0 bottom-0 w-12 pointer-events-none z-20"
+          className="absolute right-0 top-8 bottom-0 w-16 pointer-events-none z-20"
           style={{
-            background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.85) 60%, rgba(255,255,255,1))',
+            background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.9) 50%, white)',
           }}
-        >
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 pointer-events-none">
-            <span className="text-ink-muted text-xs animate-pulse">&rsaquo;</span>
-          </div>
-        </div>
+        />
       )}
     </div>
   )
@@ -580,13 +584,13 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   <td className="text-right">{exchange.total24h != null ? formatUSD(exchange.total24h, true) : <DashCell />}</td>
                   <td className="text-right">{exchange.total7d != null ? formatUSD(exchange.total7d, true) : <DashCell />}</td>
                   <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : <DashCell tooltip="OI data requires CoinGecko exchange listing" />}</td>
-                  <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available from DefiLlama" />}</td>
-                  <td className="text-right font-mono text-xs">{exchange.volumeToTvl != null && isFinite(exchange.volumeToTvl) ? `${exchange.volumeToTvl.toFixed(1)}x` : <DashCell tooltip="Requires both volume and TVL data" />}</td>
-                  <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : <DashCell tooltip="Fee data not tracked by DefiLlama for this exchange" />}</td>
-                  <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : <DashCell tooltip="Requires both fee and volume data" />}</td>
                   <td className="text-right">{exchange.mcap && exchange.mcap > 0 ? formatUSD(exchange.mcap, true) : <DashCell tooltip="No governance token or market cap data unavailable" />}</td>
                   <td className="text-right">{exchange.psRatio != null ? formatMultiple(exchange.psRatio) : <DashCell tooltip="Requires market cap and fee data" />}</td>
                   <td className="text-right">{exchange.peRatio != null ? formatMultiple(exchange.peRatio) : <DashCell tooltip="Requires market cap and revenue data" />}</td>
+                  <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : <DashCell tooltip="Fee data not tracked by DefiLlama for this exchange" />}</td>
+                  <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : <DashCell tooltip="Requires both fee and volume data" />}</td>
+                  <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available from DefiLlama" />}</td>
+                  <td className="text-right font-mono text-xs">{exchange.volumeToTvl != null && isFinite(exchange.volumeToTvl) ? `${exchange.volumeToTvl.toFixed(1)}x` : <DashCell tooltip="Requires both volume and TVL data" />}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_1d))}>{formatPercent(exchange.change_1d)}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_7d))}>{formatPercent(exchange.change_7d)}</td>
                 </tr>

@@ -19,6 +19,7 @@ import { VolumeGrowthChart } from '../components/charts/VolumeGrowthChart'
 import { TokenUnlockCalendar } from '../components/charts/TokenUnlockCalendar'
 import { BridgeFlowChart } from '../components/charts/BridgeFlowChart'
 import { CapitalEfficiencyChart } from '../components/charts/CapitalEfficiencyChart'
+import { ScatterPlotGenerator } from '../components/charts/ScatterPlotGenerator'
 import { CommandPalette } from '../components/CommandPalette'
 import { DataMethodology } from '../components/DataMethodology'
 import { TabNavigation, useTabNavigation } from '../components/TabNavigation'
@@ -238,6 +239,12 @@ function RankingsTab({ data }: { data: any }) {
       <section>
         <ErrorBoundary fallbackLabel="Exchange rankings">
           <ExchangeRankingsTable exchanges={data.enrichedExchanges} />
+        </ErrorBoundary>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Scatter plot explorer">
+          <ScatterPlotGenerator exchanges={data.enrichedExchanges} />
         </ErrorBoundary>
       </section>
 
