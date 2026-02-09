@@ -423,6 +423,13 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       oiHHI: null,
       effectiveAssetCount: null,
       holderYield: null,
+      ttRevenue: null,
+      ttEarnings: null,
+      ttTokenIncentives: null,
+      ttActiveUsers: null,
+      ttPE: null,
+      ttPS: null,
+      ttCodeCommits7d: null,
     }
   })
 
@@ -737,6 +744,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     perpFeeBreakdown: [], // Populated lazily
     perpFeeBreakdownNames: [],
     perpFeeShareHistory: [], // Populated lazily
+    ttAggregate: null, // Populated lazily via Token Terminal
   }
 }
 

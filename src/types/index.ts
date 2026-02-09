@@ -69,6 +69,14 @@ export interface EnrichedExchange extends DexProtocol {
   effectiveAssetCount: number | null
   // Holder yield (lazy-loaded)
   holderYield: number | null
+  // Token Terminal data (lazy-loaded, optional)
+  ttRevenue: number | null
+  ttEarnings: number | null
+  ttTokenIncentives: number | null
+  ttActiveUsers: number | null
+  ttPE: number | null
+  ttPS: number | null
+  ttCodeCommits7d: number | null
 }
 
 export interface FeeProtocol {
@@ -214,6 +222,15 @@ export interface FeeSharePoint {
   [protocolName: string]: number
 }
 
+/** Token Terminal sector-level aggregate */
+export interface TTAggregateData {
+  sectorRevenue: number
+  sectorEarnings: number
+  sectorIncentives: number
+  sectorActiveUsers: number
+  coverageCount: number
+}
+
 /** Perps share of total DeFi fees at a point in time */
 export interface PerpFeeSharePoint {
   date: number
@@ -250,4 +267,6 @@ export interface DashboardData {
   perpFeeBreakdown: FeeSharePoint[]
   perpFeeBreakdownNames: string[]
   perpFeeShareHistory: PerpFeeSharePoint[]
+  // Token Terminal aggregate (lazy-loaded, optional)
+  ttAggregate: TTAggregateData | null
 }

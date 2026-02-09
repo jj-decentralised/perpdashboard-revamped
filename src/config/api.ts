@@ -20,6 +20,11 @@ export const EMISSIONS_BASE = useDirectApi
   ? 'https://api.llama.fi'
   : '/api/emissions'
 
+// Token Terminal (optional enrichment — dashboard works perfectly without it)
+const ttApiKey = import.meta.env.VITE_TT_API_KEY as string | undefined
+export const TT_ENABLED = !!ttApiKey
+export const TT_BASE = 'https://api.tokenterminal.com/v2'
+
 export function geckoHeaders(): HeadersInit {
   // When using proxy, headers are added server-side
   if (!useDirectApi) return {}
@@ -27,4 +32,9 @@ export function geckoHeaders(): HeadersInit {
     return { 'x-cg-pro-api-key': geckoKey }
   }
   return {}
+}
+
+export function ttHeaders(): HeadersInit {
+  if (!ttApiKey) return {}
+  return { Authorization: `Bearer ${ttApiKey}` }
 }

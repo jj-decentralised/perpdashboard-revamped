@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
 import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory } from '../services/defillama'
+import { TT_ENABLED } from '../config/api'
+import { getCachedTTMetrics, fetchTTMetricsBatch, cacheTTMetrics, computeTTAggregate, mergeTTIntoExchanges } from '../services/tokenterminal'
 
 interface UseDashboardDataReturn {
   data: DashboardData | null
@@ -39,6 +41,15 @@ export function useDashboardData(): UseDashboardDataReturn {
           result.perpFeeBreakdown = cachedFeeHistory.perpFeeBreakdown
           result.perpFeeBreakdownNames = cachedFeeHistory.perpFeeBreakdownNames
           result.perpFeeShareHistory = cachedFeeHistory.perpFeeShareHistory
+        }
+
+        // Seed with cached TT data if available
+        if (TT_ENABLED) {
+          const cachedTT = getCachedTTMetrics()
+          if (cachedTT.size > 0) {
+            result.enrichedExchanges = mergeTTIntoExchanges(result.enrichedExchanges, cachedTT)
+            result.ttAggregate = computeTTAggregate(cachedTT)
+          }
         }
 
         setData(result)
@@ -104,6 +115,23 @@ export function useDashboardData(): UseDashboardDataReturn {
             }
           }).catch(() => {})
         )
+
+        // Token Terminal metrics (optional — only if API key configured)
+        if (TT_ENABLED) {
+          lazyPromises.push(
+            fetchTTMetricsBatch(result.enrichedExchanges).then((ttData) => {
+              if (!cancelled && ttData.size > 0) {
+                cacheTTMetrics(ttData)
+                const ttAggregate = computeTTAggregate(ttData)
+                setData((prev) => {
+                  if (!prev) return prev
+                  const updated = mergeTTIntoExchanges(prev.enrichedExchanges, ttData)
+                  return { ...prev, enrichedExchanges: updated, ttAggregate }
+                })
+              }
+            }).catch(() => {})
+          )
+        }
 
         await Promise.all(lazyPromises)
       } catch (err) {

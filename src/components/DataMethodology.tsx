@@ -88,6 +88,13 @@ export function DataMethodology() {
                   stablecoins.llama.fi
                 </code>)
               </li>
+              <li>
+                <span className="font-medium">Revenue, earnings, active users:</span>{' '}
+                Token Terminal API (
+                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
+                  api.tokenterminal.com/v2
+                </code>) &mdash; optional enrichment, requires API key
+              </li>
             </ul>
           </div>
 
