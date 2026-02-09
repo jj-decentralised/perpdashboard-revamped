@@ -122,7 +122,7 @@ export function BridgeFlowChart() {
       </p>
       <MetricInfo
         description="Bridge flows show capital entering and leaving blockchain ecosystems. Rising net inflows (deposits > withdrawals) to perp-heavy chains like Arbitrum typically lead volume spikes by 3-7 days. Sustained outflows signal capital flight and potential volume decline."
-        source="DeFiLlama bridges API providing daily deposit and withdrawal volumes per chain across all tracked bridges."
+        source="Bridge data providing daily deposit and withdrawal volumes per chain across all tracked bridges."
       />
 
       <div className="flex items-center justify-between mb-4">

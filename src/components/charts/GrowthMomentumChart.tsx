@@ -263,7 +263,7 @@ export function GrowthMomentumChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Realized volatility (standard deviation of daily volume changes) reveals how erratic trading activity is across exchanges. High volatility often signals speculative surges or market stress. Comparing tokenised vs non-tokenised exchange volatility highlights whether governance token incentives amplify or dampen volume swings. Median growth rates are used instead of means to prevent outlier skew."
-        source="Computed from DefiLlama daily volume change data. Statistics measured across all exchanges with >$10M daily volume. Emerging exchanges ($1M-$10M) shown separately."
+        source="Computed from daily volume change data. Statistics measured across all exchanges with >$10M daily volume. Emerging exchanges ($1M-$10M) shown separately."
       />
 
       {(() => {

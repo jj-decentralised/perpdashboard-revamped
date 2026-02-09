@@ -159,7 +159,7 @@ export function TokenUnlockCalendar({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Token unlocks create sell pressure as vested tokens enter circulation. The 30-day unlock pressure score shows what percentage of circulating supply will be unlocked in the next month. High pressure combined with low P/E can signal buying opportunities, while high pressure with high valuation flags dilution risk."
-        source="DeFiLlama emissions API providing circulating supply, total locked, daily unlock rates, and upcoming unlock events per protocol."
+        source="Emissions data providing circulating supply, total locked, daily unlock rates, and upcoming unlock events per protocol."
       />
 
       <div className="overflow-x-auto">

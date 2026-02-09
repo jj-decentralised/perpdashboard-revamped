@@ -266,7 +266,7 @@ export function MarketConcentrationChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Market concentration metrics reveal how trading volume is distributed across exchanges. The Herfindahl-Hirschman Index (HHI) quantifies concentration: below 1,500 indicates a competitive market, 1,500-2,500 is moderately concentrated, and above 2,500 is highly concentrated. High concentration means liquidation cascades on a single venue can have outsized market impact."
-        source="Computed from DefiLlama 24h volume data. HHI calculated as the sum of squared market share percentages across all active exchanges."
+        source="Computed from 24h volume data. HHI calculated as the sum of squared market share percentages across all active exchanges."
       />
 
       {/* Stacked percentage bar */}

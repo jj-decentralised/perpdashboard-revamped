@@ -122,8 +122,8 @@ const columns: ColumnDef[] = [
   { key: 'carryYield', label: 'Carry %', sortable: true, align: 'right', tooltip: 'OI-weighted annualized funding rate carry yield' },
   { key: 'effectiveAssets', label: 'Assets', sortable: true, align: 'right', tooltip: 'Effective number of listed assets (1/HHI of OI distribution)' },
   { key: 'holderYield', label: 'Holder Yield', sortable: true, align: 'right', tooltip: 'Annualized holder revenue as % of market cap' },
-  { key: 'ttRevenue', label: 'Revenue (TT)', sortable: true, align: 'right', tooltip: 'Daily revenue from Token Terminal (verified on-chain)' },
-  { key: 'ttActiveUsers', label: 'WAU', sortable: true, align: 'right', tooltip: 'Weekly active users from Token Terminal' },
+  { key: 'ttRevenue', label: 'Revenue (TT)', sortable: true, align: 'right', tooltip: 'Daily verified on-chain revenue' },
+  { key: 'ttActiveUsers', label: 'WAU', sortable: true, align: 'right', tooltip: 'Weekly active users (unique addresses)' },
   { key: 'change_1d', label: '1d %', sortable: true, align: 'right' },
   { key: 'change_7d', label: '7d %', sortable: true, align: 'right' },
 ]
@@ -455,7 +455,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
           </p>
           <MetricInfo
             description="The comprehensive rankings table aggregates volume, open interest, fees, valuation ratios, and growth metrics for every tracked perpetual exchange. Use sorting and filtering to compare protocols across dimensions — P/S and P/E ratios help assess whether a token is over- or under-valued relative to fee generation, while take rate and Vol/TVL reveal capital efficiency. Holder yield and carry yield highlight which protocols return value to token holders and traders respectively."
-            source="Volume and OI from DefiLlama perps endpoint. Fees from DefiLlama fees endpoint. Market cap and token data from CoinGecko. Carry yield derived from funding rate data. Holder yield estimated from protocol-reported revenue distributions."
+            source="Volume, OI, and fees from on-chain data. Market cap and token data from market aggregators. Carry yield derived from funding rate data. Holder yield estimated from protocol-reported revenue distributions."
           />
         </div>
 
@@ -608,19 +608,19 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   </td>
                   <td className="text-right">{exchange.total24h != null ? formatUSD(exchange.total24h, true) : <DashCell />}</td>
                   <td className="text-right">{exchange.total7d != null ? formatUSD(exchange.total7d, true) : <DashCell />}</td>
-                  <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : <DashCell tooltip="OI data requires CoinGecko exchange listing" />}</td>
+                  <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : <DashCell tooltip="OI data requires exchange listing on data aggregator" />}</td>
                   <td className="text-right">{exchange.mcap && exchange.mcap > 0 ? formatUSD(exchange.mcap, true) : <DashCell tooltip="No governance token or market cap data unavailable" />}</td>
                   <td className="text-right">{exchange.psRatio != null ? formatMultiple(exchange.psRatio) : <DashCell tooltip="Requires market cap and fee data" />}</td>
                   <td className="text-right">{exchange.peRatio != null ? formatMultiple(exchange.peRatio) : <DashCell tooltip="Requires market cap and revenue data" />}</td>
-                  <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : <DashCell tooltip="Fee data not tracked by DefiLlama for this exchange" />}</td>
+                  <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : <DashCell tooltip="Fee data not tracked for this exchange" />}</td>
                   <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : <DashCell tooltip="Requires both fee and volume data" />}</td>
-                  <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available from DefiLlama" />}</td>
+                  <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available" />}</td>
                   <td className="text-right font-mono text-xs">{exchange.volumeToTvl != null && isFinite(exchange.volumeToTvl) ? `${exchange.volumeToTvl.toFixed(1)}x` : <DashCell tooltip="Requires both volume and TVL data" />}</td>
                   <td className="text-right font-mono text-xs">{exchange.avgCarryYield != null ? `${exchange.avgCarryYield.toFixed(1)}%` : <DashCell tooltip="No funding rate data matched to this exchange" />}</td>
                   <td className="text-right font-mono text-xs">{exchange.effectiveAssetCount != null ? exchange.effectiveAssetCount.toFixed(0) : <DashCell tooltip="No OI breakdown data available" />}</td>
                   <td className="text-right font-mono text-xs">{exchange.holderYield != null && exchange.holderYield > 0 ? `${exchange.holderYield.toFixed(2)}%` : <DashCell tooltip="No holder revenue data or no token" />}</td>
-                  <td className="text-right font-mono text-xs">{exchange.ttRevenue != null ? formatUSD(exchange.ttRevenue, true) : <DashCell tooltip="Token Terminal data not available" />}</td>
-                  <td className="text-right font-mono text-xs">{exchange.ttActiveUsers != null ? formatNumber(exchange.ttActiveUsers) : <DashCell tooltip="Token Terminal data not available" />}</td>
+                  <td className="text-right font-mono text-xs">{exchange.ttRevenue != null ? formatUSD(exchange.ttRevenue, true) : <DashCell tooltip="Verified revenue data not available" />}</td>
+                  <td className="text-right font-mono text-xs">{exchange.ttActiveUsers != null ? formatNumber(exchange.ttActiveUsers) : <DashCell tooltip="Verified revenue data not available" />}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_1d))}>{formatPercent(exchange.change_1d)}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_7d))}>{formatPercent(exchange.change_7d)}</td>
                 </tr>
@@ -725,8 +725,8 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         <span><strong>Carry %</strong> = OI-weighted annualized funding yield</span>
         <span><strong>Assets</strong> = Effective listed assets (1/HHI)</span>
         <span><strong>Holder Yield</strong> = Annualized holder revenue / Mcap</span>
-        <span><strong>Revenue (TT)</strong> = Verified daily revenue via Token Terminal</span>
-        <span><strong>WAU</strong> = Weekly Active Users via Token Terminal</span>
+        <span><strong>Revenue (TT)</strong> = Verified daily on-chain revenue</span>
+        <span><strong>WAU</strong> = Weekly Active Users (unique addresses)</span>
         <span><strong>{'\u2014'}</strong> = Data not available from source (hover for details)</span>
         <span><strong>&#9888;</strong> = Possible data anomaly</span>
         <span><span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Fee Share</span> / <span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Buyback</span> = Token holder value accrual</span>

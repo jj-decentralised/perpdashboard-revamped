@@ -87,7 +87,7 @@ export function VolumeGrowthChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Growth acceleration shows which protocols are gaining or losing momentum. Week-over-week and month-over-month changes reveal trends before they show up in raw volume. Breakout detection flags exchanges with >100% weekly growth and >$10M daily volume, catching new protocols gaining traction."
-        source="DefiLlama derivatives overview with change_7dover7d and change_30dover30d growth metrics per protocol."
+        source="Derivatives overview with week-over-week and month-over-month growth metrics per protocol."
       />
 
       <div className="flex items-center gap-1 mb-4">

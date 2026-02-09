@@ -41,7 +41,7 @@ export function BasisMonitor({ basisMetrics }: Props) {
       </p>
       <MetricInfo
         description="The basis measures how much a perpetual contract deviates from the spot price. A persistent positive basis signals bullish positioning across the market."
-        source="yields.llama.fi"
+        source="Funding rate and mark/index price data from on-chain derivatives markets."
       />
 
       {/* Summary KPIs */}

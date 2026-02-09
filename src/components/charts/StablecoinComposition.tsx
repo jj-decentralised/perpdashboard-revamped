@@ -120,7 +120,7 @@ export function StablecoinComposition() {
       </p>
       <MetricInfo
         description="Stablecoin supply on a chain is a proxy for available collateral and settlement liquidity. Chains with deeper stablecoin pools attract more perp trading activity because traders can enter and exit large positions with less slippage. A shift in stablecoin distribution across chains often foreshadows where perp volume will migrate next."
-        source="DeFiLlama stablecoins API aggregating circulating supply of all tracked stablecoins per chain."
+        source="Stablecoin data aggregating circulating supply of all tracked stablecoins per chain."
       />
 
       <div className="grid grid-cols-3 gap-4 mb-5 pb-4 border-b border-rule">

@@ -55,7 +55,7 @@ export function TreasuryOverview({ treasuryData }: Props) {
       </p>
       <MetricInfo
         description="Treasury composition across perp protocols. Stablecoins + majors (BTC/ETH) represent real reserves. Own-token holdings are circular and less meaningful."
-        source="DefiLlama Treasury API"
+        source="Protocol treasury balances including own tokens, stablecoins, and major assets."
       />
 
       <div className="mt-4" style={{ height: Math.max(350, data.length * 32) }}>

@@ -113,7 +113,7 @@ export function FundingRateChart({ tickers }: Props) {
           Current perpetual funding rates across top markets
         </p>
         <p className="font-sans text-sm text-ink-muted py-12 text-center">
-          Funding rate data unavailable. CoinGecko API may be rate-limited.
+          Funding rate data unavailable. Data source may be rate-limited.
         </p>
       </div>
     )
@@ -127,7 +127,7 @@ export function FundingRateChart({ tickers }: Props) {
       </p>
       <MetricInfo
         description="Funding rates show the cost of holding long/short perp positions and are a leading sentiment indicator; extreme rates signal over-leveraged markets. The basis (difference between the perp's mark price and spot price) shows whether perps trade at a premium or discount. Long-short ratios highlight whether traders are heavily long or short, helping anticipate reversals."
-        source="CoinGecko derivatives API for funding rates, mark price and index price. Basis can be computed from the difference between mark and spot prices."
+        source="Funding rates, mark price, and index price from derivatives markets. Basis computed from the difference between mark and spot prices."
       />
 
       {stats && (

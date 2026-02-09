@@ -76,7 +76,7 @@ export function FundingTermStructure({ carryMetrics, fundingRateData }: Props) {
       </p>
       <MetricInfo
         description="Shows how funding rates have evolved. Rising current rates above 30d average indicates crowding. Falling rates may signal opportunity."
-        source="yields.llama.fi"
+        source="Funding rate data from on-chain derivatives markets."
       />
 
       <div className="mt-4" style={{ height: 380 }}>

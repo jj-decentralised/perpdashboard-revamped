@@ -149,7 +149,7 @@ export function ScatterPlotGenerator({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Compare any two metrics across all exchanges. Each dot is an exchange. Use presets for common comparisons or pick your own axes. Log scale is used for dollar-denominated metrics."
-        source="DefiLlama + CoinGecko"
+        source="Aggregated on-chain and market data."
       />
 
       {/* Presets */}

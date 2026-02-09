@@ -95,17 +95,46 @@ export async function fetchTTMetrics(projectId: string): Promise<TTMetricSnapsho
     `${TT_BASE}/projects/${projectId}/metrics?metric_ids=${TT_METRIC_IDS}&start=${start}&end=${end}&order_direction=desc`
   )
   if (!data?.data || data.data.length === 0) return null
-  // Take the first (most recent) data point
-  const m = data.data[0]
+
+  // Log first response for debugging (remove in production)
+  if (data.errors?.length > 0) {
+    console.warn(`[TT] ${projectId} errors:`, data.errors)
+  }
+
+  // Merge values from all returned rows (API may return separate rows per metric/date)
+  // Take the first non-null value for each metric (most recent since ordered desc)
+  let revenue: number | null = null
+  let fees: number | null = null
+  let earnings: number | null = null
+  let tokenIncentives: number | null = null
+  let activeUsers: number | null = null
+  let priceToEarnings: number | null = null
+  let priceToSales: number | null = null
+
+  for (const m of data.data) {
+    if (revenue == null && m.revenue != null) revenue = m.revenue
+    if (fees == null && m.fees != null) fees = m.fees
+    if (earnings == null && m.earnings != null) earnings = m.earnings
+    if (tokenIncentives == null && m.token_incentives != null) tokenIncentives = m.token_incentives
+    if (activeUsers == null && m.active_users != null) activeUsers = m.active_users
+    if (priceToEarnings == null && m.price_to_earnings != null) priceToEarnings = m.price_to_earnings
+    if (priceToSales == null && m.price_to_fees != null) priceToSales = m.price_to_fees
+    // Break early if we have everything
+    if (revenue != null && fees != null && earnings != null && tokenIncentives != null && activeUsers != null && priceToEarnings != null && priceToSales != null) break
+  }
+
+  // Log what we found for debugging
+  console.log(`[TT] ${projectId}: rev=${revenue}, fees=${fees}, earn=${earnings}, incentives=${tokenIncentives}, users=${activeUsers}, pe=${priceToEarnings}, ps=${priceToSales} (${data.data.length} rows)`)
+
   return {
     projectId,
-    revenue: m.revenue ?? null,
-    fees: m.fees ?? null,
-    earnings: m.earnings ?? null,
-    tokenIncentives: m.token_incentives ?? null,
-    activeUsers: m.active_users ?? null,
-    priceToEarnings: m.price_to_earnings ?? null,
-    priceToSales: m.price_to_fees ?? null,
+    revenue,
+    fees,
+    earnings,
+    tokenIncentives,
+    activeUsers,
+    priceToEarnings,
+    priceToSales,
     codeCommits7d: null,
   }
 }

@@ -54,7 +54,7 @@ export function AssetOIBreakdown({ assetOIBreakdown }: Props) {
       </p>
       <MetricInfo
         description="Shows which assets dominate open interest across all exchanges. High concentration in BTC/ETH means the market is less diversified."
-        source="yields.llama.fi"
+        source="Per-asset open interest data from on-chain derivatives markets."
       />
 
       <div className="mt-4" style={{ height: 360 }}>

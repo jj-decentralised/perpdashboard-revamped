@@ -108,7 +108,7 @@ export function TVLvsVolumeScatter({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Open interest turnover (daily volume / open interest) shows how quickly positions are being opened and closed. A low OI/VOL ratio signals that capital is 'sticky' and positions are held longer. Exchanges above the diagonal line have higher turnover, while those below indicate more static positioning."
-        source="DefiLlama perps data for volume and open interest. OI/VOL ratios computed by dividing 24h volume by open interest."
+        source="On-chain perps data for volume and open interest. OI/VOL ratios computed by dividing 24h volume by open interest."
       />
 
       <ResponsiveContainer width="100%" height={400}>

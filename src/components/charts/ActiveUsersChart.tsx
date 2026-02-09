@@ -34,7 +34,7 @@ export function ActiveUsersChart({ exchanges }: Props) {
     return (
       <div className="chart-container">
         <h3 className="chart-title">Active Users</h3>
-        <p className="chart-subtitle">Token Terminal data not available</p>
+        <p className="chart-subtitle">Verified user data not available</p>
       </div>
     )
   }
@@ -47,7 +47,7 @@ export function ActiveUsersChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Weekly active users (WAU) counts unique addresses interacting with each protocol. Higher user counts suggest broader adoption, while revenue-per-user reveals monetisation efficiency. Protocols with high volume but few users may rely on whale traders or bots."
-        source="Token Terminal API. Active user counts based on unique on-chain addresses."
+        source="Active user counts based on unique on-chain addresses."
       />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-5 pb-4 border-b border-rule">

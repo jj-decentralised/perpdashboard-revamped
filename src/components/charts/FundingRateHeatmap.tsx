@@ -178,7 +178,7 @@ export function FundingRateHeatmap({ data }: Props) {
       </p>
       <MetricInfo
         description="Funding rates show the cost of holding long/short perp positions and are a leading sentiment indicator. This heatmap reveals cross-exchange funding differentials. Extreme rates signal over-leveraged markets, while large spreads between exchanges present arbitrage opportunities."
-        source="DeFiLlama yields/perps endpoint providing per-market funding rates, 7d/30d averages, and open interest across all tracked exchanges."
+        source="Per-market funding rates, 7d/30d averages, and open interest across all tracked exchanges."
       />
 
       {/* Sentiment bar */}

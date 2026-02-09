@@ -99,7 +99,7 @@ export function PerpsDominanceChart({ perpVolume, spotVolume }: Props) {
       <div className="flex items-center justify-between mb-4">
         <MetricInfo
           description="The perps dominance ratio (perp volume / total on-chain volume) shows how much speculative activity dominates over spot trading. Rising dominance indicates increasing leverage appetite. Historically, extreme perps dominance has coincided with overheated markets and potential reversals."
-          source="DeFiLlama derivatives overview for perp volume and DEX overview for spot volume, merged by date."
+          source="Derivatives overview for perp volume and DEX overview for spot volume, merged by date."
         />
         <TimePeriodSelector selected={period} onChange={setPeriod} />
       </div>

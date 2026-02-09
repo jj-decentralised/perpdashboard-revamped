@@ -95,7 +95,7 @@ export function HistoricalOIChart({ oiData, volumeData }: Props) {
       <div className="flex items-center justify-between mb-4">
         <MetricInfo
           description="Open interest represents total capital committed to perpetual positions. Rising OI + rising volume = strong trend conviction. Rising volume + flat OI = churn/wash trading. OI delta (daily change) is a key signal: positive delta with rising price = new longs entering (bullish), positive delta with falling price = new shorts entering (bearish)."
-          source="DeFiLlama open-interest overview endpoint providing daily aggregate OI across all tracked derivative exchanges."
+          source="Open-interest overview providing daily aggregate OI across all tracked derivative exchanges."
         />
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 font-sans text-xs text-ink-muted cursor-pointer">

@@ -155,7 +155,7 @@ export function ChainDiversityChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Chain diversity measures how many distinct blockchains each exchange is deployed on. Protocols that expand to more chains can capture fragmented liquidity and reach new user bases, but multi-chain deployment also increases operational complexity and can dilute liquidity. Comparing token-bearing vs. non-token exchanges reveals whether tokenized governance models correlate with more aggressive cross-chain expansion strategies."
-        source="Chain deployment data from DefiLlama protocol metadata. Each exchange's chain list is counted and bucketed into ranges for the histogram."
+        source="Chain deployment data from protocol metadata. Each exchange's chain list is counted and bucketed into ranges for the histogram."
       />
 
       <ResponsiveContainer width="100%" height={360}>

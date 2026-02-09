@@ -159,7 +159,7 @@ export function OpenInterestChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Open interest represents the total value of outstanding perpetual contracts. OI turnover (daily volume / open interest) shows how quickly positions are being opened and closed, while a low OI/VOL ratio signals capital is 'sticky.' Sudden OI spikes or drops often coincide with liquidation cascades and potential turning points."
-        source="DefiLlama perps data for open interest by exchange. Volume and OI ratios computed from the same dataset."
+        source="On-chain perps data for open interest by exchange. Volume and OI ratios computed from the same dataset."
       />
 
       {(() => {

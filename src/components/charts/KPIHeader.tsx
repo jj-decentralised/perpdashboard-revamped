@@ -144,7 +144,7 @@ export function KPIHeader({ data }: Props) {
       {/* KPI description */}
       <MetricInfo
         description="These headline figures provide a real-time snapshot of the perpetual futures market. Total volume and open interest gauge overall trading activity and leverage exposure, while perps dominance shows the balance between derivatives and spot trading. BTC basis indicates whether futures trade at a premium or discount to spot, signaling market sentiment. All figures refresh on each page load."
-        source="DefiLlama perps and DEX overview endpoints for volume and OI. CoinGecko for global crypto volume context. Funding rate and basis data from yields.llama.fi."
+        source="Perps and DEX overview data for volume and OI. Global crypto volume for context. Funding rate and basis data from on-chain sources."
       />
 
       {/* KPI Grid */}

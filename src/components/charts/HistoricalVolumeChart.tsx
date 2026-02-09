@@ -142,7 +142,7 @@ export function HistoricalVolumeChart({ data }: Props) {
         <div className="flex items-center gap-3">
           <MetricInfo
             description="Aggregate perpetual volume tracks total daily trading activity across all tracked exchanges. Large divergences between perp volume and spot volume can signal increased speculation. Comparing perp and spot volume over time helps gauge trader preference for leverage vs. spot exposure."
-            source="DefiLlama perps volume data aggregated across all exchanges. Spot volume available via DefiLlama DEX overview endpoint for comparison."
+            source="Perps volume data aggregated across all exchanges. Spot volume also available for comparison."
           />
           <div className="flex items-center gap-1">
             {(['daily', 'monthly', 'cumulative'] as ViewMode[]).map((v) => (

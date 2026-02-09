@@ -147,7 +147,7 @@ export function FeeRevenueChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Fee revenue analysis breaks down how much each protocol earns from trading activity. The fee/volume ratio (take rate) measures capital efficiency — lower rates attract more volume but generate less revenue per trade. Comparing tokenised vs non-tokenised exchange fee structures reveals how governance token incentives affect pricing."
-        source="DefiLlama fees endpoint for 24h fee data. Take rate computed as fees / volume in basis points."
+        source="24h fee data from on-chain sources. Take rate computed as fees / volume in basis points."
       />
 
       <div className="flex justify-end mb-2">

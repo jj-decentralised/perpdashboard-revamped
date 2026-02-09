@@ -41,7 +41,7 @@ export function IncentiveSustainabilityChart({ exchanges }: Props) {
     return (
       <div className="chart-container">
         <h3 className="chart-title">Incentive Sustainability</h3>
-        <p className="chart-subtitle">Token Terminal data not available</p>
+        <p className="chart-subtitle">Verified revenue data not available</p>
       </div>
     )
   }
@@ -57,7 +57,7 @@ export function IncentiveSustainabilityChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Maps each protocol's token incentive spend against its revenue. Protocols below the 100% line earn more than they pay out in incentives (sustainable). Above the line, they're spending more on incentives than they earn — effectively subsidising growth. Bubble size represents daily revenue."
-        source="Token Terminal API. Revenue and token incentive data from verified protocol metrics."
+        source="Revenue and token incentive data from verified on-chain protocol metrics."
       />
 
       <div className="grid grid-cols-2 gap-4 mb-5 pb-4 border-b border-rule">

@@ -50,7 +50,7 @@ export function HolderYieldRanking({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Shows how much revenue each protocol distributes to token holders (via fee sharing, buybacks, staking rewards). Higher yield = more value accrual per dollar of market cap."
-        source="DefiLlama Fees API"
+        source="Protocol-reported holder revenue data, annualised as percentage of market cap."
       />
 
       <div className="mt-4" style={{ height: Math.max(300, data.length * 32) }}>

@@ -92,8 +92,7 @@ export default function DashboardPage() {
                 Perpetual Exchanges in Numbers
               </p>
               <p className="font-sans text-xs text-ink-muted mt-1">
-                Data sourced from DefiLlama, CoinGecko{data.ttAggregate ? ', and Token Terminal' : ''} APIs. Updated in
-                real-time.
+                Updated in real-time.
               </p>
             </div>
             <div className="text-right">

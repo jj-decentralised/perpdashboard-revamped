@@ -95,7 +95,7 @@ export function VolumeShareChart({ data, exchangeNames }: Props) {
       <div className="flex items-center justify-between mb-4">
         <MetricInfo
           description="Market share trends reveal how competitive dynamics evolve over time. Rapidly shifting shares indicate a competitive market where traders actively seek the best execution. Stable dominance by a few exchanges suggests high switching costs or strong network effects in liquidity."
-          source="DefiLlama historical volume data, aggregated weekly and computed as percentage share of total across all tracked exchanges."
+          source="Historical volume data, aggregated weekly and computed as percentage share of total across all tracked exchanges."
         />
         <TimePeriodSelector selected={period} onChange={setPeriod} />
       </div>

@@ -176,7 +176,7 @@ export function CapitalEfficiencyChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Capital efficiency measures how well a protocol monetizes its open interest. Fee yield (fees / OI) shows the revenue generated per dollar of open interest, while turnover (volume / OI) indicates trading activity relative to positioning. Protocols in the upper-right quadrant generate high fees from active trading, while lower-left protocols have sticky capital with low fee generation. A high fee yield with low turnover suggests premium pricing, whereas high turnover with low fee yield indicates competitive fee structures."
-        source="DefiLlama perps data for volume and open interest. Fee data from DefiLlama fees endpoint. Ratios computed as 24h fees / OI (fee yield) and 24h volume / OI (turnover)."
+        source="On-chain perps data for volume and open interest. Fee data from the fees endpoint. Ratios computed as 24h fees / OI (fee yield) and 24h volume / OI (turnover)."
       />
 
       <ResponsiveContainer width="100%" height={420}>

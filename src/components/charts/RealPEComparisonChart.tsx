@@ -91,21 +91,21 @@ export function RealPEComparisonChart({ exchanges }: Props) {
   if (rows.length === 0) {
     return (
       <div className="chart-container">
-        <h3 className="chart-title">P/E Comparison: DefiLlama vs Token Terminal</h3>
-        <p className="chart-subtitle">Token Terminal data not available</p>
+        <h3 className="chart-title">P/E Comparison: Estimated vs Verified</h3>
+        <p className="chart-subtitle">Verified revenue data not available</p>
       </div>
     )
   }
 
   return (
     <div className="chart-container">
-      <h3 className="chart-title">P/E Comparison: DefiLlama vs Token Terminal</h3>
+      <h3 className="chart-title">P/E Comparison: Estimated vs Verified</h3>
       <p className="chart-subtitle">
         Side-by-side valuation multiples from two independent data sources
       </p>
       <MetricInfo
-        description="Compares P/E ratios computed from DefiLlama estimated revenue vs Token Terminal's verified revenue data. Large discrepancies highlight where DefiLlama's assumed 30% take rate diverges from actual protocol economics. Token Terminal P/E is generally more accurate as it uses audited on-chain revenue."
-        source="P/E (DL) from DefiLlama fees with estimated 30% revenue take rate. P/E (TT) from Token Terminal verified revenue data. Market cap from CoinGecko."
+        description="Compares P/E ratios computed from estimated revenue (fees x 30% take rate) vs verified on-chain revenue data. Large discrepancies highlight where the assumed take rate diverges from actual protocol economics. Verified P/E is generally more accurate as it uses audited on-chain revenue."
+        source="P/E (DL) from estimated fees with 30% revenue take rate. P/E (TT) from verified on-chain revenue data. Market cap from market aggregators."
       />
 
       <div className="overflow-x-auto">
@@ -169,8 +169,8 @@ export function RealPEComparisonChart({ exchanges }: Props) {
       </div>
 
       <p className="font-sans text-[11px] text-ink-muted mt-4 leading-relaxed">
-        <strong>DL</strong> = DefiLlama (estimated revenue: fees &times; 0.3 assumed take rate).{' '}
-        <strong>TT</strong> = Token Terminal (verified on-chain revenue).{' '}
+        <strong>DL</strong> = Estimated (revenue: fees &times; 0.3 assumed take rate).{' '}
+        <strong>TT</strong> = Verified (on-chain revenue).{' '}
         <strong>&Delta;</strong> = TT P/E &minus; DL P/E. Negative delta means TT shows the protocol is cheaper than DL estimates.
       </p>
     </div>

@@ -34,7 +34,7 @@ export function EarningsWaterfallChart({ exchanges }: Props) {
     return (
       <div className="chart-container">
         <h3 className="chart-title">Revenue vs Earnings</h3>
-        <p className="chart-subtitle">Token Terminal data not available</p>
+        <p className="chart-subtitle">Verified revenue data not available</p>
       </div>
     )
   }
@@ -54,7 +54,7 @@ export function EarningsWaterfallChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Compares protocol-reported revenue with token incentive costs to show real earnings. Protocols with earnings significantly below revenue are spending heavily on token emissions to acquire users — a potential sustainability concern. Positive earnings indicate protocols that generate more revenue than they distribute in incentives."
-        source="Token Terminal API. Revenue and token incentive data verified against on-chain protocol metrics."
+        source="Revenue and token incentive data verified against on-chain protocol metrics."
       />
 
       <div className="flex flex-wrap gap-4 mb-4 font-sans text-xs text-ink-muted">

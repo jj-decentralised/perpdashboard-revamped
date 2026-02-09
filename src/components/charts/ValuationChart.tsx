@@ -124,7 +124,7 @@ export function ValuationChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Valuation multiples compare a protocol's market cap to its revenue (P/E) and fees (P/S). Lower ratios suggest relative undervaluation compared to peers. Traditional finance exchange benchmarks (CME, ICE) typically trade at 20-30x P/E, providing a reference point for DeFi perpetual protocol valuations."
-        source="Market cap from CoinGecko. Revenue and fees from DefiLlama fees endpoint, annualised from trailing data."
+        source="Market cap from market aggregators. Revenue and fees annualised from trailing on-chain data."
       />
 
       {/* Summary stats */}
@@ -216,11 +216,10 @@ export function ValuationChart({ exchanges }: Props) {
       <p className="font-sans text-[11px] text-ink-muted mt-4 leading-relaxed">
         <strong>Methodology:</strong> P/E = Circulating Market Cap / Annualised Revenue.
         P/S = Circulating Market Cap / Annualised Fees.
-        Market cap uses circulating supply (not FDV) sourced from CoinGecko.
+        Market cap uses circulating supply (not FDV).
         Annualisation prefers trailing 30d fees &times; 12 when available; falls back to 24h &times; 365.
         Revenue is estimated as fees &times; 0.3 assumed take rate where actual protocol revenue data
-        is not available from DefiLlama; when DefiLlama provides explicit revenue figures, those are
-        used instead. Values color-coded: <span style={{ color: COLORS.green }}>green</span> = below median,
+        is not available; when explicit revenue figures are provided, those are used instead. Values color-coded: <span style={{ color: COLORS.green }}>green</span> = below median,
         black = median to Q3, <span style={{ color: COLORS.red }}>red</span> = above Q3.
         TradFi exchange benchmarks (CME, ICE) typically trade at 20&ndash;30x P/E.
       </p>

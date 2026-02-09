@@ -89,7 +89,7 @@ export function PerpRevenueBreakdownChart({ data, protocolNames }: Props) {
       </p>
       <MetricInfo
         description="Shows how fee revenue is distributed among perpetual exchange protocols over time. Shifts in revenue share indicate changing competitive dynamics — a protocol gaining fee share is capturing more trading activity or charging higher take rates. The 'Other' category aggregates smaller protocols, and its growth signals an increasingly fragmented market."
-        source="DefiLlama fees endpoint with historical breakdown. Monthly aggregation of daily fee data. Only protocols matching tracked perpetual exchanges are included."
+        source="Historical fee breakdown with monthly aggregation of daily fee data. Only protocols matching tracked perpetual exchanges are included."
       />
 
       <ResponsiveContainer width="100%" height={400}>

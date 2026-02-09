@@ -203,7 +203,7 @@ export function VolumeByChainChart({ exchanges }: Props) {
       </p>
       <MetricInfo
         description="Chain-level volume distribution shows where perpetual trading activity is concentrated. This helps identify which L1/L2 ecosystems are capturing the most derivatives activity and reveals infrastructure preferences. Stablecoin collateral composition on each chain further affects capital efficiency and risk profiles."
-        source="DefiLlama perps volume data broken down by chain. Chain-level stablecoin data available via DefiLlama stablecoins endpoints."
+        source="Perps volume data broken down by chain. Chain-level stablecoin data also available for context."
       />
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart

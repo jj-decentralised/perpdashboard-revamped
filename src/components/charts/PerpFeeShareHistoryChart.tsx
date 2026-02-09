@@ -63,7 +63,7 @@ export function PerpFeeShareHistoryChart({ data }: Props) {
       </p>
       <MetricInfo
         description="Tracks the perpetual exchange sector's contribution to overall DeFi fee revenue over time. A rising share signals that derivatives trading is becoming a larger part of the DeFi economy, reflecting increased demand for leveraged exposure. Declines may indicate that other DeFi verticals (lending, DEXs, staking) are growing faster, or that perp trading activity is cooling off."
-        source="DefiLlama /overview/fees endpoint. Total DeFi fees include all tracked protocols across all categories. Perp fees are the subset matching tracked perpetual exchange protocols. Monthly aggregation of daily data."
+        source="Total DeFi fees include all tracked protocols across all categories. Perp fees are the subset matching tracked perpetual exchange protocols. Monthly aggregation of daily data."
       />
 
       {/* Summary stats */}

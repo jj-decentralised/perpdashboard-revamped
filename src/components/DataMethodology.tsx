@@ -34,70 +34,6 @@ export function DataMethodology() {
 
       {expanded && (
         <div className="mt-4 space-y-5 max-w-3xl">
-          {/* Data Sources */}
-          <div>
-            <h4
-              className="font-serif text-xs font-semibold uppercase tracking-wider mb-2"
-              style={{ color: COLORS.ink }}
-            >
-              Data Sources
-            </h4>
-            <ul className="font-sans text-xs text-ink-light leading-relaxed space-y-1 pl-4 list-disc">
-              <li>
-                <span className="font-medium">Volume, OI, fees:</span>{' '}
-                DefiLlama API (
-                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
-                  /overview/derivatives
-                </code>,{' '}
-                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
-                  /overview/open-interest
-                </code>,{' '}
-                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
-                  /summary/fees/&#123;protocol&#125;
-                </code>)
-              </li>
-              <li>
-                <span className="font-medium">Market data:</span>{' '}
-                CoinGecko API (exchange details, token prices, market cap)
-              </li>
-              <li>
-                <span className="font-medium">Funding rates:</span>{' '}
-                DeFiLlama Yields (
-                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
-                  yields.llama.fi/perps
-                </code>)
-              </li>
-              <li>
-                <span className="font-medium">Bridge flows:</span>{' '}
-                DeFiLlama Bridges (
-                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
-                  bridges.llama.fi/bridgevolume/&#123;chain&#125;
-                </code>)
-              </li>
-              <li>
-                <span className="font-medium">Token emissions:</span>{' '}
-                DeFiLlama (
-                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
-                  api.llama.fi/emissions
-                </code>)
-              </li>
-              <li>
-                <span className="font-medium">Stablecoins:</span>{' '}
-                DeFiLlama (
-                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
-                  stablecoins.llama.fi
-                </code>)
-              </li>
-              <li>
-                <span className="font-medium">Revenue, earnings, active users:</span>{' '}
-                Token Terminal API (
-                <code className="text-[11px] px-1 py-0.5 rounded" style={{ backgroundColor: COLORS.paperAlt, color: COLORS.inkLight }}>
-                  api.tokenterminal.com/v2
-                </code>) &mdash; optional enrichment, requires API key
-              </li>
-            </ul>
-          </div>
-
           {/* Calculation Methodology */}
           <div>
             <h4
@@ -112,7 +48,7 @@ export function DataMethodology() {
                 <dd className="inline">
                   Circulating Market Cap / Annualised Revenue. Annualisation prefers trailing 30d fees &times; 12
                   when available; falls back to 24h &times; 365. Revenue estimated as fees &times; 0.3 assumed
-                  take rate when DefiLlama does not provide explicit revenue figures.
+                  take rate when explicit revenue figures are not available.
                 </dd>
               </div>
               <div>
@@ -170,8 +106,8 @@ export function DataMethodology() {
                 Unknown venues default to CeFi.
               </p>
               <p>
-                <strong>Derivatives overview</strong> data from DefiLlama tracks on-chain protocols and is
-                predominantly DeFi. <strong>Funding rate</strong> data from yields/perps includes both CeFi
+                <strong>Derivatives overview</strong> data tracks on-chain protocols and is
+                predominantly DeFi. <strong>Funding rate</strong> data includes both CeFi
                 and DeFi markets. The category filter (All / DeFi / CeFi) on charts allows separate analysis
                 of each venue type.
               </p>
@@ -195,8 +131,7 @@ export function DataMethodology() {
               The <strong>basis</strong> is computed as (mark price &minus; index price) / index price,
               expressed in basis points. A positive basis indicates the perpetual trades at a premium
               to spot (bullish), while a negative basis indicates a discount (bearish). Basis is shown
-              in the funding rate arbitrage table when mark and index prices are available from the
-              DeFiLlama yields/perps endpoint.
+              in the funding rate arbitrage table when mark and index prices are available.
             </p>
           </div>
 
