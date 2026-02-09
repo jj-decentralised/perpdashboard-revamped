@@ -20,7 +20,6 @@ import { TokenUnlockCalendar } from '../components/charts/TokenUnlockCalendar'
 import { BridgeFlowChart } from '../components/charts/BridgeFlowChart'
 import { CapitalEfficiencyChart } from '../components/charts/CapitalEfficiencyChart'
 import { ScatterPlotGenerator } from '../components/charts/ScatterPlotGenerator'
-import { FundingTermStructure } from '../components/charts/FundingTermStructure'
 import { BasisMonitor } from '../components/charts/BasisMonitor'
 import { StablecoinComposition } from '../components/charts/StablecoinComposition'
 import { HolderYieldRanking } from '../components/charts/HolderYieldRanking'
@@ -137,14 +136,6 @@ function OverviewTab({ data }: { data: any }) {
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Perps dominance chart">
             <PerpsDominanceChart perpVolume={data.historicalVolume} spotVolume={data.spotVolumeHistory} />
-          </ErrorBoundary>
-        </section>
-      )}
-
-      {data.fundingRateData.length > 0 && (
-        <section className="section-rule">
-          <ErrorBoundary fallbackLabel="Funding term structure">
-            <FundingTermStructure carryMetrics={data.carryMetrics} fundingRateData={data.fundingRateData} />
           </ErrorBoundary>
         </section>
       )}

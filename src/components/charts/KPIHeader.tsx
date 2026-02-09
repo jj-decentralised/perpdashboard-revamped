@@ -125,7 +125,7 @@ export function KPIHeader({ data }: Props) {
         </h1>
         <div className="border-t border-rule mt-3 pt-2 flex items-center justify-between">
           <p className="font-serif text-sm text-ink-light italic">
-            Open Interest, Volume, Fees &amp; Token Classification
+            Volume, Open Interest, Fees, Valuations &amp; Market Structure
           </p>
           <p className="font-sans text-[11px] text-ink-muted" title={`Data loaded at ${loadTime.toLocaleTimeString()}`}>
             Updated {elapsed}

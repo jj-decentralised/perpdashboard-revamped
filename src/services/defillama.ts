@@ -350,13 +350,25 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
     const cgMatch = matchCGExchange(dex.slug, dex.name, cgMap)
 
-    const hasToken = !!(
+    const hasTokenFromProtInfo = !!(
       protInfo &&
       protInfo.symbol &&
       protInfo.symbol !== '-' &&
       protInfo.symbol !== ''
     )
-    const tokenSymbol = hasToken ? protInfo!.symbol : null
+    // Fallback: if the slug is in our curated SLUG_TO_GECKO_TOKEN map, it has a token
+    const slugLower = dex.slug?.toLowerCase() || ''
+    const strippedSlug = slugLower.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|trade|pro|omni|markets?|interface|digital|terminal|labs)$/i, '').trim()
+    const hasTokenFromMap = !!(SLUG_TO_GECKO_TOKEN[slugLower] || (strippedSlug !== slugLower && SLUG_TO_GECKO_TOKEN[strippedSlug]))
+    const hasToken = hasTokenFromProtInfo || hasTokenFromMap
+
+    // Resolve token symbol: prefer protInfo, fall back to CoinGecko coins list
+    let tokenSymbol: string | null = hasTokenFromProtInfo ? protInfo!.symbol : null
+    if (!tokenSymbol && hasTokenFromMap) {
+      const geckoTokenId = SLUG_TO_GECKO_TOKEN[slugLower] || SLUG_TO_GECKO_TOKEN[strippedSlug]
+      const coinEntry = coinsList.find((c) => c.id === geckoTokenId)
+      if (coinEntry) tokenSymbol = coinEntry.symbol.toUpperCase()
+    }
     const tvl = protInfo?.tvl || 0
     const vol24 = dex.total24h || 0
 
