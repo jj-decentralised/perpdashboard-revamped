@@ -23,7 +23,9 @@ export const EMISSIONS_BASE = useDirectApi
 // Token Terminal (optional enrichment — dashboard works perfectly without it)
 const ttApiKey = import.meta.env.VITE_TT_API_KEY as string | undefined
 export const TT_ENABLED = !!ttApiKey
-export const TT_BASE = 'https://api.tokenterminal.com/v2'
+export const TT_BASE = useDirectApi
+  ? 'https://api.tokenterminal.com/v2'
+  : '/api/tt'
 
 export function geckoHeaders(): HeadersInit {
   // When using proxy, headers are added server-side

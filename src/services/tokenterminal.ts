@@ -71,10 +71,16 @@ const TT_METRIC_IDS = [
 async function fetchTTJSON<T>(url: string): Promise<T | null> {
   if (!TT_ENABLED) return null
   try {
-    const res = await fetch(url, { headers: ttHeaders() })
-    if (!res.ok) return null
+    // When using proxy, auth headers are added server-side; only send them in direct mode
+    const headers = url.startsWith('/api/') ? {} : ttHeaders()
+    const res = await fetch(url, { headers })
+    if (!res.ok) {
+      console.warn(`[TT] fetch failed: ${res.status} ${url}`)
+      return null
+    }
     return await res.json()
-  } catch {
+  } catch (err) {
+    console.warn(`[TT] fetch error:`, err)
     return null
   }
 }
