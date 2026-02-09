@@ -122,8 +122,6 @@ const columns: ColumnDef[] = [
   { key: 'carryYield', label: 'Carry %', sortable: true, align: 'right', tooltip: 'OI-weighted annualized funding rate carry yield' },
   { key: 'effectiveAssets', label: 'Assets', sortable: true, align: 'right', tooltip: 'Effective number of listed assets (1/HHI of OI distribution)' },
   { key: 'holderYield', label: 'Holder Yield', sortable: true, align: 'right', tooltip: 'Annualized holder revenue as % of market cap' },
-  { key: 'ttRevenue', label: 'Revenue (TT)', sortable: true, align: 'right', tooltip: 'Daily verified on-chain revenue' },
-  { key: 'ttActiveUsers', label: 'WAU', sortable: true, align: 'right', tooltip: 'Weekly active users (unique addresses)' },
   { key: 'change_1d', label: '1d %', sortable: true, align: 'right' },
   { key: 'change_7d', label: '7d %', sortable: true, align: 'right' },
 ]
@@ -191,10 +189,6 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
       return exchange.effectiveAssetCount ?? -Infinity
     case 'holderYield':
       return exchange.holderYield ?? -Infinity
-    case 'ttRevenue':
-      return exchange.ttRevenue ?? -Infinity
-    case 'ttActiveUsers':
-      return exchange.ttActiveUsers ?? -Infinity
     case 'change_1d':
       return exchange.change_1d ?? -Infinity
     case 'change_7d':
@@ -314,7 +308,7 @@ function ScrollableTable({ children }: { children: React.ReactNode }) {
 }
 
 function exportCSV(exchanges: EnrichedExchange[]) {
-  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', 'Carry Yield %', 'Effective Assets', 'Holder Yield %', 'Revenue (TT)', 'WAU (TT)', '1d Change %', '7d Change %']
+  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', 'Carry Yield %', 'Effective Assets', 'Holder Yield %', '1d Change %', '7d Change %']
   const rows = exchanges.map((e, i) => [
     i + 1,
     e.displayName || e.name,
@@ -333,8 +327,6 @@ function exportCSV(exchanges: EnrichedExchange[]) {
     e.avgCarryYield?.toFixed(1) ?? '',
     e.effectiveAssetCount?.toFixed(0) ?? '',
     e.holderYield?.toFixed(2) ?? '',
-    e.ttRevenue ?? '',
-    e.ttActiveUsers ?? '',
     e.change_1d?.toFixed(2) ?? '',
     e.change_7d?.toFixed(2) ?? '',
   ])
@@ -619,8 +611,6 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   <td className="text-right font-mono text-xs">{exchange.avgCarryYield != null ? `${exchange.avgCarryYield.toFixed(1)}%` : <DashCell tooltip="No funding rate data matched to this exchange" />}</td>
                   <td className="text-right font-mono text-xs">{exchange.effectiveAssetCount != null ? exchange.effectiveAssetCount.toFixed(0) : <DashCell tooltip="No OI breakdown data available" />}</td>
                   <td className="text-right font-mono text-xs">{exchange.holderYield != null && exchange.holderYield > 0 ? `${exchange.holderYield.toFixed(2)}%` : <DashCell tooltip="No holder revenue data or no token" />}</td>
-                  <td className="text-right font-mono text-xs">{exchange.ttRevenue != null ? formatUSD(exchange.ttRevenue, true) : <DashCell tooltip="Verified revenue data not available" />}</td>
-                  <td className="text-right font-mono text-xs">{exchange.ttActiveUsers != null ? formatNumber(exchange.ttActiveUsers) : <DashCell tooltip="Verified revenue data not available" />}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_1d))}>{formatPercent(exchange.change_1d)}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_7d))}>{formatPercent(exchange.change_7d)}</td>
                 </tr>
@@ -725,8 +715,6 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         <span><strong>Carry %</strong> = OI-weighted annualized funding yield</span>
         <span><strong>Assets</strong> = Effective listed assets (1/HHI)</span>
         <span><strong>Holder Yield</strong> = Annualized holder revenue / Mcap</span>
-        <span><strong>Revenue (TT)</strong> = Verified daily on-chain revenue</span>
-        <span><strong>WAU</strong> = Weekly Active Users (unique addresses)</span>
         <span><strong>{'\u2014'}</strong> = Data not available from source (hover for details)</span>
         <span><strong>&#9888;</strong> = Possible data anomaly</span>
         <span><span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Fee Share</span> / <span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Buyback</span> = Token holder value accrual</span>

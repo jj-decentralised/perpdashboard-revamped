@@ -26,10 +26,6 @@ import { HolderYieldRanking } from '../components/charts/HolderYieldRanking'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
-import { EarningsWaterfallChart } from '../components/charts/EarningsWaterfallChart'
-import { ActiveUsersChart } from '../components/charts/ActiveUsersChart'
-import { IncentiveSustainabilityChart } from '../components/charts/IncentiveSustainabilityChart'
-import { RealPEComparisonChart } from '../components/charts/RealPEComparisonChart'
 import { CommandPalette } from '../components/CommandPalette'
 import { DataMethodology } from '../components/DataMethodology'
 import { TabNavigation, useTabNavigation } from '../components/TabNavigation'
@@ -270,34 +266,6 @@ function FeesValuationTab({ data }: { data: any }) {
           <TreasuryOverview treasuryData={data.treasuryData} />
         </ErrorBoundary>
       </section>
-
-      {/* Token Terminal enrichment — only renders when TT data is loaded */}
-      {data.enrichedExchanges.some((e: any) => e.ttRevenue != null) && (
-        <>
-          <section className="section-rule">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ErrorBoundary fallbackLabel="Revenue vs earnings">
-                <EarningsWaterfallChart exchanges={data.enrichedExchanges} />
-              </ErrorBoundary>
-              <ErrorBoundary fallbackLabel="Active users">
-                <ActiveUsersChart exchanges={data.enrichedExchanges} />
-              </ErrorBoundary>
-            </div>
-          </section>
-
-          <section className="section-rule">
-            <ErrorBoundary fallbackLabel="Incentive sustainability">
-              <IncentiveSustainabilityChart exchanges={data.enrichedExchanges} />
-            </ErrorBoundary>
-          </section>
-
-          <section className="section-rule">
-            <ErrorBoundary fallbackLabel="P/E comparison">
-              <RealPEComparisonChart exchanges={data.enrichedExchanges} />
-            </ErrorBoundary>
-          </section>
-        </>
-      )}
 
       <section className="section-rule">
         <ErrorBoundary fallbackLabel="Token unlock calendar">

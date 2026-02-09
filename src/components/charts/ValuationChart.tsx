@@ -39,18 +39,13 @@ export function ValuationChart({ exchanges }: Props) {
   const { rows, peQ, psQ } = useMemo(() => {
     const valid = exchanges
       .filter(
-        (e) => {
-          // Prefer TT ratios when available, fall back to DefiLlama
-          const pe = e.ttPE ?? e.peRatio
-          const ps = e.ttPS ?? e.psRatio
-          return pe != null && ps != null && pe > 0 && ps > 0 && pe < 1000 && ps < 1000 && e.mcap != null && e.mcap > 0
-        }
+        (e) => e.peRatio != null && e.psRatio != null && e.peRatio > 0 && e.psRatio > 0 && e.peRatio < 1000 && e.psRatio < 1000 && e.mcap != null && e.mcap > 0
       )
 
     const rows: ValuationRow[] = valid.map((e) => ({
       name: e.displayName || e.name,
-      pe: (e.ttPE ?? e.peRatio)!,
-      ps: (e.ttPS ?? e.psRatio)!,
+      pe: e.peRatio!,
+      ps: e.psRatio!,
       mcap: e.mcap!,
       volume24h: e.total24h ?? 0,
       fees24h: e.feeData?.total24h ?? 0,
