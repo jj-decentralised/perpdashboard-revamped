@@ -61,6 +61,14 @@ export interface EnrichedExchange extends DexProtocol {
   peRatio: number | null
   psRatio: number | null
   venueType: 'defi' | 'cefi'
+  // Funding carry metrics
+  avgCarryYield: number | null
+  fundingSlope: number | null
+  // OI concentration
+  oiHHI: number | null
+  effectiveAssetCount: number | null
+  // Holder yield (lazy-loaded)
+  holderYield: number | null
 }
 
 export interface FeeProtocol {
@@ -157,6 +165,49 @@ export interface FundingRateEntry {
   venueType: 'defi' | 'cefi'
 }
 
+export interface CarryPairData {
+  asset: string
+  marketplace: string
+  carry: number
+  oi: number
+  slope: number
+  currentRate: number
+  avg7d: number | null
+  avg30d: number | null
+}
+
+export interface BasisMetrics {
+  btcBasisBps: number | null
+  ethBasisBps: number | null
+  marketWideBasisBps: number | null
+  topAssets: Array<{ asset: string; basisBps: number; oi: number }>
+}
+
+export interface GlobalCryptoContext {
+  totalCryptoVolume: number
+  totalCryptoMcap: number
+  btcDominance: number
+  perpsShare: number
+  oiToMcapRatio: number
+}
+
+export interface AssetOIEntry {
+  asset: string
+  totalOI: number
+  share: number
+}
+
+export interface TreasuryAgg {
+  slug: string
+  name: string
+  totalUsd: number
+  ownTokenUsd: number
+  stablecoinsUsd: number
+  majorsUsd: number
+  othersUsd: number
+  warChestRatio: number | null
+}
+
 export interface DashboardData {
   dexOverview: DexOverview
   protocols: ProtocolInfo[]
@@ -175,4 +226,10 @@ export interface DashboardData {
   spotVolume24h: number
   spotVolume7d: number
   spotVolumeHistory: HistoricalDataPoint[]
+  // New enrichments
+  carryMetrics: CarryPairData[]
+  basisMetrics: BasisMetrics
+  globalContext: GlobalCryptoContext | null
+  assetOIBreakdown: AssetOIEntry[]
+  treasuryData: TreasuryAgg[]
 }

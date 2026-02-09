@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory } from '../services/defillama'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch } from '../services/defillama'
 
 interface UseDashboardDataReturn {
   data: DashboardData | null
@@ -31,7 +31,7 @@ export function useDashboardData(): UseDashboardDataReturn {
         setData(result)
         setLoading(false)
 
-        // Lazy load: fetch breakdown data and spot volume history in background
+        // Lazy load: fetch breakdown data, spot volume, holder yield, treasury in background
         const lazyPromises: Promise<void>[] = []
 
         if (result.topExchangeNames.length > 0) {
@@ -50,6 +50,31 @@ export function useDashboardData(): UseDashboardDataReturn {
               setData((prev) => prev ? { ...prev, spotVolumeHistory } : prev)
             }
           })
+        )
+
+        // Holder yield batch (top 20 token exchanges)
+        lazyPromises.push(
+          fetchHolderYieldBatch(result.enrichedExchanges).then((yieldMap) => {
+            if (!cancelled && yieldMap.size > 0) {
+              setData((prev) => {
+                if (!prev) return prev
+                const updated = prev.enrichedExchanges.map(ex => {
+                  const y = yieldMap.get(ex.slug)
+                  return y != null ? { ...ex, holderYield: y } : ex
+                })
+                return { ...prev, enrichedExchanges: updated }
+              })
+            }
+          }).catch(() => {})
+        )
+
+        // Treasury batch (top 20 token exchanges)
+        lazyPromises.push(
+          fetchTreasuryBatch(result.enrichedExchanges).then((treasuryData) => {
+            if (!cancelled && treasuryData.length > 0) {
+              setData((prev) => prev ? { ...prev, treasuryData } : prev)
+            }
+          }).catch(() => {})
         )
 
         await Promise.all(lazyPromises)

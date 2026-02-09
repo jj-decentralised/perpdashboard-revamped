@@ -8,10 +8,14 @@ import type {
   DashboardData,
   VolumeSharePoint,
   FundingRateEntry,
+  CarryPairData,
+  BasisMetrics,
+  AssetOIEntry,
+  TreasuryAgg,
 } from '../types'
 import type { DerivativesSummary } from '../types/profile'
 import { LLAMA_BASE, YIELDS_BASE } from '../config/api'
-import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices, fetchCoinsList, fetchCachedCoinsList, fetchCoinMarkets } from './coingecko'
+import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices, fetchCoinsList, fetchCachedCoinsList, fetchCoinMarkets, fetchGlobalData } from './coingecko'
 import type { CoinListEntry } from './coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 import { classifyProtocol, classifyVenue } from '../utils/classification'
@@ -227,7 +231,7 @@ export const SLUG_TO_GECKO_TOKEN: Record<string, string> = {
 export async function fetchDashboardData(): Promise<DashboardData> {
   // Phase 1: Fetch all data sources in parallel
   // Use lightweight overview (exclude breakdown) for enrichment — breakdown fetched lazily
-  const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers, coinsList, oiOverview, fundingRateData, spotDexOverview] = await Promise.all([
+  const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers, coinsList, oiOverview, fundingRateData, spotDexOverview, globalData] = await Promise.all([
     fetchDerivativesOverview(true),
     fetchProtocols(),
     fetchFeeOverview(),
@@ -238,6 +242,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     fetchOIOverview(),
     fetchFundingRates(),
     fetchSpotDexOverview(),
+    fetchGlobalData(),
   ])
 
   // Build symbol → geckoId map from CoinGecko coins list
@@ -399,6 +404,11 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       peRatio: null, // Computed in Pass 2
       psRatio: null,
       venueType: classifyProtocol(dex.slug, dex.name, dex.chains || []),
+      avgCarryYield: null,
+      fundingSlope: null,
+      oiHHI: null,
+      effectiveAssetCount: null,
+      holderYield: null,
     }
   })
 
@@ -526,6 +536,167 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     oiOverview.totalDataChart || []
   ).map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
 
+  // ── PASS 4: Compute carry, basis, HHI from funding rate data ──
+
+  // Build marketplace→exchange name lookup for matching
+  const marketplaceToExchange = new Map<string, EnrichedExchange>()
+  for (const ex of deduped) {
+    const nameLower = ex.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const slugBase = ex.slug.toLowerCase().replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|trade|pro|omni|markets?)/g, '')
+    marketplaceToExchange.set(ex.name.toLowerCase(), ex)
+    marketplaceToExchange.set(nameLower, ex)
+    marketplaceToExchange.set(ex.slug.toLowerCase(), ex)
+    if (slugBase !== ex.slug.toLowerCase()) marketplaceToExchange.set(slugBase, ex)
+  }
+
+  function resolveExchange(marketplace: string): EnrichedExchange | null {
+    const lower = marketplace.toLowerCase()
+    if (marketplaceToExchange.has(lower)) return marketplaceToExchange.get(lower)!
+    const normalized = lower.replace(/[^a-z0-9]/g, '')
+    if (marketplaceToExchange.has(normalized)) return marketplaceToExchange.get(normalized)!
+    return null
+  }
+
+  // Carry metrics: top pairs by OI with annualized carry
+  const carryMetrics: CarryPairData[] = []
+  // Group funding data by marketplace for per-exchange carry/slope
+  const exchangeFundingMap = new Map<string, { weightedCarry: number; totalOI: number; slopeSum: number; slopeCount: number }>()
+  // For basis computation
+  const basisByAsset = new Map<string, { weightedBasis: number; totalOI: number }>()
+  // For HHI: marketplace → asset → OI
+  const exchangeAssetOI = new Map<string, Map<string, number>>()
+  // Global asset OI
+  const globalAssetOI = new Map<string, number>()
+
+  for (const entry of fundingRateData) {
+    if (!entry.marketplace || !entry.baseAsset) continue
+    const oi = entry.openInterest || 0
+
+    // Carry computation
+    if (entry.fundingRate && isFinite(entry.fundingRate)) {
+      const annualizedCarry = entry.fundingRate * 3 * 365 * 100 // as percentage
+      const slope = entry.fundingRate30dAverage != null
+        ? (entry.fundingRate - entry.fundingRate30dAverage) * 3 * 365 * 100
+        : 0
+
+      if (oi > 100_000) {
+        carryMetrics.push({
+          asset: entry.baseAsset,
+          marketplace: entry.marketplace,
+          carry: annualizedCarry,
+          oi,
+          slope,
+          currentRate: entry.fundingRate,
+          avg7d: entry.fundingRate7dAverage,
+          avg30d: entry.fundingRate30dAverage,
+        })
+      }
+
+      // Per-exchange aggregation
+      const mpKey = entry.marketplace.toLowerCase()
+      if (oi > 0) {
+        const existing = exchangeFundingMap.get(mpKey) || { weightedCarry: 0, totalOI: 0, slopeSum: 0, slopeCount: 0 }
+        existing.weightedCarry += annualizedCarry * oi
+        existing.totalOI += oi
+        if (entry.fundingRate30dAverage != null) {
+          existing.slopeSum += slope
+          existing.slopeCount++
+        }
+        exchangeFundingMap.set(mpKey, existing)
+      }
+    }
+
+    // Basis computation
+    if (entry.markPrice != null && entry.indexPrice != null && entry.indexPrice > 0) {
+      const basisBps = ((entry.markPrice - entry.indexPrice) / entry.indexPrice) * 10000
+      if (isFinite(basisBps) && Math.abs(basisBps) < 500) { // Filter outliers
+        const asset = entry.baseAsset.toUpperCase()
+        const existing = basisByAsset.get(asset) || { weightedBasis: 0, totalOI: 0 }
+        const weight = oi > 0 ? oi : 1
+        existing.weightedBasis += basisBps * weight
+        existing.totalOI += weight
+        basisByAsset.set(asset, existing)
+      }
+    }
+
+    // HHI: accumulate OI by asset per exchange
+    if (oi > 0) {
+      const mpKey = entry.marketplace.toLowerCase()
+      if (!exchangeAssetOI.has(mpKey)) exchangeAssetOI.set(mpKey, new Map())
+      const assetMap = exchangeAssetOI.get(mpKey)!
+      assetMap.set(entry.baseAsset, (assetMap.get(entry.baseAsset) || 0) + oi)
+      globalAssetOI.set(entry.baseAsset, (globalAssetOI.get(entry.baseAsset) || 0) + oi)
+    }
+  }
+
+  // Sort carry pairs by OI desc
+  carryMetrics.sort((a, b) => b.oi - a.oi)
+  const topCarryMetrics = carryMetrics.slice(0, 50)
+
+  // Assign per-exchange carry yield and slope
+  for (const ex of deduped) {
+    const mpKey = ex.name.toLowerCase()
+    const agg = exchangeFundingMap.get(mpKey) || exchangeFundingMap.get(ex.slug.toLowerCase().replace(/-(perps?|perpetuals?|v\d+)/g, ''))
+    if (agg && agg.totalOI > 0) {
+      ex.avgCarryYield = agg.weightedCarry / agg.totalOI
+      ex.fundingSlope = agg.slopeCount > 0 ? agg.slopeSum / agg.slopeCount : null
+    }
+  }
+
+  // Compute basis metrics
+  const btcBasis = basisByAsset.get('BTC')
+  const ethBasis = basisByAsset.get('ETH')
+  let marketWideBasisNum = 0, marketWideBasisDen = 0
+  const basisTopAssets: BasisMetrics['topAssets'] = []
+  for (const [asset, data] of basisByAsset) {
+    const avgBasis = data.totalOI > 0 ? data.weightedBasis / data.totalOI : 0
+    basisTopAssets.push({ asset, basisBps: avgBasis, oi: data.totalOI })
+    marketWideBasisNum += data.weightedBasis
+    marketWideBasisDen += data.totalOI
+  }
+  basisTopAssets.sort((a, b) => b.oi - a.oi)
+
+  const basisMetrics: BasisMetrics = {
+    btcBasisBps: btcBasis && btcBasis.totalOI > 0 ? btcBasis.weightedBasis / btcBasis.totalOI : null,
+    ethBasisBps: ethBasis && ethBasis.totalOI > 0 ? ethBasis.weightedBasis / ethBasis.totalOI : null,
+    marketWideBasisBps: marketWideBasisDen > 0 ? marketWideBasisNum / marketWideBasisDen : null,
+    topAssets: basisTopAssets.slice(0, 20),
+  }
+
+  // Compute HHI per exchange and assign to deduped
+  for (const ex of deduped) {
+    const mpKey = ex.name.toLowerCase()
+    const assetMap = exchangeAssetOI.get(mpKey) || exchangeAssetOI.get(ex.slug.toLowerCase().replace(/-(perps?|perpetuals?|v\d+)/g, ''))
+    if (assetMap && assetMap.size > 0) {
+      const totalExOI = Array.from(assetMap.values()).reduce((s, v) => s + v, 0)
+      if (totalExOI > 0) {
+        let hhi = 0
+        for (const oi of assetMap.values()) {
+          const share = oi / totalExOI
+          hhi += share * share
+        }
+        ex.oiHHI = hhi
+        ex.effectiveAssetCount = Math.round(1 / hhi)
+      }
+    }
+  }
+
+  // Global asset OI breakdown
+  const totalGlobalOI = Array.from(globalAssetOI.values()).reduce((s, v) => s + v, 0)
+  const assetOIBreakdown: AssetOIEntry[] = Array.from(globalAssetOI.entries())
+    .map(([asset, oi]) => ({ asset, totalOI: oi, share: totalGlobalOI > 0 ? (oi / totalGlobalOI) * 100 : 0 }))
+    .sort((a, b) => b.totalOI - a.totalOI)
+    .slice(0, 30)
+
+  // Global crypto context
+  const globalContext = globalData ? {
+    totalCryptoVolume: globalData.totalVolume,
+    totalCryptoMcap: globalData.totalMcap,
+    btcDominance: globalData.btcDominance,
+    perpsShare: globalData.totalVolume > 0 ? (derivativesOverview.total24h / globalData.totalVolume) * 100 : 0,
+    oiToMcapRatio: globalData.totalMcap > 0 ? (totalOpenInterest / globalData.totalMcap) * 100 : 0,
+  } : null
+
   return {
     dexOverview: derivativesOverview,
     protocols: derivativeProtocols,
@@ -537,13 +708,18 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     topTokenPrices,
     totalOpenInterest,
     topFundingRates,
-    volumeShareHistory: [] as VolumeSharePoint[], // Populated lazily via fetchVolumeShareData
+    volumeShareHistory: [] as VolumeSharePoint[],
     topExchangeNames,
     historicalOI,
     fundingRateData,
     spotVolume24h: spotDexOverview.total24h,
     spotVolume7d: spotDexOverview.total7d,
-    spotVolumeHistory: [], // Populated lazily via fetchSpotVolumeHistory
+    spotVolumeHistory: [],
+    carryMetrics: topCarryMetrics,
+    basisMetrics,
+    globalContext,
+    assetOIBreakdown,
+    treasuryData: [], // Populated lazily
   }
 }
 
@@ -599,6 +775,54 @@ export async function fetchSpotVolumeHistory(): Promise<HistoricalDataPoint[]> {
   } catch {
     return []
   }
+}
+
+// Batch-fetch holder yield for top token exchanges (Phase 2 lazy load)
+export async function fetchHolderYieldBatch(exchanges: EnrichedExchange[]): Promise<Map<string, number>> {
+  const tokenExchanges = exchanges.filter(e => e.hasToken && e.mcap && e.mcap > 0).slice(0, 20)
+  const results = await Promise.all(
+    tokenExchanges.map(async (ex) => {
+      const data = await fetchHoldersRevenueSummary(ex.slug).catch(() => null)
+      const daily = data?.total24h || 0
+      if (daily > 0 && ex.mcap && ex.mcap > 0) {
+        return { slug: ex.slug, yield: (daily * 365 / ex.mcap) * 100 }
+      }
+      return null
+    })
+  )
+  const map = new Map<string, number>()
+  for (const r of results) {
+    if (r) map.set(r.slug, r.yield)
+  }
+  return map
+}
+
+// Batch-fetch treasury data for top token exchanges (Phase 2 lazy load)
+export async function fetchTreasuryBatch(exchanges: EnrichedExchange[]): Promise<TreasuryAgg[]> {
+  const tokenExchanges = exchanges.filter(e => e.hasToken).slice(0, 20)
+  const results = await Promise.all(
+    tokenExchanges.map(async (ex) => {
+      const raw = await fetchTreasury(ex.slug).catch(() => null)
+      if (!raw) return null
+      const ownTokens = raw.ownTokens || 0
+      const stablecoins = raw.stablecoins || 0
+      const majors = raw.majors || 0
+      const others = raw.others || 0
+      const totalUsd = ownTokens + stablecoins + majors + others
+      if (totalUsd <= 0 && !raw.tvl) return null
+      return {
+        slug: ex.slug,
+        name: ex.displayName || ex.name,
+        totalUsd: totalUsd || raw.tvl || 0,
+        ownTokenUsd: ownTokens,
+        stablecoinsUsd: stablecoins,
+        majorsUsd: majors,
+        othersUsd: others,
+        warChestRatio: ex.mcap && ex.mcap > 0 ? (stablecoins + majors) / ex.mcap : null,
+      } as TreasuryAgg
+    })
+  )
+  return results.filter(Boolean) as TreasuryAgg[]
 }
 
 // Separate call for breakdown data (5-10MB) — loaded lazily after initial render

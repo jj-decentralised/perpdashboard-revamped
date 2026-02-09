@@ -52,6 +52,9 @@ const METRICS: MetricDef[] = [
   { key: 'change_1d', label: '1d Change %', getValue: (e) => e.change_1d, format: (v) => formatPercent(v) ?? `${v.toFixed(1)}%` },
   { key: 'change_7d', label: '7d Change %', getValue: (e) => e.change_7d, format: (v) => formatPercent(v) ?? `${v.toFixed(1)}%` },
   { key: 'change_1m', label: '1m Change %', getValue: (e) => e.change_1m, format: (v) => formatPercent(v) ?? `${v.toFixed(1)}%` },
+  { key: 'carryYield', label: 'Carry Yield %', getValue: (e) => e.avgCarryYield, format: (v) => `${v.toFixed(1)}%` },
+  { key: 'effectiveAssets', label: 'Effective Assets', getValue: (e) => e.effectiveAssetCount, format: (v) => `${v.toFixed(0)}` },
+  { key: 'holderYield', label: 'Holder Yield %', getValue: (e) => e.holderYield, format: (v) => `${v.toFixed(2)}%` },
 ]
 
 const PRESETS = [

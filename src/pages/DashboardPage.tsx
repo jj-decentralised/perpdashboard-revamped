@@ -20,6 +20,12 @@ import { TokenUnlockCalendar } from '../components/charts/TokenUnlockCalendar'
 import { BridgeFlowChart } from '../components/charts/BridgeFlowChart'
 import { CapitalEfficiencyChart } from '../components/charts/CapitalEfficiencyChart'
 import { ScatterPlotGenerator } from '../components/charts/ScatterPlotGenerator'
+import { FundingTermStructure } from '../components/charts/FundingTermStructure'
+import { BasisMonitor } from '../components/charts/BasisMonitor'
+import { AssetOIBreakdown } from '../components/charts/AssetOIBreakdown'
+import { StablecoinComposition } from '../components/charts/StablecoinComposition'
+import { HolderYieldRanking } from '../components/charts/HolderYieldRanking'
+import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { CommandPalette } from '../components/CommandPalette'
 import { DataMethodology } from '../components/DataMethodology'
 import { TabNavigation, useTabNavigation } from '../components/TabNavigation'
@@ -135,6 +141,22 @@ function OverviewTab({ data }: { data: any }) {
           </ErrorBoundary>
         </section>
       )}
+
+      {data.fundingRateData.length > 0 && (
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Funding term structure">
+            <FundingTermStructure carryMetrics={data.carryMetrics} fundingRateData={data.fundingRateData} />
+          </ErrorBoundary>
+        </section>
+      )}
+
+      {data.basisMetrics.topAssets.length > 0 && (
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Basis monitor">
+            <BasisMonitor basisMetrics={data.basisMetrics} />
+          </ErrorBoundary>
+        </section>
+      )}
     </>
   )
 }
@@ -172,6 +194,14 @@ function MarketStructureTab({ data }: { data: any }) {
         </ErrorBoundary>
       </section>
 
+      {data.assetOIBreakdown.length > 0 && (
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Asset OI breakdown">
+            <AssetOIBreakdown assetOIBreakdown={data.assetOIBreakdown} />
+          </ErrorBoundary>
+        </section>
+      )}
+
       <section className="section-rule">
         <ErrorBoundary fallbackLabel="Volume growth chart">
           <VolumeGrowthChart exchanges={data.enrichedExchanges} />
@@ -187,6 +217,12 @@ function MarketStructureTab({ data }: { data: any }) {
       <section className="section-rule">
         <ErrorBoundary fallbackLabel="Bridge flows">
           <BridgeFlowChart />
+        </ErrorBoundary>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Stablecoin composition">
+          <StablecoinComposition />
         </ErrorBoundary>
       </section>
     </>
@@ -222,6 +258,18 @@ function FeesValuationTab({ data }: { data: any }) {
             <GrowthMomentumChart exchanges={data.enrichedExchanges} />
           </ErrorBoundary>
         </div>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Holder yield ranking">
+          <HolderYieldRanking exchanges={data.enrichedExchanges} />
+        </ErrorBoundary>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Treasury overview">
+          <TreasuryOverview treasuryData={data.treasuryData} />
+        </ErrorBoundary>
       </section>
 
       <section className="section-rule">

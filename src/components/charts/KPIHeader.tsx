@@ -94,6 +94,24 @@ export function KPIHeader({ data }: Props) {
     })
   }
 
+  // Global context KPIs
+  if (data.globalContext) {
+    kpis.push({
+      label: 'Perps % of Crypto Vol',
+      value: `${data.globalContext.perpsShare.toFixed(1)}%`,
+      sublabel: `of ${formatUSD(data.globalContext.totalCryptoVolume, true)} total`,
+    })
+  }
+
+  // BTC basis KPI
+  if (data.basisMetrics?.btcBasisBps != null) {
+    kpis.push({
+      label: 'BTC Basis',
+      value: `${data.basisMetrics.btcBasisBps.toFixed(1)} bps`,
+      sublabel: data.basisMetrics.btcBasisBps >= 0 ? 'premium (bullish)' : 'discount (bearish)',
+    })
+  }
+
   return (
     <header className="bg-paper">
       {/* Masthead */}
