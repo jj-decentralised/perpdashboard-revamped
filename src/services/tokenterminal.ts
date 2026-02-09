@@ -57,6 +57,17 @@ export function resolveTTId(slug: string): string | null {
 
 // ── API fetching ──
 
+// Metrics we request from Token Terminal
+const TT_METRIC_IDS = [
+  'revenue',
+  'fees',
+  'earnings',
+  'token_incentives',
+  'active_users',
+  'price_to_earnings',
+  'price_to_fees',
+].join(',')
+
 async function fetchTTJSON<T>(url: string): Promise<T | null> {
   if (!TT_ENABLED) return null
   try {
@@ -68,23 +79,34 @@ async function fetchTTJSON<T>(url: string): Promise<T | null> {
   }
 }
 
+/** Get a date string N days ago in YYYY-MM-DD format. */
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().slice(0, 10)
+}
+
 /** Fetch latest metrics for a single Token Terminal project. */
 export async function fetchTTMetrics(projectId: string): Promise<TTMetricSnapshot | null> {
+  // Request last 7 days and take the most recent row with data
+  const start = daysAgo(7)
+  const end = daysAgo(0)
   const data = await fetchTTJSON<any>(
-    `${TT_BASE}/projects/${projectId}/metrics?interval=daily&limit=1`
+    `${TT_BASE}/projects/${projectId}/metrics?metric_ids=${TT_METRIC_IDS}&start=${start}&end=${end}&order_direction=desc`
   )
-  if (!data?.data?.[0]) return null
+  if (!data?.data || data.data.length === 0) return null
+  // Take the first (most recent) data point
   const m = data.data[0]
   return {
     projectId,
-    revenue: m.revenue ?? m.revenue_24h ?? null,
-    fees: m.fees ?? m.fees_24h ?? null,
+    revenue: m.revenue ?? null,
+    fees: m.fees ?? null,
     earnings: m.earnings ?? null,
-    tokenIncentives: m.token_incentives ?? m.token_incentives_24h ?? null,
-    activeUsers: m.active_users ?? m.weekly_active_users ?? null,
-    priceToEarnings: m.pe ?? m.price_to_earnings ?? null,
-    priceToSales: m.ps ?? m.price_to_sales ?? null,
-    codeCommits7d: m.code_commits_7d ?? m.code_commits ?? null,
+    tokenIncentives: m.token_incentives ?? null,
+    activeUsers: m.active_users ?? null,
+    priceToEarnings: m.price_to_earnings ?? null,
+    priceToSales: m.price_to_fees ?? null,
+    codeCommits7d: null,
   }
 }
 
