@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch } from '../services/defillama'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury } from '../services/defillama'
 
 interface UseDashboardDataReturn {
   data: DashboardData | null
@@ -28,6 +28,13 @@ export function useDashboardData(): UseDashboardDataReturn {
         // Fast initial load (lightweight overview, no breakdown data)
         const result = await fetchDashboardData()
         if (cancelled) return
+
+        // Seed with cached treasury data for instant display
+        const cachedTreasury = getCachedTreasury()
+        if (cachedTreasury.length > 0) {
+          result.treasuryData = cachedTreasury
+        }
+
         setData(result)
         setLoading(false)
 

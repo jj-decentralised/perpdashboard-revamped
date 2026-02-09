@@ -809,6 +809,23 @@ export async function fetchHolderYieldBatch(exchanges: EnrichedExchange[]): Prom
   return map
 }
 
+// ── Treasury caching ──
+const TREASURY_CACHE_KEY = 'treasury_batch'
+const TREASURY_CACHE_TS_KEY = 'treasury_batch_ts'
+const TREASURY_CACHE_TTL = 3600000 // 1 hour
+
+/** Read cached treasury data from localStorage (instant, no network). */
+export function getCachedTreasury(): TreasuryAgg[] {
+  try {
+    const cached = localStorage.getItem(TREASURY_CACHE_KEY)
+    const ts = localStorage.getItem(TREASURY_CACHE_TS_KEY)
+    if (cached && ts && Date.now() - Number(ts) < TREASURY_CACHE_TTL) {
+      return JSON.parse(cached)
+    }
+  } catch { /* localStorage unavailable or corrupt */ }
+  return []
+}
+
 // Batch-fetch treasury data for top token exchanges (Phase 2 lazy load)
 export async function fetchTreasuryBatch(exchanges: EnrichedExchange[]): Promise<TreasuryAgg[]> {
   const tokenExchanges = exchanges.filter(e => e.hasToken).slice(0, 20)
@@ -834,7 +851,17 @@ export async function fetchTreasuryBatch(exchanges: EnrichedExchange[]): Promise
       } as TreasuryAgg
     })
   )
-  return results.filter(Boolean) as TreasuryAgg[]
+  const fresh = results.filter(Boolean) as TreasuryAgg[]
+
+  // Persist to localStorage for instant display on next visit
+  if (fresh.length > 0) {
+    try {
+      localStorage.setItem(TREASURY_CACHE_KEY, JSON.stringify(fresh))
+      localStorage.setItem(TREASURY_CACHE_TS_KEY, String(Date.now()))
+    } catch { /* quota exceeded */ }
+  }
+
+  return fresh
 }
 
 // Separate call for breakdown data (5-10MB) — loaded lazily after initial render
