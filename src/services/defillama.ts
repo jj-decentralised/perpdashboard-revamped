@@ -10,7 +10,7 @@ import type {
   FundingRateEntry,
 } from '../types'
 import type { DerivativesSummary } from '../types/profile'
-import { LLAMA_BASE } from '../config/api'
+import { LLAMA_BASE, YIELDS_BASE } from '../config/api'
 import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices, fetchCoinsList, fetchCachedCoinsList, fetchCoinMarkets } from './coingecko'
 import type { CoinListEntry } from './coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
@@ -550,7 +550,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 // Fetch historical OI time series
 export async function fetchOIOverview(): Promise<{ totalDataChart: [number, number][]; protocols: any[] }> {
   try {
-    return await fetchJSON<any>('https://api.llama.fi/overview/open-interest?excludeTotalDataChartBreakdown=true')
+    return await fetchJSON<any>(`${LLAMA_BASE}/overview/open-interest?excludeTotalDataChartBreakdown=true`)
   } catch {
     return { totalDataChart: [], protocols: [] }
   }
@@ -559,7 +559,7 @@ export async function fetchOIOverview(): Promise<{ totalDataChart: [number, numb
 // Fetch funding rate data from yields endpoint, classify venues
 export async function fetchFundingRates(): Promise<FundingRateEntry[]> {
   try {
-    const data = await fetchJSON<any>('https://yields.llama.fi/perps')
+    const data = await fetchJSON<any>(`${YIELDS_BASE}/perps`)
     const raw = data?.data || []
     return raw.map((d: any) => ({
       marketplace: d.marketplace || '',
@@ -581,7 +581,7 @@ export async function fetchFundingRates(): Promise<FundingRateEntry[]> {
 // Fetch spot DEX overview for perps vs spot comparison
 export async function fetchSpotDexOverview(): Promise<{ total24h: number; total7d: number; total30d: number }> {
   try {
-    const data = await fetchJSON<any>('https://api.llama.fi/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true')
+    const data = await fetchJSON<any>(`${LLAMA_BASE}/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`)
     return { total24h: data.total24h || 0, total7d: data.total7d || 0, total30d: data.total30d || 0 }
   } catch {
     return { total24h: 0, total7d: 0, total30d: 0 }
@@ -591,7 +591,7 @@ export async function fetchSpotDexOverview(): Promise<{ total24h: number; total7
 // Fetch historical spot DEX volume for perps/spot ratio time series (lazy loaded)
 export async function fetchSpotVolumeHistory(): Promise<HistoricalDataPoint[]> {
   try {
-    const data = await fetchJSON<any>('https://api.llama.fi/overview/dexs?excludeTotalDataChartBreakdown=true')
+    const data = await fetchJSON<any>(`${LLAMA_BASE}/overview/dexs?excludeTotalDataChartBreakdown=true`)
     return (data.totalDataChart || []).map(([date, value]: [number, number]) => ({
       date: date * 1000,
       value,

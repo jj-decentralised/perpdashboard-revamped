@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import type { EnrichedExchange } from '../../types'
 import { COLORS } from '../../utils/chartTheme'
+import { EMISSIONS_BASE } from '../../config/api'
 import { formatUSD, formatNumber, formatPercent } from '../../utils/format'
 import { MetricInfo } from '../MetricInfo'
 
@@ -44,7 +45,7 @@ export function TokenUnlockCalendar({ exchanges }: Props) {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch('https://api.llama.fi/emissions')
+        const res = await fetch(`${EMISSIONS_BASE}/emissions`)
         if (!res.ok) throw new Error('Failed')
         const data = await res.json()
         if (!cancelled && Array.isArray(data)) {

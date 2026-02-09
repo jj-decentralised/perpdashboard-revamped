@@ -15,6 +15,7 @@ import {
 import { useExchangeProfile } from '../hooks/useExchangeProfile'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../utils/chartTheme'
+import { EMISSIONS_BASE } from '../config/api'
 import { formatUSD, formatDateShort, formatFundingRate, formatNumber, formatPercent, formatMultiple, percentClass, classNames } from '../utils/format'
 import type { CGExchangeTicker } from '../types/coingecko'
 import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint } from '../types/profile'
@@ -139,7 +140,7 @@ function TokenEconomicsSection({ info, slug }: { info: TokenInfo; slug: string }
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch('https://api.llama.fi/emissions')
+        const res = await fetch(`${EMISSIONS_BASE}/emissions`)
         if (!res.ok) throw new Error('Failed')
         const data = await res.json()
         if (cancelled || !Array.isArray(data)) return
