@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import type { EnrichedExchange } from '../../types'
 import { formatUSD, formatPercent, formatNumber, formatMultiple, formatBPS, percentClass, classNames } from '../../utils/format'
 import { CategoryFilter, type CategorySelection } from '../CategoryFilter'
+import { MetricInfo } from '../MetricInfo'
 
 /** Ecosystem map: protocols with known third-party frontends/products built on top */
 const ECOSYSTEM_MAP: Record<string, { label: string; products: string[] }> = {
@@ -444,6 +445,10 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
           <p className="font-sans text-sm text-ink-muted">
             All {filtered.length} perpetual exchanges by 24-hour trading volume
           </p>
+          <MetricInfo
+            description="The comprehensive rankings table aggregates volume, open interest, fees, valuation ratios, and growth metrics for every tracked perpetual exchange. Use sorting and filtering to compare protocols across dimensions — P/S and P/E ratios help assess whether a token is over- or under-valued relative to fee generation, while take rate and Vol/TVL reveal capital efficiency. Holder yield and carry yield highlight which protocols return value to token holders and traders respectively."
+            source="Volume and OI from DefiLlama perps endpoint. Fees from DefiLlama fees endpoint. Market cap and token data from CoinGecko. Carry yield derived from funding rate data. Holder yield estimated from protocol-reported revenue distributions."
+          />
         </div>
 
         {/* Token Filter */}

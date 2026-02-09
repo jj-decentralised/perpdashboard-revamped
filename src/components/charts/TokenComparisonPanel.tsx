@@ -12,6 +12,7 @@ import {
 import type { TokenGroupStats } from '../../types'
 import { formatUSD, formatPercent, formatNumber, percentClass } from '../../utils/format'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   tokenGroup: TokenGroupStats
@@ -203,6 +204,10 @@ export function TokenComparisonPanel({ tokenGroup, noTokenGroup }: Props) {
         <p className="font-sans text-sm text-ink-muted mt-1">
           How governance tokens correlate with exchange performance metrics
         </p>
+        <MetricInfo
+          description="This analysis segments all tracked perpetual exchanges into two groups — those with a governance/utility token and those without — then compares aggregate volume, open interest, fees, growth momentum, and multi-chain footprint. Differences may reflect incentive design: token-bearing protocols often use emissions to bootstrap liquidity and trading activity, while non-token exchanges may rely on organic demand or centralized market-making."
+          source="DefiLlama perps volume and fee data. Token classification and market cap from CoinGecko. Change metrics use medians with ±500% cap to reduce outlier noise."
+        />
       </header>
 
       {/* ── Side-by-side comparison table ── */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import type { DashboardData } from '../../types'
 import { formatUSD, formatPercent, formatNumber, percentClass } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   data: DashboardData
@@ -131,6 +132,12 @@ export function KPIHeader({ data }: Props) {
           </p>
         </div>
       </div>
+
+      {/* KPI description */}
+      <MetricInfo
+        description="These headline figures provide a real-time snapshot of the perpetual futures market. Total volume and open interest gauge overall trading activity and leverage exposure, while perps dominance shows the balance between derivatives and spot trading. BTC basis indicates whether futures trade at a premium or discount to spot, signaling market sentiment. All figures refresh on each page load."
+        source="DefiLlama perps and DEX overview endpoints for volume and OI. CoinGecko for global crypto volume context. Funding rate and basis data from yields.llama.fi."
+      />
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 py-6">
