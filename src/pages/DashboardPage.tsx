@@ -22,7 +22,6 @@ import { CapitalEfficiencyChart } from '../components/charts/CapitalEfficiencyCh
 import { ScatterPlotGenerator } from '../components/charts/ScatterPlotGenerator'
 import { FundingTermStructure } from '../components/charts/FundingTermStructure'
 import { BasisMonitor } from '../components/charts/BasisMonitor'
-import { AssetOIBreakdown } from '../components/charts/AssetOIBreakdown'
 import { StablecoinComposition } from '../components/charts/StablecoinComposition'
 import { HolderYieldRanking } from '../components/charts/HolderYieldRanking'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
@@ -193,14 +192,6 @@ function MarketStructureTab({ data }: { data: any }) {
           <OpenInterestChart exchanges={data.enrichedExchanges} />
         </ErrorBoundary>
       </section>
-
-      {data.assetOIBreakdown.length > 0 && (
-        <section className="section-rule">
-          <ErrorBoundary fallbackLabel="Asset OI breakdown">
-            <AssetOIBreakdown assetOIBreakdown={data.assetOIBreakdown} />
-          </ErrorBoundary>
-        </section>
-      )}
 
       <section className="section-rule">
         <ErrorBoundary fallbackLabel="Volume growth chart">
