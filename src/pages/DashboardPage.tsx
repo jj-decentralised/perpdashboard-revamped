@@ -17,12 +17,9 @@ import { HistoricalOIChart } from '../components/charts/HistoricalOIChart'
 import { PerpsDominanceChart } from '../components/charts/PerpsDominanceChart'
 import { VolumeGrowthChart } from '../components/charts/VolumeGrowthChart'
 import { TokenUnlockCalendar } from '../components/charts/TokenUnlockCalendar'
-import { BridgeFlowChart } from '../components/charts/BridgeFlowChart'
 import { CapitalEfficiencyChart } from '../components/charts/CapitalEfficiencyChart'
 import { ScatterPlotGenerator } from '../components/charts/ScatterPlotGenerator'
 import { BasisMonitor } from '../components/charts/BasisMonitor'
-import { StablecoinComposition } from '../components/charts/StablecoinComposition'
-import { HolderYieldRanking } from '../components/charts/HolderYieldRanking'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
@@ -197,17 +194,6 @@ function MarketStructureTab({ data }: { data: any }) {
         </ErrorBoundary>
       </section>
 
-      <section className="section-rule">
-        <ErrorBoundary fallbackLabel="Bridge flows">
-          <BridgeFlowChart />
-        </ErrorBoundary>
-      </section>
-
-      <section className="section-rule">
-        <ErrorBoundary fallbackLabel="Stablecoin composition">
-          <StablecoinComposition />
-        </ErrorBoundary>
-      </section>
     </>
   )
 }
@@ -253,12 +239,6 @@ function FeesValuationTab({ data }: { data: any }) {
             <GrowthMomentumChart exchanges={data.enrichedExchanges} />
           </ErrorBoundary>
         </div>
-      </section>
-
-      <section className="section-rule">
-        <ErrorBoundary fallbackLabel="Holder yield ranking">
-          <HolderYieldRanking exchanges={data.enrichedExchanges} />
-        </ErrorBoundary>
       </section>
 
       <section className="section-rule">

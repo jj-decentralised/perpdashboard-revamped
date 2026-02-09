@@ -119,9 +119,7 @@ const columns: ColumnDef[] = [
   { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
   { key: 'tvl', label: 'TVL', sortable: true, align: 'right', tooltip: 'Total Value Locked — deposited collateral/liquidity' },
   { key: 'volumeToTvl', label: 'Vol/TVL', sortable: true, align: 'right', tooltip: 'Capital turnover: 24h Volume / TVL' },
-  { key: 'carryYield', label: 'Carry %', sortable: true, align: 'right', tooltip: 'OI-weighted annualized funding rate carry yield' },
   { key: 'effectiveAssets', label: 'Assets', sortable: true, align: 'right', tooltip: 'Effective number of listed assets (1/HHI of OI distribution)' },
-  { key: 'holderYield', label: 'Holder Yield', sortable: true, align: 'right', tooltip: 'Annualized holder revenue as % of market cap' },
   { key: 'change_1d', label: '1d %', sortable: true, align: 'right' },
   { key: 'change_7d', label: '7d %', sortable: true, align: 'right' },
 ]
@@ -183,12 +181,8 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
       return exchange.psRatio ?? Infinity
     case 'peRatio':
       return exchange.peRatio ?? Infinity
-    case 'carryYield':
-      return exchange.avgCarryYield ?? -Infinity
     case 'effectiveAssets':
       return exchange.effectiveAssetCount ?? -Infinity
-    case 'holderYield':
-      return exchange.holderYield ?? -Infinity
     case 'change_1d':
       return exchange.change_1d ?? -Infinity
     case 'change_7d':
@@ -308,7 +302,7 @@ function ScrollableTable({ children }: { children: React.ReactNode }) {
 }
 
 function exportCSV(exchanges: EnrichedExchange[]) {
-  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', 'Carry Yield %', 'Effective Assets', 'Holder Yield %', '1d Change %', '7d Change %']
+  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', 'Effective Assets', '1d Change %', '7d Change %']
   const rows = exchanges.map((e, i) => [
     i + 1,
     e.displayName || e.name,
@@ -324,9 +318,7 @@ function exportCSV(exchanges: EnrichedExchange[]) {
     e.mcap ?? '',
     e.psRatio?.toFixed(1) ?? '',
     e.peRatio?.toFixed(1) ?? '',
-    e.avgCarryYield?.toFixed(1) ?? '',
     e.effectiveAssetCount?.toFixed(0) ?? '',
-    e.holderYield?.toFixed(2) ?? '',
     e.change_1d?.toFixed(2) ?? '',
     e.change_7d?.toFixed(2) ?? '',
   ])
@@ -447,7 +439,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
           </p>
           <MetricInfo
             description="The comprehensive rankings table aggregates volume, open interest, fees, valuation ratios, and growth metrics for every tracked perpetual exchange. Use sorting and filtering to compare protocols across dimensions — P/S and P/E ratios help assess whether a token is over- or under-valued relative to fee generation, while take rate and Vol/TVL reveal capital efficiency. Holder yield and carry yield highlight which protocols return value to token holders and traders respectively."
-            source="Volume, OI, and fees from on-chain data. Market cap and token data from market aggregators. Carry yield derived from funding rate data. Holder yield estimated from protocol-reported revenue distributions."
+            source="Volume, OI, and fees from on-chain data. Market cap and token data from market aggregators."
           />
         </div>
 
@@ -608,9 +600,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : <DashCell tooltip="Requires both fee and volume data" />}</td>
                   <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available" />}</td>
                   <td className="text-right font-mono text-xs">{exchange.volumeToTvl != null && isFinite(exchange.volumeToTvl) ? `${exchange.volumeToTvl.toFixed(1)}x` : <DashCell tooltip="Requires both volume and TVL data" />}</td>
-                  <td className="text-right font-mono text-xs">{exchange.avgCarryYield != null ? `${exchange.avgCarryYield.toFixed(1)}%` : <DashCell tooltip="No funding rate data matched to this exchange" />}</td>
                   <td className="text-right font-mono text-xs">{exchange.effectiveAssetCount != null ? exchange.effectiveAssetCount.toFixed(0) : <DashCell tooltip="No OI breakdown data available" />}</td>
-                  <td className="text-right font-mono text-xs">{exchange.holderYield != null && exchange.holderYield > 0 ? `${exchange.holderYield.toFixed(2)}%` : <DashCell tooltip="No holder revenue data or no token" />}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_1d))}>{formatPercent(exchange.change_1d)}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_7d))}>{formatPercent(exchange.change_7d)}</td>
                 </tr>
@@ -712,9 +702,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         <span><strong>Take Rate</strong> = Daily Fees / Daily Volume (bps)</span>
         <span><strong>P/S</strong> = Mcap / Annualized Fees</span>
         <span><strong>P/E</strong> = Mcap / Annualized Revenue</span>
-        <span><strong>Carry %</strong> = OI-weighted annualized funding yield</span>
         <span><strong>Assets</strong> = Effective listed assets (1/HHI)</span>
-        <span><strong>Holder Yield</strong> = Annualized holder revenue / Mcap</span>
         <span><strong>{'\u2014'}</strong> = Data not available from source (hover for details)</span>
         <span><strong>&#9888;</strong> = Possible data anomaly</span>
         <span><span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Fee Share</span> / <span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Buyback</span> = Token holder value accrual</span>
