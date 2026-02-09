@@ -133,7 +133,7 @@ export function KPIHeader({ data }: Props) {
         </h1>
         <div className="border-t border-rule mt-3 pt-2 flex items-center justify-between">
           <p className="font-serif text-sm text-ink-light italic">
-            Volume, Open Interest, Fees, Valuations &amp; Market Structure
+            Maintained by <a href="https://x.com/joeljohn" target="_blank" rel="noopener noreferrer" className="underline hover:text-ink transition-colors">Joel John</a> for Decentralised.co
           </p>
           <p className="font-sans text-[11px] text-ink-muted" title={`Data loaded at ${loadTime.toLocaleTimeString()}`}>
             Updated {elapsed}
