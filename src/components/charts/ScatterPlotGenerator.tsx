@@ -83,12 +83,15 @@ export function ScatterPlotGenerator({ exchanges }: Props) {
   const xMetric = METRICS.find(m => m.key === xKey)!
   const yMetric = METRICS.find(m => m.key === yKey)!
 
-  const data = useMemo(() => {
-    return exchanges
+  const { data, xDomain, yDomain } = useMemo(() => {
+    const points = exchanges
       .map(e => {
         const xVal = xMetric.getValue(e)
         const yVal = yMetric.getValue(e)
         if (xVal == null || yVal == null || !isFinite(xVal) || !isFinite(yVal)) return null
+        // Log scale requires strictly positive values
+        if (xMetric.logScale && xVal <= 0) return null
+        if (yMetric.logScale && yVal <= 0) return null
         return {
           x: xVal,
           y: yVal,
@@ -102,6 +105,32 @@ export function ScatterPlotGenerator({ exchanges }: Props) {
         }
       })
       .filter(Boolean) as any[]
+
+    // Compute explicit domains — 'auto' with log scale can include 0 which breaks rendering
+    let xDom: [number, number] | undefined
+    let yDom: [number, number] | undefined
+    if (points.length > 0) {
+      const xVals = points.map((d: any) => d.x)
+      const yVals = points.map((d: any) => d.y)
+      const xMin = Math.min(...xVals)
+      const xMax = Math.max(...xVals)
+      const yMin = Math.min(...yVals)
+      const yMax = Math.max(...yVals)
+      if (xMetric.logScale) {
+        xDom = [xMin * 0.5, xMax * 2]
+      } else {
+        const xPad = (xMax - xMin) * 0.1 || 1
+        xDom = [xMin - xPad, xMax + xPad]
+      }
+      if (yMetric.logScale) {
+        yDom = [yMin * 0.5, yMax * 2]
+      } else {
+        const yPad = (yMax - yMin) * 0.1 || 1
+        yDom = [yMin - yPad, yMax + yPad]
+      }
+    }
+
+    return { data: points, xDomain: xDom, yDomain: yDom }
   }, [exchanges, xMetric, yMetric])
 
   const handlePreset = (x: string, y: string) => {
@@ -177,7 +206,8 @@ export function ScatterPlotGenerator({ exchanges }: Props) {
                 dataKey="x"
                 name={xMetric.label}
                 scale={xMetric.logScale ? 'log' : 'auto'}
-                domain={xMetric.logScale ? ['auto', 'auto'] : undefined}
+                domain={xDomain}
+                allowDataOverflow
                 tickFormatter={(v) => xMetric.format(v)}
                 {...AXIS_STYLE}
                 label={{ value: xMetric.label, position: 'bottom', offset: 20, style: { fontSize: 11, fill: '#7a7a7a' } }}
@@ -187,7 +217,8 @@ export function ScatterPlotGenerator({ exchanges }: Props) {
                 dataKey="y"
                 name={yMetric.label}
                 scale={yMetric.logScale ? 'log' : 'auto'}
-                domain={yMetric.logScale ? ['auto', 'auto'] : undefined}
+                domain={yDomain}
+                allowDataOverflow
                 tickFormatter={(v) => yMetric.format(v)}
                 {...AXIS_STYLE}
                 width={80}
@@ -199,9 +230,9 @@ export function ScatterPlotGenerator({ exchanges }: Props) {
                 {data.map((d: any, i: number) => (
                   <Cell
                     key={i}
-                    fill={d.hasToken ? COLORS.blue : COLORS.slate}
-                    fillOpacity={0.7}
-                    stroke={d.hasToken ? COLORS.blue : COLORS.slate}
+                    fill={d.hasToken ? '#111111' : '#800020'}
+                    fillOpacity={0.75}
+                    stroke={d.hasToken ? '#111111' : '#800020'}
                     strokeWidth={1}
                   />
                 ))}
@@ -220,11 +251,11 @@ export function ScatterPlotGenerator({ exchanges }: Props) {
       {/* Legend */}
       <div className="flex items-center gap-4 mt-3 pt-3 border-t border-rule">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: COLORS.blue, opacity: 0.7 }} />
+          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: '#111111', opacity: 0.75 }} />
           <span className="font-sans text-[11px] text-ink-muted">With token ({data.filter((d: any) => d.hasToken).length})</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: COLORS.slate, opacity: 0.7 }} />
+          <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: '#800020', opacity: 0.75 }} />
           <span className="font-sans text-[11px] text-ink-muted">No token ({data.filter((d: any) => !d.hasToken).length})</span>
         </span>
         <span className="font-sans text-[11px] text-ink-muted ml-auto">
