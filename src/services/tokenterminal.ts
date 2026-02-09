@@ -16,7 +16,7 @@ const SLUG_TO_TT_ID: Record<string, string> = {
   'gmx-v2-perps': 'gmx',
   'gains-network': 'gains-network',
   'gains-network-perps': 'gains-network',
-  'drift-trade': 'drift',
+  'drift-trade': 'drift-protocol',
   'vertex-protocol': 'vertex-protocol',
   kwenta: 'kwenta',
   synthetix: 'synthetix',
@@ -26,7 +26,7 @@ const SLUG_TO_TT_ID: Record<string, string> = {
   'level-finance': 'level-finance',
   'aevo-perps': 'aevo',
   'orderly-perps': 'orderly-network',
-  'mux-protocol': 'mux-protocol',
+  'mux-protocol': 'mux',
   'bluefin-perps': 'bluefin',
 }
 
@@ -57,15 +57,16 @@ export function resolveTTId(slug: string): string | null {
 
 // ── API fetching ──
 
-// Metrics we request from Token Terminal
+// Metrics we request from Token Terminal (IDs match /v2/metrics endpoint)
 const TT_METRIC_IDS = [
   'revenue',
   'fees',
   'earnings',
   'token_incentives',
-  'active_users',
-  'price_to_earnings',
-  'price_to_fees',
+  'user_wau',
+  'pf_fully_diluted',
+  'ps_fully_diluted',
+  'code_commits',
 ].join(',')
 
 async function fetchTTJSON<T>(url: string): Promise<T | null> {
@@ -116,21 +117,23 @@ export async function fetchTTMetrics(projectId: string): Promise<TTMetricSnapsho
   let activeUsers: number | null = null
   let priceToEarnings: number | null = null
   let priceToSales: number | null = null
+  let codeCommits: number | null = null
 
   for (const m of data.data) {
     if (revenue == null && m.revenue != null) revenue = m.revenue
     if (fees == null && m.fees != null) fees = m.fees
     if (earnings == null && m.earnings != null) earnings = m.earnings
     if (tokenIncentives == null && m.token_incentives != null) tokenIncentives = m.token_incentives
-    if (activeUsers == null && m.active_users != null) activeUsers = m.active_users
-    if (priceToEarnings == null && m.price_to_earnings != null) priceToEarnings = m.price_to_earnings
-    if (priceToSales == null && m.price_to_fees != null) priceToSales = m.price_to_fees
+    if (activeUsers == null && m.user_wau != null) activeUsers = m.user_wau
+    if (priceToEarnings == null && m.pf_fully_diluted != null) priceToEarnings = m.pf_fully_diluted
+    if (priceToSales == null && m.ps_fully_diluted != null) priceToSales = m.ps_fully_diluted
+    if (codeCommits == null && m.code_commits != null) codeCommits = m.code_commits
     // Break early if we have everything
-    if (revenue != null && fees != null && earnings != null && tokenIncentives != null && activeUsers != null && priceToEarnings != null && priceToSales != null) break
+    if (revenue != null && fees != null && earnings != null && tokenIncentives != null && activeUsers != null && priceToEarnings != null && priceToSales != null && codeCommits != null) break
   }
 
   // Log what we found for debugging
-  console.log(`[TT] ${projectId}: rev=${revenue}, fees=${fees}, earn=${earnings}, incentives=${tokenIncentives}, users=${activeUsers}, pe=${priceToEarnings}, ps=${priceToSales} (${data.data.length} rows)`)
+  console.log(`[TT] ${projectId}: rev=${revenue}, fees=${fees}, earn=${earnings}, incentives=${tokenIncentives}, wau=${activeUsers}, pf=${priceToEarnings}, ps=${priceToSales}, commits=${codeCommits} (${data.data.length} rows)`)
 
   return {
     projectId,
@@ -141,7 +144,7 @@ export async function fetchTTMetrics(projectId: string): Promise<TTMetricSnapsho
     activeUsers,
     priceToEarnings,
     priceToSales,
-    codeCommits7d: null,
+    codeCommits7d: codeCommits,
   }
 }
 
