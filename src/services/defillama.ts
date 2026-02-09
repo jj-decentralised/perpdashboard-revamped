@@ -803,8 +803,17 @@ export async function fetchSpotVolumeHistory(): Promise<HistoricalDataPoint[]> {
 }
 
 // Batch-fetch holder yield for top token exchanges (Phase 2 lazy load)
+// Only attempt for protocols known to report dailyHoldersRevenue on DefiLlama
+const HOLDER_REVENUE_SLUGS = new Set([
+  'gmx', 'synthetix', 'dydx-v4', 'dydx', 'gains-network', 'jupiter-perpetual-exchange',
+  'vertex-protocol', 'drift-trade', 'aevo-perps', 'kwenta', 'perpetual-protocol',
+  'level-finance', 'gains-network-perps', 'mux-protocol',
+])
+
 export async function fetchHolderYieldBatch(exchanges: EnrichedExchange[]): Promise<Map<string, number>> {
-  const tokenExchanges = exchanges.filter(e => e.hasToken && e.mcap && e.mcap > 0).slice(0, 20)
+  const tokenExchanges = exchanges
+    .filter(e => e.hasToken && e.mcap && e.mcap > 0 && HOLDER_REVENUE_SLUGS.has(e.slug?.toLowerCase()))
+    .slice(0, 20)
   const results = await Promise.all(
     tokenExchanges.map(async (ex) => {
       const data = await fetchHoldersRevenueSummary(ex.slug).catch(() => null)
@@ -839,12 +848,40 @@ export function getCachedTreasury(): TreasuryAgg[] {
   return []
 }
 
+// Known protocols with treasury data on DefiLlama (use base slug, not perp variant)
+const TREASURY_SLUGS = new Set([
+  'gmx', 'synthetix', 'dydx', 'gains-network', 'jupiter', 'vertex-protocol',
+  'drift', 'aevo', 'kwenta', 'perpetual-protocol', 'level-finance',
+  'mux-protocol', 'rabbitx', 'bluefin',
+])
+
+function getBaseTreasurySlug(slug: string): string | null {
+  const lower = slug?.toLowerCase() || ''
+  if (TREASURY_SLUGS.has(lower)) return lower
+  // Strip perp-specific suffixes to find the base protocol
+  const stripped = lower.replace(/-(perps?|perpetuals?|v\d+(-perps?)?|trade|exchange|pro|omni|digital)$/i, '').trim()
+  if (stripped !== lower && TREASURY_SLUGS.has(stripped)) return stripped
+  return null
+}
+
 // Batch-fetch treasury data for top token exchanges (Phase 2 lazy load)
 export async function fetchTreasuryBatch(exchanges: EnrichedExchange[]): Promise<TreasuryAgg[]> {
-  const tokenExchanges = exchanges.filter(e => e.hasToken).slice(0, 20)
+  // Only attempt for protocols known to have treasury data, deduplicate base slugs
+  const seen = new Set<string>()
+  const candidates: { ex: EnrichedExchange; treasurySlug: string }[] = []
+  for (const ex of exchanges) {
+    if (!ex.hasToken) continue
+    const ts = getBaseTreasurySlug(ex.slug)
+    if (ts && !seen.has(ts)) {
+      seen.add(ts)
+      candidates.push({ ex, treasurySlug: ts })
+    }
+    if (candidates.length >= 20) break
+  }
+
   const results = await Promise.all(
-    tokenExchanges.map(async (ex) => {
-      const raw = await fetchTreasury(ex.slug).catch(() => null)
+    candidates.map(async ({ ex, treasurySlug }) => {
+      const raw = await fetchTreasury(treasurySlug).catch(() => null)
       if (!raw) return null
       const ownTokens = raw.ownTokens || 0
       const stablecoins = raw.stablecoins || 0
