@@ -42,7 +42,9 @@ export function KPIHeader({ data }: Props) {
   const withToken = enrichedExchanges.filter((e) => e.hasToken).length
   const withoutToken = enrichedExchanges.length - withToken
 
-  const totalFees24h = feeOverview?.total24h ?? 0
+  const totalDefiFees24h = feeOverview?.total24h ?? 0
+  const perpFees24h = enrichedExchanges.reduce((sum, e) => sum + ((e.feeData?.total24h as number) || 0), 0)
+  const perpFeeShare = totalDefiFees24h > 0 ? (perpFees24h / totalDefiFees24h) * 100 : null
 
   const kpis: {
     label: string
@@ -70,12 +72,9 @@ export function KPIHeader({ data }: Props) {
       value: formatUSD(data.totalOpenInterest, true),
     },
     {
-      label: 'Perp Pairs',
-      value: formatNumber(enrichedExchanges.reduce((s, e) => s + (e.perpPairsCount || 0), 0)),
-    },
-    {
-      label: 'Total 24h Fees',
-      value: formatUSD(totalFees24h, true),
+      label: 'Perp 24h Fees',
+      value: formatUSD(perpFees24h, true),
+      sublabel: perpFeeShare != null ? `${perpFeeShare.toFixed(1)}% of all DeFi fees` : undefined,
     },
     {
       label: 'All-Time Cumulative Volume',
@@ -89,9 +88,18 @@ export function KPIHeader({ data }: Props) {
     : null
   if (perpsDominance != null) {
     kpis.push({
-      label: 'Perps Dominance (24h)',
+      label: 'Perps Dominance',
       value: `${perpsDominance.toFixed(1)}%`,
       sublabel: `vs ${formatUSD(data.spotVolume24h, true)} spot`,
+    })
+  }
+
+  // Perps fee revenue share of all DeFi
+  if (perpFeeShare != null && perpFeeShare > 0) {
+    kpis.push({
+      label: 'Perps Fee Share',
+      value: `${perpFeeShare.toFixed(1)}%`,
+      sublabel: `of ${formatUSD(totalDefiFees24h, true)} total DeFi`,
     })
   }
 
@@ -140,7 +148,7 @@ export function KPIHeader({ data }: Props) {
       />
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 py-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 py-6">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="kpi-card">
             <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-2 leading-tight">
