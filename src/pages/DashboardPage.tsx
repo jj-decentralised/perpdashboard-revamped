@@ -24,6 +24,8 @@ import { BasisMonitor } from '../components/charts/BasisMonitor'
 import { StablecoinComposition } from '../components/charts/StablecoinComposition'
 import { HolderYieldRanking } from '../components/charts/HolderYieldRanking'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
+import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
+import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
 import { CommandPalette } from '../components/CommandPalette'
 import { DataMethodology } from '../components/DataMethodology'
 import { TabNavigation, useTabNavigation } from '../components/TabNavigation'
@@ -223,6 +225,18 @@ function FeesValuationTab({ data }: { data: any }) {
             <FeeRevenueChart exchanges={data.enrichedExchanges} />
           </ErrorBoundary>
         </div>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Perp revenue breakdown">
+          <PerpRevenueBreakdownChart data={data.perpFeeBreakdown} protocolNames={data.perpFeeBreakdownNames} />
+        </ErrorBoundary>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Perps share of DeFi revenue">
+          <PerpFeeShareHistoryChart data={data.perpFeeShareHistory} />
+        </ErrorBoundary>
       </section>
 
       <section className="section-rule">

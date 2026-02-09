@@ -208,6 +208,20 @@ export interface TreasuryAgg {
   warChestRatio: number | null
 }
 
+/** Per-protocol fee share at a point in time (%, keyed by protocol name) */
+export interface FeeSharePoint {
+  date: number
+  [protocolName: string]: number
+}
+
+/** Perps share of total DeFi fees at a point in time */
+export interface PerpFeeSharePoint {
+  date: number
+  perpFees: number
+  totalFees: number
+  perpShare: number
+}
+
 export interface DashboardData {
   dexOverview: DexOverview
   protocols: ProtocolInfo[]
@@ -232,4 +246,8 @@ export interface DashboardData {
   globalContext: GlobalCryptoContext | null
   assetOIBreakdown: AssetOIEntry[]
   treasuryData: TreasuryAgg[]
+  // Historical fee data (lazy-loaded)
+  perpFeeBreakdown: FeeSharePoint[]
+  perpFeeBreakdownNames: string[]
+  perpFeeShareHistory: PerpFeeSharePoint[]
 }

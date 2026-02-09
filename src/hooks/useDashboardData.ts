@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury } from '../services/defillama'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory } from '../services/defillama'
 
 interface UseDashboardDataReturn {
   data: DashboardData | null
@@ -29,10 +29,16 @@ export function useDashboardData(): UseDashboardDataReturn {
         const result = await fetchDashboardData()
         if (cancelled) return
 
-        // Seed with cached treasury data for instant display
+        // Seed with cached data for instant display
         const cachedTreasury = getCachedTreasury()
         if (cachedTreasury.length > 0) {
           result.treasuryData = cachedTreasury
+        }
+        const cachedFeeHistory = getCachedFeeHistory()
+        if (cachedFeeHistory.perpFeeBreakdown.length > 0) {
+          result.perpFeeBreakdown = cachedFeeHistory.perpFeeBreakdown
+          result.perpFeeBreakdownNames = cachedFeeHistory.perpFeeBreakdownNames
+          result.perpFeeShareHistory = cachedFeeHistory.perpFeeShareHistory
         }
 
         setData(result)
@@ -80,6 +86,21 @@ export function useDashboardData(): UseDashboardDataReturn {
           fetchTreasuryBatch(result.enrichedExchanges).then((treasuryData) => {
             if (!cancelled && treasuryData.length > 0) {
               setData((prev) => prev ? { ...prev, treasuryData } : prev)
+            }
+          }).catch(() => {})
+        )
+
+        // Historical fee breakdown (perp revenue share + perps % of DeFi fees)
+        const perpSlugs = new Set(result.enrichedExchanges.map(e => e.slug?.toLowerCase()).filter(Boolean))
+        lazyPromises.push(
+          fetchHistoricalFeeData(perpSlugs).then((feeHistory) => {
+            if (!cancelled && feeHistory.perpFeeBreakdown.length > 0) {
+              setData((prev) => prev ? {
+                ...prev,
+                perpFeeBreakdown: feeHistory.perpFeeBreakdown,
+                perpFeeBreakdownNames: feeHistory.perpFeeBreakdownNames,
+                perpFeeShareHistory: feeHistory.perpFeeShareHistory,
+              } : prev)
             }
           }).catch(() => {})
         )

@@ -12,6 +12,8 @@ import type {
   BasisMetrics,
   AssetOIEntry,
   TreasuryAgg,
+  FeeSharePoint,
+  PerpFeeSharePoint,
 } from '../types'
 import type { DerivativesSummary } from '../types/profile'
 import { LLAMA_BASE, YIELDS_BASE } from '../config/api'
@@ -732,6 +734,9 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     globalContext,
     assetOIBreakdown,
     treasuryData: [], // Populated lazily
+    perpFeeBreakdown: [], // Populated lazily
+    perpFeeBreakdownNames: [],
+    perpFeeShareHistory: [], // Populated lazily
   }
 }
 
@@ -862,6 +867,184 @@ export async function fetchTreasuryBatch(exchanges: EnrichedExchange[]): Promise
   }
 
   return fresh
+}
+
+// ── Historical fee data for perp revenue charts (Phase 2 lazy load) ──
+
+interface FeeOverviewFull {
+  totalDataChart: [number, number][]
+  totalDataChartBreakdown: [number, Record<string, Record<string, number> | number>][]
+  protocols: Array<{ name: string; slug: string; category?: string }>
+  total24h: number
+}
+
+const FEE_HISTORY_CACHE_KEY = 'fee_history'
+const FEE_HISTORY_CACHE_TS_KEY = 'fee_history_ts'
+const FEE_HISTORY_CACHE_TTL = 3600000 // 1 hour
+
+export function getCachedFeeHistory(): {
+  perpFeeBreakdown: FeeSharePoint[]
+  perpFeeBreakdownNames: string[]
+  perpFeeShareHistory: PerpFeeSharePoint[]
+} {
+  try {
+    const cached = localStorage.getItem(FEE_HISTORY_CACHE_KEY)
+    const ts = localStorage.getItem(FEE_HISTORY_CACHE_TS_KEY)
+    if (cached && ts && Date.now() - Number(ts) < FEE_HISTORY_CACHE_TTL) {
+      return JSON.parse(cached)
+    }
+  } catch { /* localStorage unavailable or corrupt */ }
+  return { perpFeeBreakdown: [], perpFeeBreakdownNames: [], perpFeeShareHistory: [] }
+}
+
+export async function fetchHistoricalFeeData(
+  perpSlugs: Set<string>,
+): Promise<{
+  perpFeeBreakdown: FeeSharePoint[]
+  perpFeeBreakdownNames: string[]
+  perpFeeShareHistory: PerpFeeSharePoint[]
+}> {
+  const empty = { perpFeeBreakdown: [] as FeeSharePoint[], perpFeeBreakdownNames: [] as string[], perpFeeShareHistory: [] as PerpFeeSharePoint[] }
+
+  try {
+    // Fetch full fee overview WITH historical chart data
+    const feeData = await fetchJSON<FeeOverviewFull>(
+      `${LLAMA_BASE}/overview/fees`
+    )
+
+    const chartRaw = feeData.totalDataChart || []
+    const breakdownRaw = feeData.totalDataChartBreakdown || []
+
+    if (chartRaw.length === 0) return empty
+
+    // Build set of perp protocol names (lowercase) from the fee protocols list
+    const perpNameSet = new Set<string>()
+    for (const p of feeData.protocols) {
+      const slug = p.slug?.toLowerCase() || ''
+      const name = p.name?.toLowerCase() || ''
+      if (perpSlugs.has(slug) || perpSlugs.has(name)) {
+        perpNameSet.add(p.name)
+      }
+    }
+
+    // Filter to data from 2022 onwards, sample monthly
+    const startTs = new Date('2022-01-01').getTime() / 1000
+
+    // ── Chart 2: Perps % of total DeFi fees (use totalDataChart + breakdown) ──
+    // Build a map of timestamp → perp fees from breakdown
+    const perpFeesMap = new Map<number, number>()
+    for (const [ts, breakdown] of breakdownRaw) {
+      if (ts < startTs) continue
+      let perpTotal = 0
+      for (const [name, chains] of Object.entries(breakdown)) {
+        if (!perpNameSet.has(name)) continue
+        const val = typeof chains === 'number'
+          ? chains
+          : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
+        perpTotal += val
+      }
+      perpFeesMap.set(ts, perpTotal)
+    }
+
+    // Monthly sample for the time series
+    const perpFeeShareHistory: PerpFeeSharePoint[] = []
+    const monthBuckets = new Map<string, { perpFees: number; totalFees: number; ts: number }>()
+
+    for (const [ts, totalFees] of chartRaw) {
+      if (ts < startTs || totalFees <= 0) continue
+      const d = new Date(ts * 1000)
+      const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`
+      const existing = monthBuckets.get(key)
+      const perpFees = perpFeesMap.get(ts) || 0
+      if (!existing) {
+        monthBuckets.set(key, { perpFees, totalFees, ts })
+      } else {
+        existing.perpFees += perpFees
+        existing.totalFees += totalFees
+      }
+    }
+
+    for (const [, bucket] of [...monthBuckets.entries()].sort((a, b) => a[1].ts - b[1].ts)) {
+      perpFeeShareHistory.push({
+        date: bucket.ts * 1000,
+        perpFees: bucket.perpFees,
+        totalFees: bucket.totalFees,
+        perpShare: bucket.totalFees > 0 ? (bucket.perpFees / bucket.totalFees) * 100 : 0,
+      })
+    }
+
+    // ── Chart 1: Per-protocol revenue breakdown (top 8 perp protocols + Other) ──
+    // Aggregate monthly fees per perp protocol
+    const protocolMonthlyFees = new Map<string, Map<string, number>>() // monthKey → { protocolName → fees }
+    const protocolTotals = new Map<string, number>() // protocolName → total fees
+
+    for (const [ts, breakdown] of breakdownRaw) {
+      if (ts < startTs) continue
+      const d = new Date(ts * 1000)
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`
+
+      for (const [name, chains] of Object.entries(breakdown)) {
+        if (!perpNameSet.has(name)) continue
+        const val = typeof chains === 'number'
+          ? chains
+          : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
+        if (val <= 0) continue
+
+        if (!protocolMonthlyFees.has(monthKey)) protocolMonthlyFees.set(monthKey, new Map())
+        const month = protocolMonthlyFees.get(monthKey)!
+        month.set(name, (month.get(name) || 0) + val)
+
+        protocolTotals.set(name, (protocolTotals.get(name) || 0) + val)
+      }
+    }
+
+    // Top 8 protocols by total fees
+    const topProtocols = [...protocolTotals.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name]) => name)
+    const perpFeeBreakdownNames = [...topProtocols, 'Other']
+
+    // Build chart data points
+    const sortedMonths = [...protocolMonthlyFees.keys()].sort()
+    const perpFeeBreakdown: FeeSharePoint[] = sortedMonths.map(monthKey => {
+      const monthData = protocolMonthlyFees.get(monthKey)!
+      const [year, month] = monthKey.split('-').map(Number)
+      const date = new Date(year, month, 1).getTime()
+
+      // Total perp fees this month
+      let totalPerpFees = 0
+      for (const val of monthData.values()) totalPerpFees += val
+
+      if (totalPerpFees === 0) {
+        const point: FeeSharePoint = { date }
+        for (const n of perpFeeBreakdownNames) point[n] = 0
+        return point
+      }
+
+      const point: FeeSharePoint = { date }
+      let otherPct = 100
+      for (const name of topProtocols) {
+        const pct = ((monthData.get(name) || 0) / totalPerpFees) * 100
+        point[name] = Math.round(pct * 100) / 100
+        otherPct -= point[name]
+      }
+      point['Other'] = Math.max(0, Math.round(otherPct * 100) / 100)
+      return point
+    })
+
+    const result = { perpFeeBreakdown, perpFeeBreakdownNames, perpFeeShareHistory }
+
+    // Cache for instant loading next visit
+    try {
+      localStorage.setItem(FEE_HISTORY_CACHE_KEY, JSON.stringify(result))
+      localStorage.setItem(FEE_HISTORY_CACHE_TS_KEY, String(Date.now()))
+    } catch { /* quota exceeded */ }
+
+    return result
+  } catch {
+    return empty
+  }
 }
 
 // Separate call for breakdown data (5-10MB) — loaded lazily after initial render
