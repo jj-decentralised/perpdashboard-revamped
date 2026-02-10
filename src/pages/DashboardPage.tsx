@@ -20,7 +20,6 @@ import { TokenUnlockCalendar } from '../components/charts/TokenUnlockCalendar'
 import { CapitalEfficiencyChart } from '../components/charts/CapitalEfficiencyChart'
 import { ScatterPlotGenerator } from '../components/charts/ScatterPlotGenerator'
 import { BasisMonitor } from '../components/charts/BasisMonitor'
-import { DexCexShareChart } from '../components/charts/DexCexShareChart'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { ValuationChecker } from '../components/charts/ValuationChecker'
 import { SolanaChainGrowthChart } from '../components/charts/SolanaChainGrowthChart'
@@ -138,14 +137,6 @@ function OverviewTab({ data }: { data: any }) {
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Perps dominance chart">
             <PerpsDominanceChart perpVolume={data.historicalVolume} spotVolume={data.spotVolumeHistory} />
-          </ErrorBoundary>
-        </section>
-      )}
-
-      {data.dexCexShareHistory.length > 0 && (
-        <section className="section-rule">
-          <ErrorBoundary fallbackLabel="DEX vs CEX share chart">
-            <DexCexShareChart data={data.dexCexShareHistory} />
           </ErrorBoundary>
         </section>
       )}

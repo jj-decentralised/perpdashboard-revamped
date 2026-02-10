@@ -745,7 +745,6 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     perpFeeBreakdownNames: [],
     perpFeeShareHistory: [], // Populated lazily
     ttAggregate: null, // Populated lazily via Token Terminal
-    dexCexShareHistory: [], // Populated lazily
     solanaGrowthHistory: [], // Populated lazily
   }
 }
@@ -1135,100 +1134,6 @@ export async function fetchVolumeShareData(topNames: string[]): Promise<VolumeSh
   } catch {
     return []
   }
-}
-
-// DEX vs CEX volume share over time — uses classifyVenue to split protocols
-export async function fetchDexCexVolumeShare(): Promise<import('../types').DexCexSharePoint[]> {
-  try {
-    const overview = await fetchDerivativesOverview(false)
-    const breakdownRaw = overview.totalDataChartBreakdown || []
-    const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
-
-    return sampled.map(([timestamp, breakdown]) => {
-      let dexVol = 0
-      let cexVol = 0
-      for (const [name, chains] of Object.entries(breakdown)) {
-        const vol = typeof chains === 'number'
-          ? chains
-          : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
-        if (classifyVenue(name) === 'defi') dexVol += vol
-        else cexVol += vol
-      }
-      const total = dexVol + cexVol
-      return {
-        date: timestamp * 1000,
-        dexVol,
-        cexVol,
-        dexPct: total > 0 ? (dexVol / total) * 100 : 0,
-      }
-    })
-  } catch {
-    return []
-  }
-}
-
-/**
- * Enhanced DEX vs CEX: uses CoinGlass CEX volume when available,
- * keeping DefiLlama as authoritative for DEX volume.
- * Falls back to DefiLlama-only if cexHistory is null.
- */
-export async function fetchEnhancedDexCexShare(
-  cexHistory: import('./coinglass').CEXVolumePoint[] | null,
-): Promise<import('../types').DexCexSharePoint[]> {
-  // Always need DefiLlama for DEX volume
-  const overview = await fetchDerivativesOverview(false)
-  const breakdownRaw = overview.totalDataChartBreakdown || []
-  const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
-
-  // Extract DEX-only volume from DefiLlama
-  const llamaPoints = sampled.map(([timestamp, breakdown]) => {
-    let dexVol = 0
-    let llamaCexVol = 0
-    for (const [name, chains] of Object.entries(breakdown)) {
-      const vol = typeof chains === 'number'
-        ? chains
-        : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
-      if (classifyVenue(name) === 'defi') dexVol += vol
-      else llamaCexVol += vol
-    }
-    return { date: timestamp * 1000, dexVol, llamaCexVol }
-  })
-
-  // If no CoinGlass data, fall back to DefiLlama CEX estimates
-  if (!cexHistory || cexHistory.length === 0) {
-    return llamaPoints.map((p) => {
-      const total = p.dexVol + p.llamaCexVol
-      return {
-        date: p.date,
-        dexVol: p.dexVol,
-        cexVol: p.llamaCexVol,
-        dexPct: total > 0 ? (p.dexVol / total) * 100 : 0,
-      }
-    })
-  }
-
-  // Build a lookup: dayTs → CoinGlass CEX volume
-  const cexMap = new Map<number, number>()
-  for (const pt of cexHistory) {
-    cexMap.set(pt.date, pt.cexVol)
-  }
-
-  // Merge: DefiLlama DEX + CoinGlass CEX (fall back to DefiLlama CEX per-point)
-  return llamaPoints.map((p) => {
-    // Normalize to start-of-day for matching
-    const d = new Date(p.date)
-    d.setUTCHours(0, 0, 0, 0)
-    const dayKey = d.getTime()
-
-    const cexVol = cexMap.get(dayKey) ?? p.llamaCexVol
-    const total = p.dexVol + cexVol
-    return {
-      date: p.date,
-      dexVol: p.dexVol,
-      cexVol,
-      dexPct: total > 0 ? (p.dexVol / total) * 100 : 0,
-    }
-  })
 }
 
 // Known Solana-native perp protocols (lowercase for matching)

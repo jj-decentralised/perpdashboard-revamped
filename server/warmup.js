@@ -35,11 +35,7 @@ const WARMUP_URLS = [
 // CoinGlass endpoints (only if API key is set)
 const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
 if (CG_KEY) {
-  const symbols = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB', 'ADA', 'AVAX', 'LINK', 'SUI']
   WARMUP_URLS.push('/api/coinglass/futures/exchange-rank')
-  for (const sym of symbols) {
-    WARMUP_URLS.push(`/api/coinglass/futures/aggregated-taker-buy-sell-volume/history?symbol=${sym}&interval=1d&limit=4500`)
-  }
 }
 
 function parseUrlParts(url) {

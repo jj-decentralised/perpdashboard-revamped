@@ -269,17 +269,8 @@ export interface DashboardData {
   perpFeeShareHistory: PerpFeeSharePoint[]
   // Token Terminal aggregate (lazy-loaded, optional)
   ttAggregate: TTAggregateData | null
-  // DEX vs CEX volume share (lazy-loaded)
-  dexCexShareHistory: DexCexSharePoint[]
   // Solana chain growth (lazy-loaded)
   solanaGrowthHistory: SolanaGrowthPoint[]
-}
-
-export interface DexCexSharePoint {
-  date: number
-  dexVol: number
-  cexVol: number
-  dexPct: number
 }
 
 export interface SolanaGrowthPoint {

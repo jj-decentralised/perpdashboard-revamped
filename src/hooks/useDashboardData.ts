@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchDexCexVolumeShare, fetchEnhancedDexCexShare, fetchSolanaChainGrowth } from '../services/defillama'
-import { TT_ENABLED, COINGLASS_ENABLED } from '../config/api'
-import { fetchCEXVolumeHistory } from '../services/coinglass'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchSolanaChainGrowth } from '../services/defillama'
+import { TT_ENABLED } from '../config/api'
 import { getCachedTTMetrics, fetchTTMetricsBatch, cacheTTMetrics, computeTTAggregate, mergeTTIntoExchanges } from '../services/tokenterminal'
 
 interface UseDashboardDataReturn {
@@ -75,29 +74,6 @@ export function useDashboardData(): UseDashboardDataReturn {
               setData((prev) => prev ? { ...prev, spotVolumeHistory } : prev)
             }
           })
-        )
-
-        // DEX vs CEX volume share — use CoinGlass for accurate CEX data when available
-        lazyPromises.push(
-          (async () => {
-            try {
-              // Try CoinGlass first for accurate CEX volume
-              const cexHistory = COINGLASS_ENABLED
-                ? await fetchCEXVolumeHistory().catch(() => null)
-                : null
-              // Merge CoinGlass CEX + DefiLlama DEX (falls back to DefiLlama-only if null)
-              const dexCexShareHistory = await fetchEnhancedDexCexShare(cexHistory)
-              if (!cancelled && dexCexShareHistory.length > 0) {
-                setData((prev) => prev ? { ...prev, dexCexShareHistory } : prev)
-              }
-            } catch {
-              // Final fallback: pure DefiLlama
-              const dexCexShareHistory = await fetchDexCexVolumeShare().catch(() => [])
-              if (!cancelled && dexCexShareHistory.length > 0) {
-                setData((prev) => prev ? { ...prev, dexCexShareHistory } : prev)
-              }
-            }
-          })()
         )
 
         // Solana chain growth share
