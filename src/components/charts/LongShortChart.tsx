@@ -25,10 +25,11 @@ const ASSETS = [
   'AAVE', 'MKR', 'LDO', 'TRX',
 ] as const
 
-// All major exchanges that provide long/short data on CoinGlass
+// All exchanges that provide long/short data on CoinGlass (CEX + DEX)
 const EXCHANGES = [
-  'Binance', 'OKX', 'Bybit', 'Bitget', 'dYdX', 'HTX', 'Gate',
-  'CoinEx', 'Kraken', 'BingX', 'Phemex', 'MEXC',
+  'Binance', 'OKX', 'Bybit', 'Bitget', 'Hyperliquid', 'dYdX',
+  'HTX', 'Gate', 'CoinEx', 'Kraken', 'BingX', 'Phemex', 'MEXC',
+  'Bitmex', 'Bitfinex', 'Deribit',
 ] as const
 
 const AVG_KEY = 'Average'
