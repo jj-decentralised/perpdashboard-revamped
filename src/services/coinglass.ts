@@ -122,56 +122,65 @@ async function fetchTakerVolumeHistory(
   }))
 }
 
+// Top symbols by CEX futures volume — more symbols = better proxy coverage
+const PROXY_SYMBOLS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB', 'ADA', 'AVAX', 'LINK', 'SUI']
+
 /**
  * Build estimated total CEX futures volume history.
  *
  * 1. Fetches exchange-rank for current total CEX 24h volume
- * 2. Fetches BTC + ETH + SOL taker history (daily, 365d)
- * 3. Computes scale factor from latest proxy volume vs actual total
+ * 2. Fetches aggregated taker history for top 10 symbols (daily, full history)
+ * 3. Computes scaleFactor = totalCEXCurrent / latestProxyVolume
  * 4. Applies scale factor to all historical points
  *
  * Returns null if CoinGlass is unavailable.
  */
 export async function fetchCEXVolumeHistory(): Promise<CEXVolumePoint[] | null> {
-  // Check localStorage cache first
   const cached = getCachedCEXVolume()
   if (cached) return cached
 
   if (!COINGLASS_ENABLED) return null
 
-  // Fetch in parallel: exchange-rank + 3 symbol histories
-  const [totalCurrent, btcHist, ethHist, solHist] = await Promise.all([
+  // Fetch exchange-rank + all symbol histories in parallel
+  const [totalCurrent, ...symbolHistories] = await Promise.all([
     fetchExchangeRankTotal(),
-    fetchTakerVolumeHistory('BTC'),
-    fetchTakerVolumeHistory('ETH'),
-    fetchTakerVolumeHistory('SOL'),
+    ...PROXY_SYMBOLS.map((sym) => fetchTakerVolumeHistory(sym)),
   ])
 
-  if (!totalCurrent || !btcHist || !ethHist) {
-    console.warn('[coinglass] Missing data for CEX volume estimation')
+  if (!totalCurrent) {
+    console.warn('[coinglass] Missing exchange-rank data')
     return null
   }
 
-  // Build a map of day → proxy volume (BTC + ETH + SOL)
-  // Use BTC as the "backbone" timeline since it has the most data
-  const ethMap = new Map(ethHist.map((p) => [p.time, p.vol]))
-  const solMap = solHist ? new Map(solHist.map((p) => [p.time, p.vol])) : new Map<number, number>()
+  // BTC is required as the backbone timeline
+  const btcHist = symbolHistories[0]
+  if (!btcHist || btcHist.length === 0) {
+    console.warn('[coinglass] Missing BTC taker volume history')
+    return null
+  }
 
+  // Build lookup maps for all other symbols
+  const symbolMaps = symbolHistories.slice(1).map((hist) =>
+    hist ? new Map(hist.map((p) => [p.time, p.vol])) : new Map<number, number>()
+  )
+
+  // Sum all symbols per day, using BTC as timeline backbone
   const proxyPoints = btcHist.map((btc) => {
-    const eth = ethMap.get(btc.time) || 0
-    const sol = solMap.get(btc.time) || 0
-    return { time: btc.time, proxyVol: btc.vol + eth + sol }
+    let proxyVol = btc.vol
+    for (const sMap of symbolMaps) {
+      proxyVol += sMap.get(btc.time) || 0
+    }
+    return { time: btc.time, proxyVol }
   })
 
   if (proxyPoints.length === 0) return null
 
-  // Compute scale factor: actual total CEX current ÷ latest proxy volume
+  // Scale factor: actual total CEX current ÷ latest proxy volume
   const latestProxy = proxyPoints[proxyPoints.length - 1].proxyVol
   if (latestProxy <= 0) return null
 
   const scaleFactor = totalCurrent / latestProxy
 
-  // Apply scale factor to all historical points
   const result: CEXVolumePoint[] = proxyPoints.map((p) => ({
     date: normalizeToDay(p.time),
     cexVol: p.proxyVol * scaleFactor,

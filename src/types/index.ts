@@ -271,6 +271,8 @@ export interface DashboardData {
   ttAggregate: TTAggregateData | null
   // DEX vs CEX volume share (lazy-loaded)
   dexCexShareHistory: DexCexSharePoint[]
+  // Solana chain growth (lazy-loaded)
+  solanaGrowthHistory: SolanaGrowthPoint[]
 }
 
 export interface DexCexSharePoint {
@@ -278,4 +280,11 @@ export interface DexCexSharePoint {
   dexVol: number
   cexVol: number
   dexPct: number
+}
+
+export interface SolanaGrowthPoint {
+  date: number
+  solanaVol: number
+  totalDexVol: number
+  solanaPct: number
 }

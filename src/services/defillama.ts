@@ -746,6 +746,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     perpFeeShareHistory: [], // Populated lazily
     ttAggregate: null, // Populated lazily via Token Terminal
     dexCexShareHistory: [], // Populated lazily
+    solanaGrowthHistory: [], // Populated lazily
   }
 }
 
@@ -1228,6 +1229,41 @@ export async function fetchEnhancedDexCexShare(
       dexPct: total > 0 ? (p.dexVol / total) * 100 : 0,
     }
   })
+}
+
+// Solana chain growth — tracks Solana's share of DEX perp volume over time
+export async function fetchSolanaChainGrowth(): Promise<import('../types').SolanaGrowthPoint[]> {
+  try {
+    const overview = await fetchDerivativesOverview(false)
+    const breakdownRaw = overview.totalDataChartBreakdown || []
+    const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
+
+    return sampled.map(([timestamp, breakdown]) => {
+      let solanaVol = 0
+      let totalDexVol = 0
+
+      for (const [name, chains] of Object.entries(breakdown)) {
+        if (typeof chains === 'number') continue
+        if (classifyVenue(name) !== 'defi') continue
+
+        const chainEntries = chains as Record<string, number>
+        for (const [chainName, vol] of Object.entries(chainEntries)) {
+          const v = Number(vol) || 0
+          totalDexVol += v
+          if (chainName === 'Solana') solanaVol += v
+        }
+      }
+
+      return {
+        date: timestamp * 1000,
+        solanaVol,
+        totalDexVol,
+        solanaPct: totalDexVol > 0 ? (solanaVol / totalDexVol) * 100 : 0,
+      }
+    })
+  } catch {
+    return []
+  }
 }
 
 export interface BuilderVolumePoint {

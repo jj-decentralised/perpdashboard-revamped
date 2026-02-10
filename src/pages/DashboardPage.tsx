@@ -23,6 +23,8 @@ import { BasisMonitor } from '../components/charts/BasisMonitor'
 import { DexCexShareChart } from '../components/charts/DexCexShareChart'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { ValuationChecker } from '../components/charts/ValuationChecker'
+import { SolanaChainGrowthChart } from '../components/charts/SolanaChainGrowthChart'
+import { ValuationScatterChart } from '../components/charts/ValuationScatterChart'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
 import { CommandPalette } from '../components/CommandPalette'
@@ -148,6 +150,14 @@ function OverviewTab({ data }: { data: any }) {
         </section>
       )}
 
+      {data.solanaGrowthHistory.length > 0 && (
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Solana chain growth chart">
+            <SolanaChainGrowthChart data={data.solanaGrowthHistory} />
+          </ErrorBoundary>
+        </section>
+      )}
+
       {data.basisMetrics.topAssets.length > 0 && (
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Basis monitor">
@@ -254,6 +264,12 @@ function FeesValuationTab({ data }: { data: any }) {
       <section className="section-rule">
         <ErrorBoundary fallbackLabel="Valuation checker">
           <ValuationChecker exchanges={data.enrichedExchanges} />
+        </ErrorBoundary>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Relative valuation scatter">
+          <ValuationScatterChart exchanges={data.enrichedExchanges} />
         </ErrorBoundary>
       </section>
 

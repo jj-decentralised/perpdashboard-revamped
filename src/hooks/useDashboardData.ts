@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchDexCexVolumeShare, fetchEnhancedDexCexShare } from '../services/defillama'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchDexCexVolumeShare, fetchEnhancedDexCexShare, fetchSolanaChainGrowth } from '../services/defillama'
 import { TT_ENABLED, COINGLASS_ENABLED } from '../config/api'
 import { fetchCEXVolumeHistory } from '../services/coinglass'
 import { getCachedTTMetrics, fetchTTMetricsBatch, cacheTTMetrics, computeTTAggregate, mergeTTIntoExchanges } from '../services/tokenterminal'
@@ -98,6 +98,15 @@ export function useDashboardData(): UseDashboardDataReturn {
               }
             }
           })()
+        )
+
+        // Solana chain growth share
+        lazyPromises.push(
+          fetchSolanaChainGrowth().then((solanaGrowthHistory) => {
+            if (!cancelled && solanaGrowthHistory.length > 0) {
+              setData((prev) => prev ? { ...prev, solanaGrowthHistory } : prev)
+            }
+          }).catch(() => {})
         )
 
         // Holder yield batch (top 20 token exchanges)
