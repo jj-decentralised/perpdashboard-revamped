@@ -271,6 +271,10 @@ export interface DashboardData {
   ttAggregate: TTAggregateData | null
   // Solana chain growth (lazy-loaded)
   solanaGrowthHistory: SolanaGrowthPoint[]
+  // CoinGlass data (lazy-loaded)
+  cexOIHistory: import('../services/coinglass').OIExchangePoint[]
+  liquidationHistory: import('../services/coinglass').LiquidationPoint[]
+  longShortHistory: import('../services/coinglass').LongShortPoint[]
 }
 
 export interface SolanaGrowthPoint {

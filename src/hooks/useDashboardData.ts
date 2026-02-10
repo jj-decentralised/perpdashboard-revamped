@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
 import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchSolanaChainGrowth } from '../services/defillama'
-import { TT_ENABLED } from '../config/api'
+import { TT_ENABLED, COINGLASS_ENABLED } from '../config/api'
+import { fetchOIExchangeHistory, fetchLiquidationHistory, fetchLongShortHistory } from '../services/coinglass'
 import { getCachedTTMetrics, fetchTTMetricsBatch, cacheTTMetrics, computeTTAggregate, mergeTTIntoExchanges } from '../services/tokenterminal'
 
 interface UseDashboardDataReturn {
@@ -84,6 +85,26 @@ export function useDashboardData(): UseDashboardDataReturn {
             }
           }).catch(() => {})
         )
+
+        // CoinGlass enrichment (OI history, liquidations, long/short ratio)
+        if (COINGLASS_ENABLED) {
+          lazyPromises.push(
+            Promise.all([
+              fetchOIExchangeHistory('BTC', '1y').catch(() => null),
+              fetchLiquidationHistory('BTC', '24h', 365).catch(() => null),
+              fetchLongShortHistory('Binance', 'BTCUSDT', '24h', 365).catch(() => null),
+            ]).then(([cexOI, liquidations, longShort]) => {
+              if (cancelled) return
+              const updates: Partial<import('../types').DashboardData> = {}
+              if (cexOI?.length) updates.cexOIHistory = cexOI
+              if (liquidations?.length) updates.liquidationHistory = liquidations
+              if (longShort?.length) updates.longShortHistory = longShort
+              if (Object.keys(updates).length > 0) {
+                setData((prev) => prev ? { ...prev, ...updates } : prev)
+              }
+            }).catch(() => {})
+          )
+        }
 
         // Holder yield batch (top 20 token exchanges)
         lazyPromises.push(

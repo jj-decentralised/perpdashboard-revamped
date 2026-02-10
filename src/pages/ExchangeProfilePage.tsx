@@ -1141,8 +1141,8 @@ export default function ExchangeProfilePage() {
     }
   }, [exchangeName])
 
-  // Monthly volume mode: 'monthly' or 'cumulative'
-  const [monthlyMode, setMonthlyMode] = useState<'monthly' | 'cumulative'>('monthly')
+  // Volume chart mode: 'daily' | 'monthly' | 'cumulative'
+  const [volMode, setVolMode] = useState<'daily' | 'monthly' | 'cumulative'>('daily')
 
   // Aggregate daily volume into monthly buckets
   const monthlyVolumeData = useMemo(() => {
@@ -1162,7 +1162,7 @@ export default function ExchangeProfilePage() {
       .sort((a, b) => a.date - b.date)
       .map((b) => ({ date: b.date, volume: b.sum }))
 
-    if (monthlyMode === 'cumulative') {
+    if (volMode === 'cumulative') {
       let running = 0
       return monthly.map((m) => {
         running += m.volume
@@ -1170,7 +1170,7 @@ export default function ExchangeProfilePage() {
       })
     }
     return monthly
-  }, [data?.historicalVolume, monthlyMode])
+  }, [data?.historicalVolume, volMode])
 
   if (loading) return <ProfileSkeleton />
 
@@ -1317,96 +1317,114 @@ export default function ExchangeProfilePage() {
           />
         )}
 
-        {/* Historical Volume + Price Overlay */}
+        {/* Historical Volume + Price Overlay — with Daily / Monthly / Cumulative toggle */}
         {volumePriceData.length > 0 && (
           <ErrorBoundary fallbackLabel="Historical volume">
-            <section className="section-rule">
-              <h3 className="chart-title">
-                Historical Volume{hasPrice ? ' & Token Price' : ''}
-              </h3>
-              <p className="chart-subtitle">
-                Daily trading volume{hasPrice ? ` with ${data.tokenInfo?.symbol || 'token'} price overlay` : ''}
-              </p>
-              <ResponsiveContainer width="100%" height={380}>
-                <ComposedChart data={volumePriceData} margin={{ top: 8, right: hasPrice ? 60 : 8, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="profileVolGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.15} />
-                      <stop offset="95%" stopColor={COLORS.ink} stopOpacity={0.01} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
-                  <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
-                  <YAxis yAxisId="vol" tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
-                  {hasPrice && (
-                    <YAxis yAxisId="price" orientation="right" tickFormatter={(v: number) => `$${v < 1 ? v.toFixed(4) : v.toFixed(2)}`}
-                      tick={{ ...AXIS_STYLE, fill: COLORS.blue }} tickLine={false} axisLine={false} width={68} />
-                  )}
-                  <Tooltip content={<VolumeWithPriceTooltip />} />
-                  <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1.5}
-                    fill="url(#profileVolGrad)" animationDuration={800} />
-                  {hasPrice && (
-                    <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke={COLORS.blue} strokeWidth={1.5}
-                      dot={false} animationDuration={800} connectNulls />
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
-              {hasPrice && (
-                <div className="flex items-center gap-4 mt-2">
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
-                    <span className="font-sans text-[11px] text-ink-muted">Volume</span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
-                    <span className="font-sans text-[11px] text-ink-muted">{data.tokenInfo?.symbol || 'Token'} Price</span>
-                  </span>
-                </div>
-              )}
-            </section>
-          </ErrorBoundary>
-        )}
-
-        {/* Monthly Volume */}
-        {monthlyVolumeData.length > 0 && (
-          <ErrorBoundary fallbackLabel="Monthly volume">
             <section className="section-rule">
               <div className="flex items-center justify-between mb-1">
                 <div>
                   <h3 className="chart-title">
-                    {monthlyMode === 'cumulative' ? 'Cumulative Volume' : 'Monthly Volume'}
+                    {volMode === 'daily' && `Historical Volume${hasPrice ? ' & Token Price' : ''}`}
+                    {volMode === 'monthly' && 'Monthly Volume'}
+                    {volMode === 'cumulative' && 'Cumulative Volume'}
                   </h3>
                   <p className="chart-subtitle">
-                    {monthlyMode === 'cumulative'
-                      ? 'Running total of trading volume since inception'
-                      : 'Aggregated trading volume by calendar month'}
+                    {volMode === 'daily' && `Daily trading volume${hasPrice ? ` with ${data.tokenInfo?.symbol || 'token'} price overlay` : ''}`}
+                    {volMode === 'monthly' && 'Aggregated trading volume by calendar month'}
+                    {volMode === 'cumulative' && 'Running total of trading volume since inception'}
                   </p>
                 </div>
-                <div className="flex gap-1 rounded-md overflow-hidden border" style={{ borderColor: COLORS.rule }}>
-                  <button
-                    onClick={() => setMonthlyMode('monthly')}
-                    className="px-3 py-1 text-xs font-sans font-medium transition-colors"
-                    style={{
-                      backgroundColor: monthlyMode === 'monthly' ? COLORS.ink : 'transparent',
-                      color: monthlyMode === 'monthly' ? COLORS.paper : COLORS.inkMuted,
-                    }}
-                  >
-                    Monthly
-                  </button>
-                  <button
-                    onClick={() => setMonthlyMode('cumulative')}
-                    className="px-3 py-1 text-xs font-sans font-medium transition-colors"
-                    style={{
-                      backgroundColor: monthlyMode === 'cumulative' ? COLORS.ink : 'transparent',
-                      color: monthlyMode === 'cumulative' ? COLORS.paper : COLORS.inkMuted,
-                    }}
-                  >
-                    Cumulative
-                  </button>
+                <div className="flex rounded-md overflow-hidden border" style={{ borderColor: COLORS.rule }}>
+                  {(['daily', 'monthly', 'cumulative'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setVolMode(mode)}
+                      className="px-3 py-1 text-xs font-sans font-medium transition-colors"
+                      style={{
+                        backgroundColor: volMode === mode ? COLORS.ink : 'transparent',
+                        color: volMode === mode ? COLORS.paper : COLORS.inkMuted,
+                      }}
+                    >
+                      {mode === 'daily' ? 'Daily' : mode === 'monthly' ? 'Monthly' : 'Cumulative'}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height={340}>
-                {monthlyMode === 'cumulative' ? (
+
+              {/* Daily view — area chart with optional price line */}
+              {volMode === 'daily' && (
+                <>
+                  <ResponsiveContainer width="100%" height={380}>
+                    <ComposedChart data={volumePriceData} margin={{ top: 8, right: hasPrice ? 60 : 8, bottom: 0, left: 0 }}>
+                      <defs>
+                        <linearGradient id="profileVolGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.15} />
+                          <stop offset="95%" stopColor={COLORS.ink} stopOpacity={0.01} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                      <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
+                      <YAxis yAxisId="vol" tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
+                      {hasPrice && (
+                        <YAxis yAxisId="price" orientation="right" tickFormatter={(v: number) => `$${v < 1 ? v.toFixed(4) : v.toFixed(2)}`}
+                          tick={{ ...AXIS_STYLE, fill: COLORS.blue }} tickLine={false} axisLine={false} width={68} />
+                      )}
+                      <Tooltip content={<VolumeWithPriceTooltip />} />
+                      <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1.5}
+                        fill="url(#profileVolGrad)" animationDuration={800} />
+                      {hasPrice && (
+                        <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke={COLORS.blue} strokeWidth={1.5}
+                          dot={false} animationDuration={800} connectNulls />
+                      )}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  {hasPrice && (
+                    <div className="flex items-center gap-4 mt-2">
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
+                        <span className="font-sans text-[11px] text-ink-muted">Volume</span>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
+                        <span className="font-sans text-[11px] text-ink-muted">{data.tokenInfo?.symbol || 'Token'} Price</span>
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Monthly view — bar chart */}
+              {volMode === 'monthly' && monthlyVolumeData.length > 0 && (
+                <ResponsiveContainer width="100%" height={380}>
+                  <BarChart data={monthlyVolumeData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(v: number) => {
+                        const d = new Date(v)
+                        return `${d.toLocaleString('en', { month: 'short' })} '${String(d.getFullYear()).slice(2)}`
+                      }}
+                      tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} minTickGap={50}
+                    />
+                    <YAxis tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE.contentStyle}
+                      labelStyle={TOOLTIP_STYLE.labelStyle}
+                      labelFormatter={(v: number) => {
+                        const d = new Date(v)
+                        return `${d.toLocaleString('en', { month: 'long' })} ${d.getFullYear()}`
+                      }}
+                      formatter={(v: number) => [formatUSD(v, true), 'Monthly Volume']}
+                    />
+                    <Bar dataKey="volume" fill={COLORS.ink} fillOpacity={0.75} radius={[2, 2, 0, 0]}
+                      animationDuration={800} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+
+              {/* Cumulative view — area chart */}
+              {volMode === 'cumulative' && monthlyVolumeData.length > 0 && (
+                <ResponsiveContainer width="100%" height={380}>
                   <AreaChart data={monthlyVolumeData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="cumVolGrad" x1="0" y1="0" x2="0" y2="1">
@@ -1436,32 +1454,8 @@ export default function ExchangeProfilePage() {
                     <Area type="monotone" dataKey="volume" stroke={COLORS.ink} strokeWidth={1.5}
                       fill="url(#cumVolGrad)" animationDuration={800} />
                   </AreaChart>
-                ) : (
-                  <BarChart data={monthlyVolumeData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                    <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={(v: number) => {
-                        const d = new Date(v)
-                        return `${d.toLocaleString('en', { month: 'short' })} '${String(d.getFullYear()).slice(2)}`
-                      }}
-                      tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} minTickGap={50}
-                    />
-                    <YAxis tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE.contentStyle}
-                      labelStyle={TOOLTIP_STYLE.labelStyle}
-                      labelFormatter={(v: number) => {
-                        const d = new Date(v)
-                        return `${d.toLocaleString('en', { month: 'long' })} ${d.getFullYear()}`
-                      }}
-                      formatter={(v: number) => [formatUSD(v, true), 'Monthly Volume']}
-                    />
-                    <Bar dataKey="volume" fill={COLORS.ink} fillOpacity={0.75} radius={[2, 2, 0, 0]}
-                      animationDuration={800} />
-                  </BarChart>
-                )}
-              </ResponsiveContainer>
+                </ResponsiveContainer>
+              )}
             </section>
           </ErrorBoundary>
         )}

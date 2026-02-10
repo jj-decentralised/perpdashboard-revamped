@@ -23,6 +23,9 @@ import { BasisMonitor } from '../components/charts/BasisMonitor'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { ValuationChecker } from '../components/charts/ValuationChecker'
 import { SolanaChainGrowthChart } from '../components/charts/SolanaChainGrowthChart'
+import { CEXOIChart } from '../components/charts/CEXOIChart'
+import { LiquidationChart } from '../components/charts/LiquidationChart'
+import { LongShortChart } from '../components/charts/LongShortChart'
 import { ValuationScatterChart } from '../components/charts/ValuationScatterChart'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
@@ -141,10 +144,34 @@ function OverviewTab({ data }: { data: any }) {
         </section>
       )}
 
+      {data.cexOIHistory.length > 0 && (
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="CEX OI chart">
+            <CEXOIChart data={data.cexOIHistory} />
+          </ErrorBoundary>
+        </section>
+      )}
+
       {data.solanaGrowthHistory.length > 0 && (
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Solana chain growth chart">
             <SolanaChainGrowthChart data={data.solanaGrowthHistory} />
+          </ErrorBoundary>
+        </section>
+      )}
+
+      {data.liquidationHistory.length > 0 && (
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Liquidation chart">
+            <LiquidationChart data={data.liquidationHistory} />
+          </ErrorBoundary>
+        </section>
+      )}
+
+      {data.longShortHistory.length > 0 && (
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="Long/Short ratio chart">
+            <LongShortChart data={data.longShortHistory} />
           </ErrorBoundary>
         </section>
       )}

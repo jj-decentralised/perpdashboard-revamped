@@ -35,7 +35,12 @@ const WARMUP_URLS = [
 // CoinGlass endpoints (only if API key is set)
 const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
 if (CG_KEY) {
-  WARMUP_URLS.push('/api/coinglass/futures/exchange-rank')
+  WARMUP_URLS.push(
+    '/api/coinglass/futures/exchange-rank',
+    '/api/coinglass/futures/open-interest/exchange-history-chart?symbol=BTC&range=1y',
+    '/api/coinglass/futures/liquidation/aggregated-history?symbol=BTC&interval=24h&limit=365',
+    '/api/coinglass/futures/global-long-short-account-ratio/history?exchange=Binance&symbol=BTCUSDT&interval=24h&limit=365',
+  )
 }
 
 function parseUrlParts(url) {
