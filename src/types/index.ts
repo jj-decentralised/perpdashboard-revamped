@@ -272,7 +272,6 @@ export interface DashboardData {
   // Solana chain growth (lazy-loaded)
   solanaGrowthHistory: SolanaGrowthPoint[]
   // CoinGlass data (lazy-loaded)
-  cexOIHistory: import('../services/coinglass').OIExchangePoint[]
   liquidationHistory: import('../services/coinglass').LiquidationPoint[]
 }
 

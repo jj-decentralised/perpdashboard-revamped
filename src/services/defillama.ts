@@ -746,7 +746,6 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     perpFeeShareHistory: [], // Populated lazily
     ttAggregate: null, // Populated lazily via Token Terminal
     solanaGrowthHistory: [], // Populated lazily
-    cexOIHistory: [], // Populated lazily via CoinGlass
     liquidationHistory: [], // Populated lazily via CoinGlass
   }
 }

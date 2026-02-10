@@ -23,7 +23,6 @@ import { BasisMonitor } from '../components/charts/BasisMonitor'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { ValuationChecker } from '../components/charts/ValuationChecker'
 import { SolanaChainGrowthChart } from '../components/charts/SolanaChainGrowthChart'
-import { CEXOIChart } from '../components/charts/CEXOIChart'
 import { LiquidationChart } from '../components/charts/LiquidationChart'
 import { LongShortChart } from '../components/charts/LongShortChart'
 import { ValuationScatterChart } from '../components/charts/ValuationScatterChart'
@@ -140,14 +139,6 @@ function OverviewTab({ data }: { data: any }) {
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Perps dominance chart">
             <PerpsDominanceChart perpVolume={data.historicalVolume} spotVolume={data.spotVolumeHistory} />
-          </ErrorBoundary>
-        </section>
-      )}
-
-      {data.cexOIHistory.length > 0 && (
-        <section className="section-rule">
-          <ErrorBoundary fallbackLabel="CEX OI chart">
-            <CEXOIChart data={data.cexOIHistory} />
           </ErrorBoundary>
         </section>
       )}

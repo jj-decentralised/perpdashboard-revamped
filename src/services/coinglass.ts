@@ -3,7 +3,6 @@
  *
  * Endpoints used:
  *   - /futures/exchange-rank — current OI + volume snapshot per exchange
- *   - /futures/open-interest/exchange-history-chart — historical OI by exchange
  *   - /futures/liquidation/aggregated-history — historical liquidation data
  *   - /futures/global-long-short-account-ratio/history — long/short ratio
  */
@@ -23,19 +22,6 @@ export interface CGExchangeRank {
   open_interest_usd: number
   volume_usd: number
   liquidation_usd_24h: number
-}
-
-export interface OIExchangeHistoryData {
-  time_list: number[]
-  price_list: number[]
-  data_map: Record<string, number[]>
-}
-
-export interface OIExchangePoint {
-  date: number
-  price: number
-  exchanges: Record<string, number>
-  total: number
 }
 
 export interface LiquidationPoint {
@@ -94,54 +80,6 @@ export async function fetchCEXCurrentTotal(): Promise<number | null> {
   const data = await fetchExchangeRankings()
   if (!data || data.length === 0) return null
   return data.reduce((sum, ex) => sum + (ex.volume_usd || 0), 0)
-}
-
-/**
- * Fetch historical OI broken down by exchange.
- * Returns up to 1 year of data with per-exchange OI values.
- */
-export async function fetchOIExchangeHistory(
-  symbol = 'BTC',
-  range = '1y',
-): Promise<OIExchangePoint[] | null> {
-  const raw = await fetchCG<OIExchangeHistoryData>(
-    '/futures/open-interest/exchange-history-chart',
-    { symbol, range },
-  )
-  if (!raw?.time_list?.length) return null
-
-  const exchanges = Object.keys(raw.data_map)
-  return raw.time_list.map((ts, i) => {
-    const exchangeVals: Record<string, number> = {}
-    let total = 0
-    for (const ex of exchanges) {
-      const val = raw.data_map[ex]?.[i] || 0
-      exchangeVals[ex] = val
-      total += val
-    }
-    return {
-      date: ts,
-      price: raw.price_list?.[i] || 0,
-      exchanges: exchangeVals,
-      total,
-    }
-  })
-}
-
-/**
- * Get top N exchanges by average OI from OI history data.
- */
-export function getTopOIExchanges(points: OIExchangePoint[], n = 8): string[] {
-  const totals = new Map<string, number>()
-  for (const pt of points) {
-    for (const [ex, val] of Object.entries(pt.exchanges)) {
-      totals.set(ex, (totals.get(ex) || 0) + val)
-    }
-  }
-  return [...totals.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map(([name]) => name)
 }
 
 /**
