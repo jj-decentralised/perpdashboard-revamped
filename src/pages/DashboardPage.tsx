@@ -22,6 +22,7 @@ import { ScatterPlotGenerator } from '../components/charts/ScatterPlotGenerator'
 import { BasisMonitor } from '../components/charts/BasisMonitor'
 import { DexCexShareChart } from '../components/charts/DexCexShareChart'
 import { TreasuryOverview } from '../components/charts/TreasuryOverview'
+import { ValuationChecker } from '../components/charts/ValuationChecker'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
 import { CommandPalette } from '../components/CommandPalette'
@@ -248,6 +249,12 @@ function FeesValuationTab({ data }: { data: any }) {
             <GrowthMomentumChart exchanges={data.enrichedExchanges} />
           </ErrorBoundary>
         </div>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Valuation checker">
+          <ValuationChecker exchanges={data.enrichedExchanges} />
+        </ErrorBoundary>
       </section>
 
       <section className="section-rule">
