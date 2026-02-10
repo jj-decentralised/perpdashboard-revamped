@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory } from '../services/defillama'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchDexCexVolumeShare } from '../services/defillama'
 import { TT_ENABLED } from '../config/api'
 import { getCachedTTMetrics, fetchTTMetricsBatch, cacheTTMetrics, computeTTAggregate, mergeTTIntoExchanges } from '../services/tokenterminal'
 
@@ -74,6 +74,15 @@ export function useDashboardData(): UseDashboardDataReturn {
               setData((prev) => prev ? { ...prev, spotVolumeHistory } : prev)
             }
           })
+        )
+
+        // DEX vs CEX volume share (reuses the same breakdown call as volume share)
+        lazyPromises.push(
+          fetchDexCexVolumeShare().then((dexCexShareHistory) => {
+            if (!cancelled && dexCexShareHistory.length > 0) {
+              setData((prev) => prev ? { ...prev, dexCexShareHistory } : prev)
+            }
+          }).catch(() => {})
         )
 
         // Holder yield batch (top 20 token exchanges)
