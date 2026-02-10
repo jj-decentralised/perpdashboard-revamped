@@ -109,7 +109,7 @@ async function fetchExchangeRankTotal(): Promise<number | null> {
  */
 async function fetchTakerVolumeHistory(
   symbol: string,
-  limit = 365,
+  limit = 4500,
 ): Promise<{ time: number; vol: number }[] | null> {
   const data = await fetchCG<CGTakerVolumePoint[]>(
     '/futures/aggregated-taker-buy-sell-volume/history',

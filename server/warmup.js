@@ -37,9 +37,9 @@ const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_K
 if (CG_KEY) {
   WARMUP_URLS.push(
     '/api/coinglass/futures/exchange-rank',
-    '/api/coinglass/futures/aggregated-taker-buy-sell-volume/history?symbol=BTC&interval=1d&limit=365',
-    '/api/coinglass/futures/aggregated-taker-buy-sell-volume/history?symbol=ETH&interval=1d&limit=365',
-    '/api/coinglass/futures/aggregated-taker-buy-sell-volume/history?symbol=SOL&interval=1d&limit=365',
+    '/api/coinglass/futures/aggregated-taker-buy-sell-volume/history?symbol=BTC&interval=1d&limit=4500',
+    '/api/coinglass/futures/aggregated-taker-buy-sell-volume/history?symbol=ETH&interval=1d&limit=4500',
+    '/api/coinglass/futures/aggregated-taker-buy-sell-volume/history?symbol=SOL&interval=1d&limit=4500',
   )
 }
 
