@@ -748,7 +748,6 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     solanaGrowthHistory: [], // Populated lazily
     cexOIHistory: [], // Populated lazily via CoinGlass
     liquidationHistory: [], // Populated lazily via CoinGlass
-    longShortHistory: {}, // Populated lazily via CoinGlass
   }
 }
 

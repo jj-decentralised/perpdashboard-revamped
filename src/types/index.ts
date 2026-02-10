@@ -274,7 +274,6 @@ export interface DashboardData {
   // CoinGlass data (lazy-loaded)
   cexOIHistory: import('../services/coinglass').OIExchangePoint[]
   liquidationHistory: import('../services/coinglass').LiquidationPoint[]
-  longShortHistory: Record<string, import('../services/coinglass').LongShortPoint[]>
 }
 
 export interface SolanaGrowthPoint {

@@ -168,13 +168,11 @@ function OverviewTab({ data }: { data: any }) {
         </section>
       )}
 
-      {Object.keys(data.longShortHistory).length > 0 && (
-        <section className="section-rule">
-          <ErrorBoundary fallbackLabel="Long/Short ratio chart">
-            <LongShortChart data={data.longShortHistory} />
-          </ErrorBoundary>
-        </section>
-      )}
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Long/Short ratio chart">
+          <LongShortChart />
+        </ErrorBoundary>
+      </section>
 
       {data.basisMetrics.topAssets.length > 0 && (
         <section className="section-rule">
