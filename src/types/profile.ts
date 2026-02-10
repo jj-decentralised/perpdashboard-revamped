@@ -109,4 +109,5 @@ export interface ExchangeProfileData {
   revenueHistory: HistoricalDataPoint[]
   btcPrice: number
   holdersRevenue: HoldersRevenueData | null
+  marketShareHistory: MarketSharePoint[]
 }

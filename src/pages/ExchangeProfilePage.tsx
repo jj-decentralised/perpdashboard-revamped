@@ -18,7 +18,7 @@ import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../utils/chartThe
 import { EMISSIONS_BASE } from '../config/api'
 import { formatUSD, formatDateShort, formatFundingRate, formatNumber, formatPercent, formatMultiple, percentClass, classNames } from '../utils/format'
 import type { CGExchangeTicker } from '../types/coingecko'
-import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint } from '../types/profile'
+import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint, MarketSharePoint } from '../types/profile'
 
 function ProfileSkeleton() {
   return (
@@ -69,6 +69,20 @@ function PETooltip({ active, payload, label }: any) {
       <p style={{ margin: 0, color: COLORS.inkMuted, fontSize: 12 }}>P/S: {d.ps != null ? formatMultiple(d.ps) : '\u2014'}</p>
       <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>Price: ${d.price?.toFixed(4)}</p>
       <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>Mcap: {formatUSD(d.mcap, true)}</p>
+    </div>
+  )
+}
+
+function MarketShareTooltip({ active, payload, label }: any) {
+  if (!active || !payload || !payload.length) return null
+  return (
+    <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
+      <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
+      {payload.map((entry: any) => (
+        <p key={entry.name} style={{ margin: 0, color: entry.color || COLORS.inkLight, fontSize: 12 }}>
+          {entry.name === 'marketPct' ? '% of Market' : '% of Hyperliquid'}: {entry.value?.toFixed(2)}%
+        </p>
+      ))}
     </div>
   )
 }
@@ -854,6 +868,35 @@ export default function ExchangeProfilePage() {
   const chains = data?.summary?.chains || []
   const hasPrice = volumePriceData.some((d) => d.price != null && d.price > 0)
 
+  // Market share data
+  const marketShareData = useMemo(() => {
+    if (!data?.marketShareHistory?.length) return []
+    return data.marketShareHistory
+  }, [data?.marketShareHistory])
+
+  const hasHlLine = marketShareData.some((d) => d.hlPct != null)
+  const isHyperliquid = slug?.toLowerCase() === 'hyperliquid-perps'
+
+  // PE + Volume dual chart data (for exchanges with tokens)
+  const peVolumeData = useMemo(() => {
+    if (!data?.historicalPE?.length || !data?.historicalVolume?.length) return []
+    // Build volume lookup by day
+    const volMap = new Map<number, number>()
+    for (const v of data.historicalVolume) {
+      const dayKey = Math.floor(v.date / 86400000) * 86400000
+      volMap.set(dayKey, v.value)
+    }
+    // 7-day rolling average for volume to reduce noise
+    const raw = data.historicalPE
+      .filter((p) => p.pe != null && p.pe > 0 && p.pe < 500)
+      .map((p) => {
+        const dayKey = Math.floor(p.date / 86400000) * 86400000
+        return { date: p.date, pe: p.pe!, volume: volMap.get(dayKey) || null }
+      })
+      .filter((p) => p.volume != null && p.volume > 0)
+    return raw
+  }, [data?.historicalPE, data?.historicalVolume])
+
   // SEO: update document title and meta description
   // NOTE: This must be before any early returns to satisfy React's rules of hooks
   useEffect(() => {
@@ -1060,6 +1103,48 @@ export default function ExchangeProfilePage() {
           </ErrorBoundary>
         )}
 
+        {/* Market Share */}
+        {marketShareData.length > 7 && (
+          <ErrorBoundary fallbackLabel="Market share">
+            <section className="section-rule">
+              <h3 className="chart-title">Market Share Over Time</h3>
+              <p className="chart-subtitle">
+                {isHyperliquid
+                  ? 'Share of total perpetual derivatives market volume (7-day rolling average)'
+                  : 'Share of total market and Hyperliquid volume (7-day rolling average)'}
+              </p>
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={marketShareData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                  <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false}
+                    axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
+                  <YAxis tickFormatter={(v: number) => `${v.toFixed(1)}%`} tick={AXIS_STYLE} tickLine={false}
+                    axisLine={false} width={48} />
+                  <Tooltip content={<MarketShareTooltip />} />
+                  <Line type="monotone" dataKey="marketPct" name="marketPct" stroke={COLORS.ink} strokeWidth={2}
+                    dot={false} animationDuration={800} />
+                  {hasHlLine && !isHyperliquid && (
+                    <Line type="monotone" dataKey="hlPct" name="hlPct" stroke={COLORS.blue} strokeWidth={1.5}
+                      dot={false} animationDuration={800} connectNulls />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="flex items-center gap-4 mt-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
+                  <span className="font-sans text-[11px] text-ink-muted">% of Total Perp Market</span>
+                </span>
+                {hasHlLine && !isHyperliquid && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
+                    <span className="font-sans text-[11px] text-ink-muted">% of Hyperliquid Volume</span>
+                  </span>
+                )}
+              </div>
+            </section>
+          </ErrorBoundary>
+        )}
+
         {/* Historical Fees & Revenue */}
         {feeRevenueData.length > 3 && (
           <ErrorBoundary fallbackLabel="Fee & revenue history">
@@ -1153,6 +1238,62 @@ export default function ExchangeProfilePage() {
                 <span className="flex items-center gap-1.5">
                   <span className="inline-block w-4 h-0.5 border-t border-dashed" style={{ borderColor: COLORS.inkMuted }} />
                   <span className="font-sans text-[11px] text-ink-muted">P/S Ratio</span>
+                </span>
+              </div>
+            </section>
+          </ErrorBoundary>
+        )}
+
+        {/* P/E vs Volume */}
+        {peVolumeData.length > 3 && (
+          <ErrorBoundary fallbackLabel="P/E vs Volume">
+            <section className="section-rule">
+              <h3 className="chart-title">P/E Ratio vs Volume</h3>
+              <p className="chart-subtitle">
+                How valuation multiples move with trading activity — falling P/E on rising volume suggests improving fundamentals
+              </p>
+              <ResponsiveContainer width="100%" height={340}>
+                <ComposedChart data={peVolumeData} margin={{ top: 8, right: 60, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="peVolGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.1} />
+                      <stop offset="95%" stopColor={COLORS.ink} stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                  <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false}
+                    axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
+                  <YAxis yAxisId="pe" tickFormatter={(v: number) => `${v.toFixed(0)}x`}
+                    tick={{ ...AXIS_STYLE, fill: COLORS.blue }} tickLine={false} axisLine={false} width={48} />
+                  <YAxis yAxisId="vol" orientation="right" tickFormatter={fmtAxis}
+                    tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
+                  <Tooltip content={({ active, payload, label }: any) => {
+                    if (!active || !payload?.length) return null
+                    return (
+                      <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
+                        <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
+                        {payload.map((entry: any) => (
+                          <p key={entry.name} style={{ margin: 0, color: entry.color || COLORS.inkLight, fontSize: 12 }}>
+                            {entry.name === 'pe' ? 'P/E' : 'Volume'}: {entry.name === 'pe' ? `${entry.value?.toFixed(1)}x` : formatUSD(entry.value, true)}
+                          </p>
+                        ))}
+                      </div>
+                    )
+                  }} />
+                  <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1}
+                    fill="url(#peVolGrad)" animationDuration={800} />
+                  <Line yAxisId="pe" type="monotone" dataKey="pe" name="pe" stroke={COLORS.blue} strokeWidth={2}
+                    dot={false} animationDuration={800} connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
+              <div className="flex items-center gap-4 mt-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
+                  <span className="font-sans text-[11px] text-ink-muted">P/E Ratio</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
+                  <span className="font-sans text-[11px] text-ink-muted">Daily Volume</span>
                 </span>
               </div>
             </section>
