@@ -1141,6 +1141,37 @@ export default function ExchangeProfilePage() {
     }
   }, [exchangeName])
 
+  // Monthly volume mode: 'monthly' or 'cumulative'
+  const [monthlyMode, setMonthlyMode] = useState<'monthly' | 'cumulative'>('monthly')
+
+  // Aggregate daily volume into monthly buckets
+  const monthlyVolumeData = useMemo(() => {
+    if (!data?.historicalVolume?.length) return []
+    const buckets = new Map<string, { date: number; sum: number }>()
+    for (const d of data.historicalVolume) {
+      const dt = new Date(d.date)
+      const key = `${dt.getFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+      const existing = buckets.get(key)
+      if (existing) {
+        existing.sum += d.value
+      } else {
+        buckets.set(key, { date: new Date(dt.getFullYear(), dt.getUTCMonth(), 1).getTime(), sum: d.value })
+      }
+    }
+    const monthly = Array.from(buckets.values())
+      .sort((a, b) => a.date - b.date)
+      .map((b) => ({ date: b.date, volume: b.sum }))
+
+    if (monthlyMode === 'cumulative') {
+      let running = 0
+      return monthly.map((m) => {
+        running += m.volume
+        return { ...m, volume: running }
+      })
+    }
+    return monthly
+  }, [data?.historicalVolume, monthlyMode])
+
   if (loading) return <ProfileSkeleton />
 
   if (error || !data) {
@@ -1332,6 +1363,105 @@ export default function ExchangeProfilePage() {
                   </span>
                 </div>
               )}
+            </section>
+          </ErrorBoundary>
+        )}
+
+        {/* Monthly Volume */}
+        {monthlyVolumeData.length > 0 && (
+          <ErrorBoundary fallbackLabel="Monthly volume">
+            <section className="section-rule">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h3 className="chart-title">
+                    {monthlyMode === 'cumulative' ? 'Cumulative Volume' : 'Monthly Volume'}
+                  </h3>
+                  <p className="chart-subtitle">
+                    {monthlyMode === 'cumulative'
+                      ? 'Running total of trading volume since inception'
+                      : 'Aggregated trading volume by calendar month'}
+                  </p>
+                </div>
+                <div className="flex gap-1 rounded-md overflow-hidden border" style={{ borderColor: COLORS.rule }}>
+                  <button
+                    onClick={() => setMonthlyMode('monthly')}
+                    className="px-3 py-1 text-xs font-sans font-medium transition-colors"
+                    style={{
+                      backgroundColor: monthlyMode === 'monthly' ? COLORS.ink : 'transparent',
+                      color: monthlyMode === 'monthly' ? COLORS.paper : COLORS.inkMuted,
+                    }}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => setMonthlyMode('cumulative')}
+                    className="px-3 py-1 text-xs font-sans font-medium transition-colors"
+                    style={{
+                      backgroundColor: monthlyMode === 'cumulative' ? COLORS.ink : 'transparent',
+                      color: monthlyMode === 'cumulative' ? COLORS.paper : COLORS.inkMuted,
+                    }}
+                  >
+                    Cumulative
+                  </button>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={340}>
+                {monthlyMode === 'cumulative' ? (
+                  <AreaChart data={monthlyVolumeData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="cumVolGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.15} />
+                        <stop offset="95%" stopColor={COLORS.ink} stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(v: number) => {
+                        const d = new Date(v)
+                        return `${d.toLocaleString('en', { month: 'short' })} '${String(d.getFullYear()).slice(2)}`
+                      }}
+                      tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} minTickGap={50}
+                    />
+                    <YAxis tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE.contentStyle}
+                      labelStyle={TOOLTIP_STYLE.labelStyle}
+                      labelFormatter={(v: number) => {
+                        const d = new Date(v)
+                        return `${d.toLocaleString('en', { month: 'long' })} ${d.getFullYear()}`
+                      }}
+                      formatter={(v: number) => [formatUSD(v, true), 'Cumulative Volume']}
+                    />
+                    <Area type="monotone" dataKey="volume" stroke={COLORS.ink} strokeWidth={1.5}
+                      fill="url(#cumVolGrad)" animationDuration={800} />
+                  </AreaChart>
+                ) : (
+                  <BarChart data={monthlyVolumeData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(v: number) => {
+                        const d = new Date(v)
+                        return `${d.toLocaleString('en', { month: 'short' })} '${String(d.getFullYear()).slice(2)}`
+                      }}
+                      tick={AXIS_STYLE} tickLine={false} axisLine={{ stroke: COLORS.rule }} minTickGap={50}
+                    />
+                    <YAxis tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE.contentStyle}
+                      labelStyle={TOOLTIP_STYLE.labelStyle}
+                      labelFormatter={(v: number) => {
+                        const d = new Date(v)
+                        return `${d.toLocaleString('en', { month: 'long' })} ${d.getFullYear()}`
+                      }}
+                      formatter={(v: number) => [formatUSD(v, true), 'Monthly Volume']}
+                    />
+                    <Bar dataKey="volume" fill={COLORS.ink} fillOpacity={0.75} radius={[2, 2, 0, 0]}
+                      animationDuration={800} />
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
             </section>
           </ErrorBoundary>
         )}
