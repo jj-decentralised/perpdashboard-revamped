@@ -1144,7 +1144,15 @@ export interface BuilderVolumePoint {
  * Extract per-builder volume on Hyperliquid chain from derivatives overview breakdown.
  * Returns weekly-sampled data with top builders + "Other" bucket.
  */
-export async function fetchHLBuilderVolume(): Promise<{ data: BuilderVolumePoint[]; builders: string[] }> {
+interface HLBuilderResult {
+  data: BuilderVolumePoint[]
+  builders: string[]
+  builderSharePct: Array<{ date: number; pct: number }>
+  cumulativeIncome: Array<{ date: number; income: number }>
+}
+
+export async function fetchHLBuilderVolume(): Promise<HLBuilderResult> {
+  const empty: HLBuilderResult = { data: [], builders: [], builderSharePct: [], cumulativeIncome: [] }
   try {
     const overview = await fetchDerivativesOverview(false)
     const breakdownRaw = overview.totalDataChartBreakdown || []
@@ -1165,25 +1173,38 @@ export async function fetchHLBuilderVolume(): Promise<{ data: BuilderVolumePoint
       }
     }
 
-    if (builderTotals.size === 0) return { data: [], builders: [] }
+    if (builderTotals.size === 0) return empty
 
     // Top 8 builders by total volume
     const sorted = [...builderTotals.entries()].sort((a, b) => b[1] - a[1])
     const topBuilders = sorted.slice(0, 8).map(([name]) => name)
     let hasOther = false
 
-    // Second pass: build time series
-    const data: BuilderVolumePoint[] = sampled.map(([timestamp, breakdown]) => {
+    // Second pass: build time series + compute share % and cumulative income
+    const data: BuilderVolumePoint[] = []
+    const builderSharePct: Array<{ date: number; pct: number }> = []
+    const cumulativeIncome: Array<{ date: number; income: number }> = []
+    let runningIncome = 0
+
+    for (const [timestamp, breakdown] of sampled) {
       const point: BuilderVolumePoint = { date: timestamp * 1000 }
+      let totalBuilderVol = 0
       let otherVol = 0
+      let hlNativeVol = 0
 
       for (const [protocolName, chains] of Object.entries(breakdown)) {
         if (typeof chains === 'number') continue
         const hlVol = chains['Hyperliquid'] || chains['hyperliquid'] || 0
         if (hlVol <= 0) continue
         const nameLower = protocolName.toLowerCase()
-        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid-perps') continue
 
+        // HL's own native volume
+        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid-perps') {
+          hlNativeVol += hlVol
+          continue
+        }
+
+        totalBuilderVol += hlVol
         if (topBuilders.includes(protocolName)) {
           point[protocolName] = hlVol
         } else {
@@ -1199,12 +1220,22 @@ export async function fetchHLBuilderVolume(): Promise<{ data: BuilderVolumePoint
         hasOther = true
       }
 
-      return point
-    })
+      data.push(point)
+
+      // Builder share of total HL volume (builder + native)
+      const totalHlVol = totalBuilderVol + hlNativeVol
+      if (totalHlVol > 0) {
+        builderSharePct.push({ date: timestamp * 1000, pct: (totalBuilderVol / totalHlVol) * 100 })
+      }
+
+      // Cumulative estimated income at ~1bp referral rate
+      runningIncome += totalBuilderVol * 0.0001
+      cumulativeIncome.push({ date: timestamp * 1000, income: runningIncome })
+    }
 
     const builders = hasOther ? [...topBuilders, 'Other'] : topBuilders
-    return { data, builders }
+    return { data, builders, builderSharePct, cumulativeIncome }
   } catch {
-    return { data: [], builders: [] }
+    return empty
   }
 }

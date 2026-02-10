@@ -95,6 +95,8 @@ export interface MarketSharePoint {
 export interface BuilderVolumeData {
   data: Array<{ date: number; [builder: string]: number }>
   builders: string[]
+  builderSharePct: Array<{ date: number; pct: number }>
+  cumulativeIncome: Array<{ date: number; income: number }>
 }
 
 export interface ExchangeProfileData {
