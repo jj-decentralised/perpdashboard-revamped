@@ -168,7 +168,7 @@ function OverviewTab({ data }: { data: any }) {
         </section>
       )}
 
-      {data.longShortHistory.length > 0 && (
+      {Object.keys(data.longShortHistory).length > 0 && (
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Long/Short ratio chart">
             <LongShortChart data={data.longShortHistory} />

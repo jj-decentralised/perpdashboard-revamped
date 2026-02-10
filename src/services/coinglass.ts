@@ -206,3 +206,28 @@ export async function fetchLongShortHistory(
     ratio: Number(d.global_account_long_short_ratio) || 0,
   }))
 }
+
+/** Exchanges that provide long/short account ratio data on CoinGlass. */
+export const LS_EXCHANGES = ['Binance', 'OKX', 'Bybit', 'Bitget', 'dYdX'] as const
+
+/**
+ * Fetch long/short history for multiple exchanges in parallel.
+ * Returns a map of exchange name -> data points.
+ */
+export async function fetchMultiExchangeLongShort(
+  symbol = 'BTCUSDT',
+  interval = '24h',
+  limit = 365,
+): Promise<Record<string, LongShortPoint[]>> {
+  const results = await Promise.all(
+    LS_EXCHANGES.map(async (ex) => {
+      const data = await fetchLongShortHistory(ex, symbol, interval, limit).catch(() => null)
+      return [ex, data] as const
+    }),
+  )
+  const map: Record<string, LongShortPoint[]> = {}
+  for (const [ex, data] of results) {
+    if (data?.length) map[ex] = data
+  }
+  return map
+}

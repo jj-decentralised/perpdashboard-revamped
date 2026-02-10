@@ -16,8 +16,10 @@ import { MetricInfo } from '../MetricInfo'
 import { TimePeriodSelector, filterDataByPeriod } from '../TimePeriodSelector'
 
 interface Props {
-  data: LongShortPoint[]
+  data: Record<string, LongShortPoint[]>
 }
+
+const AVG_KEY = 'Average'
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -39,13 +41,59 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
+/** Compute average long/short across all exchanges for each timestamp. */
+function computeAverage(allData: Record<string, LongShortPoint[]>): LongShortPoint[] {
+  const exchanges = Object.values(allData)
+  if (exchanges.length === 0) return []
+  if (exchanges.length === 1) return exchanges[0]
+
+  // Build a map of timestamp -> aggregated values
+  const byDate = new Map<number, { longSum: number; shortSum: number; ratioSum: number; count: number }>()
+  for (const points of exchanges) {
+    for (const pt of points) {
+      const existing = byDate.get(pt.date)
+      if (existing) {
+        existing.longSum += pt.longPct
+        existing.shortSum += pt.shortPct
+        existing.ratioSum += pt.ratio
+        existing.count += 1
+      } else {
+        byDate.set(pt.date, { longSum: pt.longPct, shortSum: pt.shortPct, ratioSum: pt.ratio, count: 1 })
+      }
+    }
+  }
+
+  return Array.from(byDate.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([date, v]) => ({
+      date,
+      longPct: v.longSum / v.count,
+      shortPct: v.shortSum / v.count,
+      ratio: v.ratioSum / v.count,
+    }))
+}
+
 export function LongShortChart({ data }: Props) {
+  const exchangeNames = useMemo(() => Object.keys(data), [data])
+  const [selected, setSelected] = useState(AVG_KEY)
   const [period, setPeriod] = useState('6m')
 
+  const options = useMemo(() => {
+    const opts = [AVG_KEY, ...exchangeNames]
+    return opts
+  }, [exchangeNames])
+
+  const averageData = useMemo(() => computeAverage(data), [data])
+
+  const rawData = useMemo(() => {
+    if (selected === AVG_KEY) return averageData
+    return data[selected] || averageData
+  }, [selected, data, averageData])
+
   const chartData = useMemo(() => {
-    if (!data.length) return []
-    return filterDataByPeriod(data, period)
-  }, [data, period])
+    if (!rawData.length) return []
+    return filterDataByPeriod(rawData, period)
+  }, [rawData, period])
 
   const stats = useMemo(() => {
     if (!chartData.length) return null
@@ -58,18 +106,37 @@ export function LongShortChart({ data }: Props) {
 
   if (chartData.length < 3) return null
 
+  const subtitle = selected === AVG_KEY
+    ? `BTC futures — averaged across ${exchangeNames.join(', ')}`
+    : `${selected} BTC futures — percentage of accounts positioned long vs short`
+
   return (
     <div className="chart-container">
       <h3 className="chart-title">Long/Short Account Ratio</h3>
-      <p className="chart-subtitle">
-        Binance BTC futures — percentage of accounts positioned long vs short
-      </p>
+      <p className="chart-subtitle">{subtitle}</p>
 
       <div className="flex items-center justify-between mb-3">
-        <MetricInfo
-          description="Shows what percentage of trader accounts on Binance hold long vs short BTC futures positions. When longs are crowded (high ratio), the market is vulnerable to long squeezes. When shorts dominate, short squeezes become more likely. The 50% line marks neutral positioning."
-          source="CoinGlass global long/short account ratio data from Binance."
-        />
+        <div className="flex items-center gap-3">
+          <MetricInfo
+            description="Shows what percentage of trader accounts hold long vs short BTC futures positions. When longs are crowded (high ratio), the market is vulnerable to long squeezes. When shorts dominate, short squeezes become more likely. The 50% line marks neutral positioning. 'Average' combines data from all available exchanges."
+            source="CoinGlass global long/short account ratio data."
+          />
+          <div className="flex gap-1">
+            {options.map((ex) => (
+              <button
+                key={ex}
+                onClick={() => setSelected(ex)}
+                className={`px-2 py-0.5 text-[10px] font-sans rounded border transition-colors ${
+                  selected === ex
+                    ? 'bg-ink text-paper border-ink'
+                    : 'bg-transparent text-ink-muted border-rule hover:border-ink'
+                }`}
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
+        </div>
         <TimePeriodSelector selected={period} onChange={setPeriod} periods={['1m', '3m', '6m', '1y']} />
       </div>
 
