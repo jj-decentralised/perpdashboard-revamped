@@ -14,6 +14,7 @@ import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chart
 import { formatUSD, formatDateShort } from '../../utils/format'
 import { MetricInfo } from '../MetricInfo'
 import { TimePeriodSelector, filterDataByPeriod } from '../TimePeriodSelector'
+import { COINGLASS_ENABLED } from '../../config/api'
 
 interface Props {
   data: DexCexSharePoint[]
@@ -77,7 +78,10 @@ export function DexCexShareChart({ data }: Props) {
       <div className="flex items-center justify-between mb-4">
         <MetricInfo
           description="Tracks what proportion of perpetual futures trading volume occurs on decentralised exchanges (Hyperliquid, dYdX, GMX, etc.) versus centralised exchanges (Binance, Bybit, OKX, etc.). A rising DEX share indicates growing adoption of on-chain derivatives infrastructure."
-          source="DefiLlama derivatives overview. Covers major tracked exchanges only — does not represent the entire derivatives market."
+          source={COINGLASS_ENABLED
+            ? "DEX volume from DefiLlama. CEX volume from CoinGlass (aggregated futures exchange data, scaled from BTC + ETH + SOL taker volume)."
+            : "DefiLlama derivatives overview. Covers major tracked exchanges only — does not represent the entire derivatives market."
+          }
         />
         <TimePeriodSelector selected={period} onChange={setPeriod} />
       </div>
@@ -217,7 +221,10 @@ export function DexCexShareChart({ data }: Props) {
       </div>
 
       <p className="font-sans text-[10px] text-ink-muted mt-3 italic">
-        Based on major exchanges tracked by DefiLlama. Does not represent the full derivatives market.
+        {COINGLASS_ENABLED
+          ? 'DEX volume from DefiLlama. CEX volume from CoinGlass (estimated from top-3 symbol taker volume, scaled to total exchange volume). Historical scale factor is constant — actual ratio may vary over time.'
+          : 'Based on major exchanges tracked by DefiLlama. Does not represent the full derivatives market.'
+        }
       </p>
     </div>
   )

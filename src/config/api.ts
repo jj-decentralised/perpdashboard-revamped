@@ -27,6 +27,13 @@ export const TT_BASE = useDirectApi
   ? 'https://api.tokenterminal.com/v2'
   : '/api/tt'
 
+// CoinGlass (optional — provides accurate CEX futures volume for DEX vs CEX chart)
+const coinglassKey = import.meta.env.VITE_COINGLASS_API_KEY as string | undefined
+export const COINGLASS_ENABLED = !!coinglassKey || !useDirectApi // always enabled via proxy
+export const COINGLASS_BASE = useDirectApi
+  ? 'https://open-api-v4.coinglass.com/api'
+  : '/api/coinglass'
+
 export function geckoHeaders(): HeadersInit {
   // When using proxy, headers are added server-side
   if (!useDirectApi) return {}
@@ -39,4 +46,10 @@ export function geckoHeaders(): HeadersInit {
 export function ttHeaders(): HeadersInit {
   if (!ttApiKey) return {}
   return { Authorization: `Bearer ${ttApiKey}` }
+}
+
+export function coinglassHeaders(): HeadersInit {
+  if (!useDirectApi) return {}
+  if (coinglassKey) return { 'CG-API-KEY': coinglassKey }
+  return {}
 }

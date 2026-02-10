@@ -7,6 +7,7 @@
  *   /api/yields/*    → proxy to yields.llama.fi (cached)
  *   /api/emissions/* → proxy to api.llama.fi (cached)
  *   /api/tt/*        → proxy to tokenterminal.com (cached, requires TT_API_KEY)
+ *   /api/coinglass/* → proxy to coinglass.com (cached, requires COINGLASS_API_KEY)
  *   /api/status      → cache health check
  *   /*               → serve built SPA from dist/
  */
@@ -49,6 +50,7 @@ app.get('/api/gecko/*', handleProxy)
 app.get('/api/yields/*', handleProxy)
 app.get('/api/emissions/*', handleProxy)
 app.get('/api/tt/*', handleProxy)
+app.get('/api/coinglass/*', handleProxy)
 
 async function handleProxy(req, res) {
   try {
