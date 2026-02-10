@@ -86,6 +86,12 @@ export interface HoldersRevenueData {
   history: HistoricalDataPoint[]
 }
 
+export interface MarketSharePoint {
+  date: number
+  marketPct: number
+  hlPct: number | null
+}
+
 export interface ExchangeProfileData {
   summary: DerivativesSummary | null
   historicalVolume: HistoricalDataPoint[]
