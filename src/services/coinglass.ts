@@ -4,7 +4,6 @@
  * Endpoints used:
  *   - /futures/exchange-rank — current OI + volume snapshot per exchange
  *   - /futures/liquidation/aggregated-history — historical liquidation data
- *   - /futures/global-long-short-account-ratio/history — long/short ratio
  */
 
 import { COINGLASS_BASE, COINGLASS_ENABLED, coinglassHeaders } from '../config/api'
@@ -29,13 +28,6 @@ export interface LiquidationPoint {
   longLiq: number
   shortLiq: number
   total: number
-}
-
-export interface LongShortPoint {
-  date: number
-  longPct: number
-  shortPct: number
-  ratio: number
 }
 
 // --- Fetch helper ---
@@ -115,33 +107,4 @@ export async function fetchLiquidationHistory(
   })
 }
 
-/**
- * Fetch global long/short account ratio history for a symbol on an exchange.
- */
-export async function fetchLongShortHistory(
-  exchange = 'Binance',
-  symbol = 'BTCUSDT',
-  interval = '24h',
-  limit = 365,
-): Promise<LongShortPoint[] | null> {
-  interface RawLS {
-    time: number
-    global_account_long_percent: number | string
-    global_account_short_percent: number | string
-    global_account_long_short_ratio: number | string
-  }
-
-  const data = await fetchCG<RawLS[]>(
-    '/futures/global-long-short-account-ratio/history',
-    { exchange, symbol, interval, limit: String(limit) },
-  )
-  if (!data?.length) return null
-
-  return data.map((d) => ({
-    date: d.time,
-    longPct: Number(d.global_account_long_percent) || 0,
-    shortPct: Number(d.global_account_short_percent) || 0,
-    ratio: Number(d.global_account_long_short_ratio) || 0,
-  }))
-}
 

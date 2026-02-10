@@ -38,11 +38,6 @@ if (CG_KEY) {
   WARMUP_URLS.push(
     '/api/coinglass/futures/exchange-rank',
     '/api/coinglass/futures/liquidation/aggregated-history?symbol=BTC&interval=24h&limit=365',
-    // Warm top 4 exchanges for BTC long/short (chart fetches the rest on demand)
-    '/api/coinglass/futures/global-long-short-account-ratio/history?exchange=Binance&symbol=BTCUSDT&interval=24h&limit=365',
-    '/api/coinglass/futures/global-long-short-account-ratio/history?exchange=OKX&symbol=BTCUSDT&interval=24h&limit=365',
-    '/api/coinglass/futures/global-long-short-account-ratio/history?exchange=Bybit&symbol=BTCUSDT&interval=24h&limit=365',
-    '/api/coinglass/futures/global-long-short-account-ratio/history?exchange=Bitget&symbol=BTCUSDT&interval=24h&limit=365',
   )
 }
 

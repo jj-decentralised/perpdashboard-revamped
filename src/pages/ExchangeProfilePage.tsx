@@ -1415,13 +1415,13 @@ export default function ExchangeProfilePage() {
                       <YAxis yAxisId="vol" tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
                       {hasPrice && (
                         <YAxis yAxisId="price" orientation="right" tickFormatter={(v: number) => `$${v < 1 ? v.toFixed(4) : v.toFixed(2)}`}
-                          tick={{ ...AXIS_STYLE, fill: '#8b1a1a' }} tickLine={false} axisLine={false} width={68} />
+                          tick={{ ...AXIS_STYLE, fill: '#dc2626' }} tickLine={false} axisLine={false} width={68} />
                       )}
                       <Tooltip content={<VolumeWithPriceTooltip />} />
                       <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1.5}
                         fill="url(#profileVolGrad)" animationDuration={800} />
                       {hasPrice && (
-                        <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke="#8b1a1a" strokeWidth={1.5}
+                        <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke="#dc2626" strokeWidth={1.5}
                           dot={false} animationDuration={800} connectNulls />
                       )}
                     </ComposedChart>
@@ -1433,7 +1433,7 @@ export default function ExchangeProfilePage() {
                         <span className="font-sans text-[11px] text-ink-muted">Volume</span>
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <span className="inline-block w-4 h-0.5" style={{ backgroundColor: '#8b1a1a' }} />
+                        <span className="inline-block w-4 h-0.5" style={{ backgroundColor: '#dc2626' }} />
                         <span className="font-sans text-[11px] text-ink-muted">{data.tokenInfo?.symbol || 'Token'} Price</span>
                       </span>
                     </div>
@@ -1458,13 +1458,13 @@ export default function ExchangeProfilePage() {
                       <YAxis yAxisId="vol" tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
                       {hasPrice && (
                         <YAxis yAxisId="price" orientation="right" tickFormatter={(v: number) => `$${v < 1 ? v.toFixed(4) : v.toFixed(2)}`}
-                          tick={{ ...AXIS_STYLE, fill: '#8b1a1a' }} tickLine={false} axisLine={false} width={68} />
+                          tick={{ ...AXIS_STYLE, fill: '#dc2626' }} tickLine={false} axisLine={false} width={68} />
                       )}
                       <Tooltip content={<VolumeWithPriceTooltip />} />
                       <Bar yAxisId="vol" dataKey="volume" name="volume" fill={COLORS.ink} fillOpacity={0.75} radius={[2, 2, 0, 0]}
                         animationDuration={800} />
                       {hasPrice && (
-                        <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke="#8b1a1a" strokeWidth={1.5}
+                        <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke="#dc2626" strokeWidth={1.5}
                           dot={false} animationDuration={800} connectNulls />
                       )}
                     </ComposedChart>
@@ -1476,7 +1476,7 @@ export default function ExchangeProfilePage() {
                         <span className="font-sans text-[11px] text-ink-muted">Volume</span>
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <span className="inline-block w-4 h-0.5" style={{ backgroundColor: '#8b1a1a' }} />
+                        <span className="inline-block w-4 h-0.5" style={{ backgroundColor: '#dc2626' }} />
                         <span className="font-sans text-[11px] text-ink-muted">{data.tokenInfo?.symbol || 'Token'} Price</span>
                       </span>
                     </div>
@@ -1507,13 +1507,13 @@ export default function ExchangeProfilePage() {
                       <YAxis yAxisId="vol" tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
                       {hasPrice && (
                         <YAxis yAxisId="price" orientation="right" tickFormatter={(v: number) => `$${v < 1 ? v.toFixed(4) : v.toFixed(2)}`}
-                          tick={{ ...AXIS_STYLE, fill: '#8b1a1a' }} tickLine={false} axisLine={false} width={68} />
+                          tick={{ ...AXIS_STYLE, fill: '#dc2626' }} tickLine={false} axisLine={false} width={68} />
                       )}
                       <Tooltip content={<VolumeWithPriceTooltip />} />
                       <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1.5}
                         fill="url(#cumVolGrad)" animationDuration={800} />
                       {hasPrice && (
-                        <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke="#8b1a1a" strokeWidth={1.5}
+                        <Line yAxisId="price" type="monotone" dataKey="price" name="price" stroke="#dc2626" strokeWidth={1.5}
                           dot={false} animationDuration={800} connectNulls />
                       )}
                     </ComposedChart>
@@ -1525,7 +1525,7 @@ export default function ExchangeProfilePage() {
                         <span className="font-sans text-[11px] text-ink-muted">Volume</span>
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <span className="inline-block w-4 h-0.5" style={{ backgroundColor: '#8b1a1a' }} />
+                        <span className="inline-block w-4 h-0.5" style={{ backgroundColor: '#dc2626' }} />
                         <span className="font-sans text-[11px] text-ink-muted">{data.tokenInfo?.symbol || 'Token'} Price</span>
                       </span>
                     </div>

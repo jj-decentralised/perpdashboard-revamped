@@ -24,7 +24,6 @@ import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { ValuationChecker } from '../components/charts/ValuationChecker'
 import { SolanaChainGrowthChart } from '../components/charts/SolanaChainGrowthChart'
 import { LiquidationChart } from '../components/charts/LiquidationChart'
-import { LongShortChart } from '../components/charts/LongShortChart'
 import { ValuationScatterChart } from '../components/charts/ValuationScatterChart'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
@@ -159,11 +158,6 @@ function OverviewTab({ data }: { data: any }) {
         </section>
       )}
 
-      <section className="section-rule">
-        <ErrorBoundary fallbackLabel="Long/Short ratio chart">
-          <LongShortChart />
-        </ErrorBoundary>
-      </section>
 
       {data.basisMetrics.topAssets.length > 0 && (
         <section className="section-rule">

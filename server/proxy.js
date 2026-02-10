@@ -37,7 +37,6 @@ const TTL_RULES = [
   { pattern: /\/projects\/.*\/metrics/, ttl: 60 * 60 * 1000 }, // TT metrics: 1 hour
   { pattern: /\/futures\/exchange-rank/, ttl: 5 * 60 * 1000 }, // CoinGlass exchange rank: 5 min
   { pattern: /\/futures\/liquidation/, ttl: 10 * 60 * 1000 }, // CoinGlass liquidations: 10 min
-  { pattern: /\/futures\/global-long-short/, ttl: 10 * 60 * 1000 }, // CoinGlass long/short: 10 min
 ]
 
 function getTTL(path) {
