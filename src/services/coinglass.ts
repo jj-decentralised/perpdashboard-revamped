@@ -155,9 +155,8 @@ export async function fetchLiquidationHistory(
 ): Promise<LiquidationPoint[] | null> {
   interface RawLiq {
     time: number
-    liquidation_usd: number
-    long_liquidation_usd: number
-    short_liquidation_usd: number
+    aggregated_long_liquidation_usd: number | string
+    aggregated_short_liquidation_usd: number | string
   }
 
   const data = await fetchCG<RawLiq[]>(
@@ -166,12 +165,16 @@ export async function fetchLiquidationHistory(
   )
   if (!data?.length) return null
 
-  return data.map((d) => ({
-    date: d.time,
-    longLiq: d.long_liquidation_usd || 0,
-    shortLiq: d.short_liquidation_usd || 0,
-    total: d.liquidation_usd || (d.long_liquidation_usd + d.short_liquidation_usd) || 0,
-  }))
+  return data.map((d) => {
+    const longLiq = Number(d.aggregated_long_liquidation_usd) || 0
+    const shortLiq = Number(d.aggregated_short_liquidation_usd) || 0
+    return {
+      date: d.time,
+      longLiq,
+      shortLiq,
+      total: longLiq + shortLiq,
+    }
+  })
 }
 
 /**
@@ -185,9 +188,9 @@ export async function fetchLongShortHistory(
 ): Promise<LongShortPoint[] | null> {
   interface RawLS {
     time: number
-    longAccount: number
-    shortAccount: number
-    longShortRatio: number
+    global_account_long_percent: number | string
+    global_account_short_percent: number | string
+    global_account_long_short_ratio: number | string
   }
 
   const data = await fetchCG<RawLS[]>(
@@ -198,8 +201,8 @@ export async function fetchLongShortHistory(
 
   return data.map((d) => ({
     date: d.time,
-    longPct: d.longAccount || 0,
-    shortPct: d.shortAccount || 0,
-    ratio: d.longShortRatio || 0,
+    longPct: Number(d.global_account_long_percent) || 0,
+    shortPct: Number(d.global_account_short_percent) || 0,
+    ratio: Number(d.global_account_long_short_ratio) || 0,
   }))
 }

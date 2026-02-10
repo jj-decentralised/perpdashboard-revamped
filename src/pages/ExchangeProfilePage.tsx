@@ -1122,6 +1122,35 @@ export default function ExchangeProfilePage() {
     return raw
   }, [data?.historicalPE, data?.historicalVolume])
 
+  // P/E chart mode: 'daily' | 'monthly'
+  const [peMode, setPeMode] = useState<'daily' | 'monthly'>('daily')
+
+  // Monthly aggregated P/E + volume data
+  const peVolumeMonthly = useMemo(() => {
+    if (!peVolumeData.length) return []
+    const buckets = new Map<string, { date: number; peSum: number; peCount: number; volSum: number }>()
+    for (const d of peVolumeData) {
+      const dt = new Date(d.date)
+      const key = `${dt.getFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+      const existing = buckets.get(key)
+      if (existing) {
+        existing.peSum += d.pe
+        existing.peCount += 1
+        existing.volSum += d.volume!
+      } else {
+        buckets.set(key, {
+          date: new Date(dt.getFullYear(), dt.getUTCMonth(), 1).getTime(),
+          peSum: d.pe,
+          peCount: 1,
+          volSum: d.volume!,
+        })
+      }
+    }
+    return Array.from(buckets.values())
+      .sort((a, b) => a.date - b.date)
+      .map((b) => ({ date: b.date, pe: b.peSum / b.peCount, volume: b.volSum }))
+  }, [peVolumeData])
+
   // SEO: update document title and meta description
   // NOTE: This must be before any early returns to satisfy React's rules of hooks
   useEffect(() => {
@@ -1652,12 +1681,22 @@ export default function ExchangeProfilePage() {
         {peVolumeData.length > 3 && (
           <ErrorBoundary fallbackLabel="P/E vs Volume">
             <section className="section-rule">
-              <h3 className="chart-title">P/E Ratio vs Volume</h3>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="chart-title mb-0">P/E Ratio vs Volume</h3>
+                <div className="flex gap-1">
+                  {(['daily', 'monthly'] as const).map((m) => (
+                    <button key={m} onClick={() => setPeMode(m)}
+                      className={`px-2.5 py-0.5 text-[11px] font-sans rounded border transition-colors ${peMode === m ? 'bg-ink text-paper border-ink' : 'bg-transparent text-ink-muted border-rule hover:border-ink'}`}>
+                      {m.charAt(0).toUpperCase() + m.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <p className="chart-subtitle">
                 How valuation multiples move with trading activity — falling P/E on rising volume suggests improving fundamentals
               </p>
               <ResponsiveContainer width="100%" height={340}>
-                <ComposedChart data={peVolumeData} margin={{ top: 8, right: 60, bottom: 0, left: 0 }}>
+                <ComposedChart data={peMode === 'monthly' ? peVolumeMonthly : peVolumeData} margin={{ top: 8, right: 60, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="peVolGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.1} />
@@ -1684,8 +1723,13 @@ export default function ExchangeProfilePage() {
                       </div>
                     )
                   }} />
-                  <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1}
-                    fill="url(#peVolGrad)" animationDuration={800} />
+                  {peMode === 'monthly' ? (
+                    <Bar yAxisId="vol" dataKey="volume" name="volume" fill={COLORS.ink} fillOpacity={0.15}
+                      stroke={COLORS.ink} strokeWidth={1} animationDuration={600} radius={[2, 2, 0, 0]} />
+                  ) : (
+                    <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1}
+                      fill="url(#peVolGrad)" animationDuration={800} />
+                  )}
                   <Line yAxisId="pe" type="monotone" dataKey="pe" name="pe" stroke={COLORS.blue} strokeWidth={2}
                     dot={false} animationDuration={800} connectNulls />
                 </ComposedChart>
@@ -1693,11 +1737,11 @@ export default function ExchangeProfilePage() {
               <div className="flex items-center gap-4 mt-2">
                 <span className="flex items-center gap-1.5">
                   <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
-                  <span className="font-sans text-[11px] text-ink-muted">P/E Ratio</span>
+                  <span className="font-sans text-[11px] text-ink-muted">{peMode === 'monthly' ? 'Avg' : ''} P/E Ratio</span>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
-                  <span className="font-sans text-[11px] text-ink-muted">Daily Volume</span>
+                  <span className="font-sans text-[11px] text-ink-muted">{peMode === 'monthly' ? 'Monthly' : 'Daily'} Volume</span>
                 </span>
               </div>
             </section>
