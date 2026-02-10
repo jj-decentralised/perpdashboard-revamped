@@ -1231,6 +1231,33 @@ export async function fetchEnhancedDexCexShare(
   })
 }
 
+// Known Solana-native perp protocols (lowercase for matching)
+const SOLANA_PERP_PROTOCOLS = new Set([
+  'drift', 'drift protocol', 'drift-protocol',
+  'jupiter perps', 'jupiter-perps',
+  'flash trade', 'flash-trade',
+  'zeta', 'zeta markets', 'zeta-markets',
+  'adrena', 'adrena-protocol',
+  'backpack',
+  'mango', 'mango markets', 'mango-markets',
+  'parcl',
+  'phoenix',
+  'hxro',
+  '01', 'cypher',
+  'orderly network', 'orderly-network',
+  'goosefx',
+  'surfx',
+])
+
+function isSolanaPerp(name: string): boolean {
+  const lower = name.toLowerCase().trim()
+  if (SOLANA_PERP_PROTOCOLS.has(lower)) return true
+  for (const known of SOLANA_PERP_PROTOCOLS) {
+    if (lower.startsWith(known)) return true
+  }
+  return false
+}
+
 // Solana chain growth — tracks Solana's share of DEX perp volume over time
 export async function fetchSolanaChainGrowth(): Promise<import('../types').SolanaGrowthPoint[]> {
   try {
@@ -1243,14 +1270,23 @@ export async function fetchSolanaChainGrowth(): Promise<import('../types').Solan
       let totalDexVol = 0
 
       for (const [name, chains] of Object.entries(breakdown)) {
-        if (typeof chains === 'number') continue
         if (classifyVenue(name) !== 'defi') continue
 
-        const chainEntries = chains as Record<string, number>
-        for (const [chainName, vol] of Object.entries(chainEntries)) {
-          const v = Number(vol) || 0
-          totalDexVol += v
-          if (chainName === 'Solana') solanaVol += v
+        // Handle both shapes: flat number or { chain: volume } object
+        const vol = typeof chains === 'number'
+          ? chains
+          : Object.values(chains as Record<string, number>).reduce((s, v) => s + (Number(v) || 0), 0)
+
+        totalDexVol += vol
+
+        // Check by protocol name first (covers flat-number entries)
+        if (isSolanaPerp(name)) {
+          solanaVol += vol
+        } else if (typeof chains !== 'number') {
+          // For multi-chain protocols, add only their Solana chain volume
+          const chainEntries = chains as Record<string, number>
+          const solVol = chainEntries['Solana'] || 0
+          if (solVol > 0) solanaVol += solVol
         }
       }
 
