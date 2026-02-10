@@ -1,7 +1,97 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import type { EnrichedExchange } from '../../types'
 import { formatUSD, formatPercent, formatNumber, formatMultiple, formatBPS, percentClass, classNames } from '../../utils/format'
+import { CategoryFilter, type CategorySelection } from '../CategoryFilter'
+import { MetricInfo } from '../MetricInfo'
+
+/** Ecosystem map: protocols with known third-party frontends/products built on top */
+const ECOSYSTEM_MAP: Record<string, { label: string; products: string[] }> = {
+  'hyperliquid-perps': {
+    label: 'Hyperliquid ecosystem',
+    products: [
+      'Based — trading super app (Ethena-backed)',
+      'Phantom — wallet-native perps trading',
+      'pvp.trade — Telegram trading bot',
+      'Insilico Terminal — AI trading terminal',
+      'Trade.xyz — non-crypto asset perps (HIP-3)',
+      'Tealstreet — advanced trading terminal',
+      'Rage Trade — perp screener & aggregator',
+      'Bullpen — multi-venue terminal (by Ansem)',
+      'Katoshi — copy-trading bots',
+      'Aura — social trading app',
+    ],
+  },
+  gmx: {
+    label: 'GMX ecosystem',
+    products: [
+      'MUX Protocol — perp aggregator',
+      'Stryke (Dopex) — options & liquidation protection',
+      'Puppet — copy-trading protocol',
+      'STFX — social trading vaults',
+      'GMD Protocol — GLP yield optimizer',
+      'Neutra Finance — delta-neutral GLP yield',
+    ],
+  },
+  'gmx-v2-perps': {
+    label: 'GMX ecosystem',
+    products: [
+      'MUX Protocol — perp aggregator',
+      'Puppet — copy-trading protocol',
+      'STFX — social trading vaults',
+    ],
+  },
+  synthetix: {
+    label: 'Synthetix ecosystem',
+    products: [
+      'Kwenta (Synthetix Exchange) — primary perps frontend',
+      'Polynomial — perps integrator',
+      'Derive (Lyra) — options DEX using SNX hedging',
+      'Infinex — onchain accounts gateway',
+    ],
+  },
+  'dydx-v4': {
+    label: 'dYdX ecosystem',
+    products: [
+      'Community-hosted frontends (open-source)',
+      'Typescript & Python SDKs for bot trading',
+    ],
+  },
+  'jupiter-perpetual-exchange': {
+    label: 'Jupiter Perps ecosystem',
+    products: [
+      'Kamino Finance — leveraged JLP vaults',
+      'Drift — delta-neutral JLP vaults',
+      'Solflare — wallet-native JLP access',
+    ],
+  },
+  'drift-trade': {
+    label: 'Drift ecosystem',
+    products: [
+      'SuperstakeSol — leveraged SOL staking',
+      'Circuit Finance — DeFi on Drift infra',
+      'BET — prediction markets on Drift',
+    ],
+  },
+  'vertex-protocol': {
+    label: 'Vertex ecosystem',
+    products: [
+      'Blitz — Vertex on Blast L2',
+      'Elixir — decentralized market-making (Fusion Pools)',
+      'Skate — LP vaults with boosted yields',
+    ],
+  },
+  'orderly-perps': {
+    label: 'Orderly ecosystem',
+    products: [
+      'WOOFi Pro — orderbook perps frontend',
+      'LogX Pro — AI-enhanced orderbook DEX',
+      'BTSE DEX — decentralized perps arm',
+      'AscendEX — CEX integration',
+      'REF Finance — NEAR DEX with perps',
+    ],
+  },
+}
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -22,15 +112,19 @@ const columns: ColumnDef[] = [
   { key: 'total24h', label: '24h Volume', sortable: true, align: 'right' },
   { key: 'total7d', label: '7d Volume', sortable: true, align: 'right' },
   { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' },
-  { key: 'dailyFees', label: 'Daily Fees', sortable: true, align: 'right' },
-  { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
-  { key: 'volPer1MFees', label: 'Vol / $1M Fees', sortable: true, align: 'right', tooltip: 'Volume needed to generate $1M in fees' },
   { key: 'mcap', label: 'Mcap', sortable: true, align: 'right' },
   { key: 'psRatio', label: 'P/S', sortable: true, align: 'right', tooltip: 'Price-to-Sales: Mcap / Annualized Fees' },
   { key: 'peRatio', label: 'P/E', sortable: true, align: 'right', tooltip: 'Price-to-Earnings: Mcap / Annualized Revenue' },
+  { key: 'dailyFees', label: 'Daily Fees', sortable: true, align: 'right' },
+  { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
+  { key: 'tvl', label: 'TVL', sortable: true, align: 'right', tooltip: 'Total Value Locked — deposited collateral/liquidity' },
+  { key: 'volumeToTvl', label: 'Vol/TVL', sortable: true, align: 'right', tooltip: 'Capital turnover: 24h Volume / TVL' },
+  { key: 'effectiveAssets', label: 'Assets', sortable: true, align: 'right', tooltip: 'Effective number of listed assets (1/HHI of OI distribution)' },
   { key: 'change_1d', label: '1d %', sortable: true, align: 'right' },
   { key: 'change_7d', label: '7d %', sortable: true, align: 'right' },
 ]
+
+const PAGE_SIZE = 50
 
 function getDailyFees(exchange: EnrichedExchange): number | null {
   return exchange.feeData?.total24h ?? null
@@ -50,6 +144,17 @@ function getVolPer1MFees(exchange: EnrichedExchange): number | null {
   return (vol / fees) * 1_000_000
 }
 
+function isDataAnomaly(exchange: EnrichedExchange): string | null {
+  const oi = exchange.openInterest
+  const vol = exchange.total24h ?? 0
+  const volPer1M = getVolPer1MFees(exchange)
+  const issues: string[] = []
+  if (oi > 0 && oi < 100) issues.push('OI below $100')
+  if (volPer1M != null && volPer1M > 1e12) issues.push('Vol/$1M Fees exceeds $1T')
+  if (vol > 0 && exchange.change_7d != null && Math.abs(exchange.change_7d) > 1000) issues.push('Extreme weekly change')
+  return issues.length > 0 ? issues.join('; ') : null
+}
+
 function getSortValue(exchange: EnrichedExchange, key: string): number | string {
   switch (key) {
     case 'name':
@@ -60,6 +165,10 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
       return exchange.total7d ?? -Infinity
     case 'openInterest':
       return exchange.openInterest ?? -Infinity
+    case 'tvl':
+      return exchange.tvl ?? -Infinity
+    case 'volumeToTvl':
+      return exchange.volumeToTvl ?? -Infinity
     case 'dailyFees':
       return getDailyFees(exchange) ?? -Infinity
     case 'takeRate':
@@ -72,6 +181,8 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
       return exchange.psRatio ?? Infinity
     case 'peRatio':
       return exchange.peRatio ?? Infinity
+    case 'effectiveAssets':
+      return exchange.effectiveAssetCount ?? -Infinity
     case 'change_1d':
       return exchange.change_1d ?? -Infinity
     case 'change_7d':
@@ -81,10 +192,161 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
   }
 }
 
+function DashCell({ tooltip }: { tooltip?: string }) {
+  return (
+    <span
+      className="text-ink-muted cursor-help"
+      title={tooltip || 'Data not available from source'}
+    >
+      {'\u2014'}
+    </span>
+  )
+}
+
+/** Token holder rights summary — compact tags for the rankings table */
+const HOLDER_RIGHTS_MAP: Record<string, { tags: string[]; tooltip: string }> = {
+  'hyperliquid-perps': { tags: ['Buyback'], tooltip: 'Assistance Fund buybacks of HYPE' },
+  gmx: { tags: ['Fee Share', 'Governance'], tooltip: '30% of fees to GMX stakers + governance voting' },
+  'gmx-v2-perps': { tags: ['Fee Share', 'Governance'], tooltip: '30% of fees to GMX stakers + governance voting' },
+  synthetix: { tags: ['Fee Share', 'Governance'], tooltip: 'Stakers earn trading fees + Spartan Council governance' },
+  'dydx-v4': { tags: ['Fee Rebate', 'Governance'], tooltip: 'Fee rebates for stakers + on-chain governance' },
+  dydx: { tags: ['Fee Rebate', 'Governance'], tooltip: 'Fee rebates for stakers + on-chain governance' },
+  'jupiter-perpetual-exchange': { tags: ['Buyback', 'Governance'], tooltip: '50% fee buyback + Active Staking Rewards' },
+  'jupiter-perps': { tags: ['Buyback', 'Governance'], tooltip: '50% fee buyback + Active Staking Rewards' },
+  'drift-trade': { tags: ['Insurance', 'Governance'], tooltip: 'Insurance fund staking + Realms governance' },
+  'vertex-protocol': { tags: ['Fee Share'], tooltip: 'USDC rewards from trading fees to VRTX stakers' },
+  'gains-network': { tags: ['Fee Share', 'Governance'], tooltip: 'GNS stakers earn trading fee share' },
+  'gains-network-perps': { tags: ['Fee Share', 'Governance'], tooltip: 'GNS stakers earn trading fee share' },
+  'aevo-perps': { tags: ['Governance'], tooltip: 'Governance voting + fee discounts for stakers' },
+  'rabbitx': { tags: ['Fee Share'], tooltip: 'RBX stakers earn portion of trading fees' },
+}
+
+function HolderRightsTags({ slug }: { slug: string }) {
+  const info = HOLDER_RIGHTS_MAP[slug]
+  if (!info) return null
+
+  return (
+    <>
+      {info.tags.map(tag => (
+        <span
+          key={tag}
+          className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-sans font-medium bg-accent-green/10 text-accent-green border border-accent-green/30 cursor-help"
+          title={info.tooltip}
+        >
+          {tag}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function EcosystemBadge({ slug }: { slug: string }) {
+  const eco = ECOSYSTEM_MAP[slug]
+  if (!eco) return null
+
+  const tooltipText = `${eco.label}\n${eco.products.map(p => `• ${p}`).join('\n')}`
+
+  return (
+    <span
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium bg-accent-blue/10 text-accent-blue border border-accent-blue/30 cursor-help"
+      title={tooltipText}
+    >
+      {eco.products.length} builders
+    </span>
+  )
+}
+
+function ScrollableTable({ children }: { children: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScroll, setCanScroll] = useState(false)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const check = () => {
+      const hasMore = el.scrollWidth - el.scrollLeft - el.clientWidth > 2
+      setCanScroll(hasMore)
+    }
+    check()
+    el.addEventListener('scroll', check, { passive: true })
+    window.addEventListener('resize', check)
+    return () => {
+      el.removeEventListener('scroll', check)
+      window.removeEventListener('resize', check)
+    }
+  }, [])
+
+  return (
+    <div className="relative">
+      {canScroll && (
+        <div className="flex items-center justify-end gap-1.5 mb-2 font-sans text-xs text-ink-muted">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+          </svg>
+          Scroll for more columns
+        </div>
+      )}
+      <div ref={scrollRef} className="overflow-x-auto border border-rule bg-paper">
+        {children}
+      </div>
+      {canScroll && (
+        <div
+          className="absolute right-0 top-8 bottom-0 w-16 pointer-events-none z-20"
+          style={{
+            background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.9) 50%, white)',
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function exportCSV(exchanges: EnrichedExchange[]) {
+  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', 'Effective Assets', '1d Change %', '7d Change %']
+  const rows = exchanges.map((e, i) => [
+    i + 1,
+    e.displayName || e.name,
+    e.tokenSymbol || '',
+    (e.chains || []).join('; '),
+    e.total24h ?? '',
+    e.total7d ?? '',
+    e.openInterest || '',
+    e.tvl || '',
+    e.volumeToTvl?.toFixed(2) ?? '',
+    getDailyFees(e) ?? '',
+    getTakeRate(e)?.toFixed(2) ?? '',
+    e.mcap ?? '',
+    e.psRatio?.toFixed(1) ?? '',
+    e.peRatio?.toFixed(1) ?? '',
+    e.effectiveAssetCount?.toFixed(0) ?? '',
+    e.change_1d?.toFixed(2) ?? '',
+    e.change_7d?.toFixed(2) ?? '',
+  ])
+  const csv = [headers, ...rows].map((row) =>
+    row.map((cell) => {
+      const str = String(cell)
+      return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str
+    }).join(',')
+  ).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `perp-exchange-rankings-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function ExchangeRankingsTable({ exchanges }: Props) {
+  const [category, setCategory] = useState<CategorySelection>('all')
   const [sortBy, setSortBy] = useState<string>('total24h')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [tokenFilter, setTokenFilter] = useState<'all' | 'token' | 'no-token'>('all')
+  const [page, setPage] = useState(0)
+  const [search, setSearch] = useState('')
+  const sectionRef = useRef<HTMLElement>(null)
+
+  const filtered = category === 'all' ? exchanges : exchanges.filter(e => e.venueType === category)
 
   const handleSort = (key: string) => {
     if (key === 'rank') return
@@ -92,20 +354,40 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
       setSortDir(sortDir === 'desc' ? 'asc' : 'desc')
     } else {
       setSortBy(key)
-      // For valuation ratios and vol/$1M, lower is "better" so default asc
       const ascByDefault = ['name', 'psRatio', 'peRatio', 'volPer1MFees']
       setSortDir(ascByDefault.includes(key) ? 'asc' : 'desc')
     }
+    setPage(0)
   }
 
+  const handleFilterChange = useCallback((filter: 'all' | 'token' | 'no-token') => {
+    setTokenFilter(filter)
+    setPage(0)
+    sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const handlePageChange = useCallback((newPage: number) => {
+    setPage(newPage)
+    sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   const filteredExchanges = useMemo(() => {
-    if (tokenFilter === 'token') return exchanges.filter((e) => e.hasToken)
-    if (tokenFilter === 'no-token') return exchanges.filter((e) => !e.hasToken)
-    return exchanges
-  }, [exchanges, tokenFilter])
+    let result = filtered
+    if (tokenFilter === 'token') result = result.filter((e) => e.hasToken)
+    if (tokenFilter === 'no-token') result = result.filter((e) => !e.hasToken)
+    if (search.trim()) {
+      const q = search.toLowerCase().trim()
+      result = result.filter((e) =>
+        (e.displayName || e.name).toLowerCase().includes(q) ||
+        (e.tokenSymbol || '').toLowerCase().includes(q) ||
+        (e.chains || []).some((c) => c.toLowerCase().includes(q))
+      )
+    }
+    return result
+  }, [filtered, tokenFilter, search])
 
   const sortedExchanges = useMemo(() => {
-    const sorted = [...filteredExchanges].sort((a, b) => {
+    return [...filteredExchanges].sort((a, b) => {
       const aVal = getSortValue(a, sortBy)
       const bVal = getSortValue(b, sortBy)
 
@@ -117,9 +399,10 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
       const bNum = bVal as number
       return sortDir === 'asc' ? aNum - bNum : bNum - aNum
     })
-
-    return sorted.slice(0, 50)
   }, [filteredExchanges, sortBy, sortDir])
+
+  const totalPages = Math.ceil(sortedExchanges.length / PAGE_SIZE)
+  const pagedExchanges = sortedExchanges.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const sortIndicator = (key: string) => {
     if (sortBy !== key) return null
@@ -130,36 +413,40 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
     )
   }
 
-  const tokenCount = exchanges.filter((e) => e.hasToken).length
-  const noTokenCount = exchanges.length - tokenCount
+  const tokenCount = filtered.filter((e) => e.hasToken).length
+  const noTokenCount = filtered.length - tokenCount
 
   // Summary stats
   const stats = useMemo(() => {
-    const withFees = exchanges.filter((e) => getDailyFees(e) != null && getDailyFees(e)! > 0)
+    const withFees = filtered.filter((e) => getDailyFees(e) != null && getDailyFees(e)! > 0)
     const takeRates = withFees.map((e) => getTakeRate(e)!).filter((v) => v != null && isFinite(v))
     const medianTakeRate = takeRates.length > 0
       ? takeRates.sort((a, b) => a - b)[Math.floor(takeRates.length / 2)]
       : null
     const totalDailyFees = withFees.reduce((sum, e) => sum + (getDailyFees(e) || 0), 0)
     return { medianTakeRate, totalDailyFees, exchangesWithFees: withFees.length }
-  }, [exchanges])
+  }, [filtered])
 
   return (
-    <section className="section-rule">
+    <section className="section-rule" ref={sectionRef}>
       <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 mb-4">
         <div>
           <h2 className="font-serif text-2xl font-bold text-ink mb-1">
             Exchange Rankings
           </h2>
           <p className="font-sans text-sm text-ink-muted">
-            Top perpetual exchanges by 24-hour trading volume
+            All {filtered.length} perpetual exchanges by 24-hour trading volume
           </p>
+          <MetricInfo
+            description="The comprehensive rankings table aggregates volume, open interest, fees, valuation ratios, and growth metrics for every tracked perpetual exchange. Use sorting and filtering to compare protocols across dimensions — P/S and P/E ratios help assess whether a token is over- or under-valued relative to fee generation, while take rate and Vol/TVL reveal capital efficiency. Holder yield and carry yield highlight which protocols return value to token holders and traders respectively."
+            source="Volume, OI, and fees from on-chain data. Market cap and token data from market aggregators."
+          />
         </div>
 
         {/* Token Filter */}
         <div className="flex items-center gap-1 font-sans text-xs">
           <button
-            onClick={() => setTokenFilter('all')}
+            onClick={() => handleFilterChange('all')}
             className={classNames(
               'px-3 py-1.5 border transition-colors',
               tokenFilter === 'all'
@@ -167,10 +454,10 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                 : 'bg-paper text-ink-muted border-rule hover:border-ink'
             )}
           >
-            All ({exchanges.length})
+            All ({filtered.length})
           </button>
           <button
-            onClick={() => setTokenFilter('token')}
+            onClick={() => handleFilterChange('token')}
             className={classNames(
               'px-3 py-1.5 border transition-colors',
               tokenFilter === 'token'
@@ -181,7 +468,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
             With Token ({tokenCount})
           </button>
           <button
-            onClick={() => setTokenFilter('no-token')}
+            onClick={() => handleFilterChange('no-token')}
             className={classNames(
               'px-3 py-1.5 border transition-colors',
               tokenFilter === 'no-token'
@@ -194,29 +481,58 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         </div>
       </div>
 
+      {/* Search + Category Filter + Export */}
+      <div className="mb-4 flex items-center gap-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(0) }}
+          placeholder="Search by name, token, or chain..."
+          className="w-full max-w-sm px-3 py-2 border border-rule bg-paper font-sans text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-ink transition-colors"
+        />
+        {(() => {
+          const dc = exchanges.filter(e => e.venueType === 'defi').length
+          const cc = exchanges.filter(e => e.venueType === 'cefi').length
+          return dc > 0 && cc > 0 ? (
+            <CategoryFilter selected={category} onChange={setCategory} defiCount={dc} cefiCount={cc} />
+          ) : null
+        })()}
+        <button
+          onClick={() => exportCSV(sortedExchanges)}
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-rule bg-paper text-ink-muted font-sans text-xs hover:border-ink hover:text-ink transition-colors cursor-pointer"
+          type="button"
+          title="Export to CSV"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          CSV
+        </button>
+      </div>
+
       {/* Summary stats bar */}
       <div className="grid grid-cols-3 gap-4 mb-4 pb-4 border-b border-rule">
         <div>
           <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">Total Daily Fees</p>
           <p className="font-mono text-sm font-bold text-ink">
-            {stats.totalDailyFees > 0 ? formatUSD(stats.totalDailyFees, true) : '—'}
+            {stats.totalDailyFees > 0 ? formatUSD(stats.totalDailyFees, true) : <DashCell />}
           </p>
         </div>
         <div>
           <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">Median Take Rate</p>
           <p className="font-mono text-sm font-bold text-ink">
-            {stats.medianTakeRate != null ? formatBPS(stats.medianTakeRate) : '—'}
+            {stats.medianTakeRate != null ? formatBPS(stats.medianTakeRate) : <DashCell />}
           </p>
         </div>
         <div>
           <p className="font-sans text-xs uppercase tracking-wider text-ink-muted">Exchanges w/ Fee Data</p>
           <p className="font-mono text-sm font-bold text-ink">
-            {stats.exchangesWithFees} / {exchanges.length}
+            {stats.exchangesWithFees} / {filtered.length}
           </p>
         </div>
       </div>
 
-      <div className="overflow-x-auto border border-rule bg-paper">
+      <ScrollableTable>
         <table className="data-table w-full border-collapse">
           <thead>
             <tr>
@@ -226,7 +542,8 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   className={classNames(
                     col.align === 'right' && 'text-right',
                     col.sortable && 'cursor-pointer select-none hover:text-ink',
-                    'sticky top-0 bg-paper z-10 whitespace-nowrap'
+                    'sticky top-0 bg-paper z-10 whitespace-nowrap',
+                    col.key === 'name' && 'sticky left-0 z-20 bg-paper'
                   )}
                   onClick={() => col.sortable && handleSort(col.key)}
                   title={col.tooltip}
@@ -238,36 +555,52 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
             </tr>
           </thead>
           <tbody>
-            {sortedExchanges.map((exchange, index) => {
+            {pagedExchanges.map((exchange, index) => {
               const takeRate = getTakeRate(exchange)
               const volPer1M = getVolPer1MFees(exchange)
               const dailyFees = getDailyFees(exchange)
+              const anomaly = isDataAnomaly(exchange)
+              const globalIndex = page * PAGE_SIZE + index
 
               return (
                 <tr
                   key={exchange.slug || exchange.name}
-                  className={index % 2 === 1 ? 'bg-paper-warm' : undefined}
+                  className={classNames(
+                    index % 2 === 1 ? 'bg-paper-warm' : undefined,
+                    anomaly ? 'opacity-60' : undefined,
+                  )}
                 >
-                  <td className="text-ink-muted w-10">{index + 1}</td>
-                  <td className="font-sans text-sm font-medium text-ink whitespace-nowrap">
-                    <div className="flex items-center gap-2">
+                  <td className="text-ink-muted w-10">{globalIndex + 1}</td>
+                  <td className={classNames(
+                    'font-sans text-sm font-medium text-ink whitespace-nowrap',
+                    'sticky left-0 z-10',
+                    index % 2 === 1 ? 'bg-paper-warm' : 'bg-paper'
+                  )}>
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <Link to={`/exchange/${exchange.slug}?cgId=${exchange.cgExchangeId || ''}`} className="hover:underline" style={{ color: '#2e5e8e' }}>
                         {exchange.displayName || exchange.name}
                       </Link>
                       {exchange.hasToken && (
                         <span className="tag-token">{exchange.tokenSymbol}</span>
                       )}
+                      <HolderRightsTags slug={exchange.slug} />
+                      <EcosystemBadge slug={exchange.slug} />
+                      {anomaly && (
+                        <span className="text-amber-600 cursor-help" title={`Data anomaly: ${anomaly}`}>&#9888;</span>
+                      )}
                     </div>
                   </td>
-                  <td className="text-right">{exchange.total24h != null ? formatUSD(exchange.total24h, true) : '\u2014'}</td>
-                  <td className="text-right">{exchange.total7d != null ? formatUSD(exchange.total7d, true) : '\u2014'}</td>
-                  <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : '\u2014'}</td>
-                  <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : '\u2014'}</td>
-                  <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : '\u2014'}</td>
-                  <td className="text-right font-mono text-xs">{volPer1M != null ? formatUSD(volPer1M, true) : '\u2014'}</td>
-                  <td className="text-right">{exchange.mcap && exchange.mcap > 0 ? formatUSD(exchange.mcap, true) : '\u2014'}</td>
-                  <td className="text-right">{exchange.psRatio != null ? formatMultiple(exchange.psRatio) : '\u2014'}</td>
-                  <td className="text-right">{exchange.peRatio != null ? formatMultiple(exchange.peRatio) : '\u2014'}</td>
+                  <td className="text-right">{exchange.total24h != null ? formatUSD(exchange.total24h, true) : <DashCell />}</td>
+                  <td className="text-right">{exchange.total7d != null ? formatUSD(exchange.total7d, true) : <DashCell />}</td>
+                  <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : <DashCell tooltip="OI data requires exchange listing on data aggregator" />}</td>
+                  <td className="text-right">{exchange.mcap && exchange.mcap > 0 ? formatUSD(exchange.mcap, true) : <DashCell tooltip="No governance token or market cap data unavailable" />}</td>
+                  <td className="text-right">{exchange.psRatio != null ? formatMultiple(exchange.psRatio) : <DashCell tooltip="Requires market cap and fee data" />}</td>
+                  <td className="text-right">{exchange.peRatio != null ? formatMultiple(exchange.peRatio) : <DashCell tooltip="Requires market cap and revenue data" />}</td>
+                  <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : <DashCell tooltip="Fee data not tracked for this exchange" />}</td>
+                  <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : <DashCell tooltip="Requires both fee and volume data" />}</td>
+                  <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available" />}</td>
+                  <td className="text-right font-mono text-xs">{exchange.volumeToTvl != null && isFinite(exchange.volumeToTvl) ? `${exchange.volumeToTvl.toFixed(1)}x` : <DashCell tooltip="Requires both volume and TVL data" />}</td>
+                  <td className="text-right font-mono text-xs">{exchange.effectiveAssetCount != null ? exchange.effectiveAssetCount.toFixed(0) : <DashCell tooltip="No OI breakdown data available" />}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_1d))}>{formatPercent(exchange.change_1d)}</td>
                   <td className={classNames('text-right', percentClass(exchange.change_7d))}>{formatPercent(exchange.change_7d)}</td>
                 </tr>
@@ -275,14 +608,104 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollableTable>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 font-sans text-sm">
+          <p className="text-ink-muted">
+            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sortedExchanges.length)} of {sortedExchanges.length}
+            {filteredExchanges.length !== filtered.length && ` (filtered from ${filtered.length})`}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handlePageChange(0)}
+              disabled={page === 0}
+              className={classNames(
+                'px-2 py-1 border transition-colors',
+                page === 0
+                  ? 'border-rule text-ink-muted cursor-not-allowed'
+                  : 'border-rule hover:border-ink text-ink cursor-pointer'
+              )}
+            >
+              &laquo;
+            </button>
+            <button
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 0}
+              className={classNames(
+                'px-3 py-1 border transition-colors',
+                page === 0
+                  ? 'border-rule text-ink-muted cursor-not-allowed'
+                  : 'border-rule hover:border-ink text-ink cursor-pointer'
+              )}
+            >
+              Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i)
+              .filter((i) => i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 1)
+              .reduce<(number | 'gap')[]>((acc, i, idx, arr) => {
+                if (idx > 0 && i - (arr[idx - 1] as number) > 1) acc.push('gap')
+                acc.push(i)
+                return acc
+              }, [])
+              .map((item, idx) =>
+                item === 'gap' ? (
+                  <span key={`gap-${idx}`} className="px-1 text-ink-muted">&hellip;</span>
+                ) : (
+                  <button
+                    key={item}
+                    onClick={() => handlePageChange(item)}
+                    className={classNames(
+                      'px-3 py-1 border transition-colors',
+                      page === item
+                        ? 'bg-ink text-paper border-ink font-semibold'
+                        : 'border-rule hover:border-ink text-ink cursor-pointer'
+                    )}
+                  >
+                    {item + 1}
+                  </button>
+                )
+              )}
+            <button
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page >= totalPages - 1}
+              className={classNames(
+                'px-3 py-1 border transition-colors',
+                page >= totalPages - 1
+                  ? 'border-rule text-ink-muted cursor-not-allowed'
+                  : 'border-rule hover:border-ink text-ink cursor-pointer'
+              )}
+            >
+              Next
+            </button>
+            <button
+              onClick={() => handlePageChange(totalPages - 1)}
+              disabled={page >= totalPages - 1}
+              className={classNames(
+                'px-3 py-1 border transition-colors',
+                page >= totalPages - 1
+                  ? 'border-rule text-ink-muted cursor-not-allowed'
+                  : 'border-rule hover:border-ink text-ink cursor-pointer'
+              )}
+            >
+              &raquo;
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Legend / footnote */}
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 font-sans text-[10px] text-ink-muted">
+        <span><strong>TVL</strong> = Total Value Locked (deposited collateral)</span>
+        <span><strong>Vol/TVL</strong> = Capital turnover (24h Volume / TVL)</span>
         <span><strong>Take Rate</strong> = Daily Fees / Daily Volume (bps)</span>
-        <span><strong>Vol / $1M Fees</strong> = Volume needed to generate $1M in fees</span>
         <span><strong>P/S</strong> = Mcap / Annualized Fees</span>
         <span><strong>P/E</strong> = Mcap / Annualized Revenue</span>
+        <span><strong>Assets</strong> = Effective listed assets (1/HHI)</span>
+        <span><strong>{'\u2014'}</strong> = Data not available from source (hover for details)</span>
+        <span><strong>&#9888;</strong> = Possible data anomaly</span>
+        <span><span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Fee Share</span> / <span className="inline-block px-1 py-0 text-[9px] bg-accent-green/10 text-accent-green border border-accent-green/30">Buyback</span> = Token holder value accrual</span>
       </div>
     </section>
   )

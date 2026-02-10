@@ -12,6 +12,7 @@ import {
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatUSD, formatPercent } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -81,6 +82,7 @@ function CustomTooltip({
 }
 
 export function FeeRevenueChart({ exchanges }: Props) {
+  const [useLogScale, setUseLogScale] = React.useState(false)
   const chartData = useMemo<ChartRow[]>(() => {
     return exchanges
       .filter(
@@ -143,6 +145,19 @@ export function FeeRevenueChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         Protocol fee generation and capital efficiency, 24-hour snapshot
       </p>
+      <MetricInfo
+        description="Fee revenue analysis breaks down how much each protocol earns from trading activity. The fee/volume ratio (take rate) measures capital efficiency — lower rates attract more volume but generate less revenue per trade. Comparing tokenised vs non-tokenised exchange fee structures reveals how governance token incentives affect pricing."
+        source="24h fee data from on-chain sources. Take rate computed as fees / volume in basis points."
+      />
+
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={() => setUseLogScale(!useLogScale)}
+          className="font-sans text-[11px] text-ink-muted border border-rule px-2 py-0.5 hover:border-ink transition-colors"
+        >
+          {useLogScale ? 'Linear scale' : 'Log scale'}
+        </button>
+      </div>
 
       <ResponsiveContainer width="100%" height={420}>
         <BarChart
@@ -166,11 +181,14 @@ export function FeeRevenueChart({ exchanges }: Props) {
             height={80}
           />
           <YAxis
+            scale={useLogScale ? 'log' : 'auto'}
+            domain={useLogScale ? ['auto', 'auto'] : [0, 'auto']}
             tickFormatter={formatCompact}
             tick={AXIS_STYLE}
             tickLine={false}
             axisLine={false}
             width={62}
+            allowDataOverflow={useLogScale}
           />
           <Tooltip
             content={<CustomTooltip />}

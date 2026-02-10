@@ -60,6 +60,23 @@ export interface EnrichedExchange extends DexProtocol {
   annualizedRevenue: number | null
   peRatio: number | null
   psRatio: number | null
+  venueType: 'defi' | 'cefi'
+  // Funding carry metrics
+  avgCarryYield: number | null
+  fundingSlope: number | null
+  // OI concentration
+  oiHHI: number | null
+  effectiveAssetCount: number | null
+  // Holder yield (lazy-loaded)
+  holderYield: number | null
+  // Token Terminal data (lazy-loaded, optional)
+  ttRevenue: number | null
+  ttEarnings: number | null
+  ttTokenIncentives: number | null
+  ttActiveUsers: number | null
+  ttPE: number | null
+  ttPS: number | null
+  ttCodeCommits7d: number | null
 }
 
 export interface FeeProtocol {
@@ -143,6 +160,85 @@ export interface VolumeSharePoint {
   [exchangeName: string]: number
 }
 
+export interface FundingRateEntry {
+  marketplace: string
+  market: string
+  baseAsset: string
+  fundingRate: number
+  fundingRate7dAverage: number | null
+  fundingRate30dAverage: number | null
+  openInterest: number | null
+  indexPrice: number | null
+  markPrice: number | null
+  venueType: 'defi' | 'cefi'
+}
+
+export interface CarryPairData {
+  asset: string
+  marketplace: string
+  carry: number
+  oi: number
+  slope: number
+  currentRate: number
+  avg7d: number | null
+  avg30d: number | null
+}
+
+export interface BasisMetrics {
+  btcBasisBps: number | null
+  ethBasisBps: number | null
+  marketWideBasisBps: number | null
+  topAssets: Array<{ asset: string; basisBps: number; oi: number }>
+}
+
+export interface GlobalCryptoContext {
+  totalCryptoVolume: number
+  totalCryptoMcap: number
+  btcDominance: number
+  perpsShare: number
+  oiToMcapRatio: number
+}
+
+export interface AssetOIEntry {
+  asset: string
+  totalOI: number
+  share: number
+}
+
+export interface TreasuryAgg {
+  slug: string
+  name: string
+  totalUsd: number
+  ownTokenUsd: number
+  stablecoinsUsd: number
+  majorsUsd: number
+  othersUsd: number
+  warChestRatio: number | null
+}
+
+/** Per-protocol fee share at a point in time (%, keyed by protocol name) */
+export interface FeeSharePoint {
+  date: number
+  [protocolName: string]: number
+}
+
+/** Token Terminal sector-level aggregate */
+export interface TTAggregateData {
+  sectorRevenue: number
+  sectorEarnings: number
+  sectorIncentives: number
+  sectorActiveUsers: number
+  coverageCount: number
+}
+
+/** Perps share of total DeFi fees at a point in time */
+export interface PerpFeeSharePoint {
+  date: number
+  perpFees: number
+  totalFees: number
+  perpShare: number
+}
+
 export interface DashboardData {
   dexOverview: DexOverview
   protocols: ProtocolInfo[]
@@ -156,4 +252,21 @@ export interface DashboardData {
   topFundingRates: CGDerivativeTicker[]
   volumeShareHistory: VolumeSharePoint[]
   topExchangeNames: string[]
+  historicalOI: HistoricalDataPoint[]
+  fundingRateData: FundingRateEntry[]
+  spotVolume24h: number
+  spotVolume7d: number
+  spotVolumeHistory: HistoricalDataPoint[]
+  // New enrichments
+  carryMetrics: CarryPairData[]
+  basisMetrics: BasisMetrics
+  globalContext: GlobalCryptoContext | null
+  assetOIBreakdown: AssetOIEntry[]
+  treasuryData: TreasuryAgg[]
+  // Historical fee data (lazy-loaded)
+  perpFeeBreakdown: FeeSharePoint[]
+  perpFeeBreakdownNames: string[]
+  perpFeeShareHistory: PerpFeeSharePoint[]
+  // Token Terminal aggregate (lazy-loaded, optional)
+  ttAggregate: TTAggregateData | null
 }

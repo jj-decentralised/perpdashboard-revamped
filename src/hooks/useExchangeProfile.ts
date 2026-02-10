@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange } from '../types/profile'
+import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData, MarketSharePoint, BuilderVolumeData } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchDerivativesOverview, fetchFeeOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
-import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets } from '../services/coingecko'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets, fetchBTCPrice } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
 
@@ -260,6 +260,74 @@ function buildComparables(
   return comparables.slice(0, 10)
 }
 
+function buildMarketShareHistory(
+  exchangeVolume: HistoricalDataPoint[],
+  marketTotalChart: [number, number][],
+  hlChart: [number, number][],
+  isHyperliquid: boolean
+): MarketSharePoint[] {
+  if (exchangeVolume.length === 0 || marketTotalChart.length === 0) return []
+
+  // Build lookup maps by day key (ms)
+  const marketMap = new Map<number, number>()
+  for (const [ts, vol] of marketTotalChart) {
+    const dayKey = Math.floor((ts * 1000) / 86400000) * 86400000
+    marketMap.set(dayKey, vol)
+  }
+
+  const hlMap = new Map<number, number>()
+  if (!isHyperliquid) {
+    for (const [ts, vol] of hlChart) {
+      const dayKey = Math.floor((ts * 1000) / 86400000) * 86400000
+      hlMap.set(dayKey, vol)
+    }
+  }
+
+  // Compute raw daily share
+  const raw: { date: number; marketPct: number; hlPct: number | null }[] = []
+  for (const point of exchangeVolume) {
+    const dayKey = Math.floor(point.date / 86400000) * 86400000
+    const marketVol = marketMap.get(dayKey)
+    if (!marketVol || marketVol <= 0) continue
+
+    const marketPct = (point.value / marketVol) * 100
+
+    let hlPct: number | null = null
+    if (!isHyperliquid) {
+      const hlVol = hlMap.get(dayKey)
+      if (hlVol && hlVol > 0) {
+        hlPct = (point.value / hlVol) * 100
+      }
+    }
+
+    raw.push({ date: point.date, marketPct, hlPct })
+  }
+
+  if (raw.length < 7) return raw
+
+  // 7-day rolling average for smoothing
+  const smoothed: MarketSharePoint[] = []
+  for (let i = 6; i < raw.length; i++) {
+    let sumMarket = 0
+    let sumHl = 0
+    let hlCount = 0
+    for (let j = i - 6; j <= i; j++) {
+      sumMarket += raw[j].marketPct
+      if (raw[j].hlPct != null) {
+        sumHl += raw[j].hlPct!
+        hlCount++
+      }
+    }
+    smoothed.push({
+      date: raw[i].date,
+      marketPct: sumMarket / 7,
+      hlPct: hlCount > 0 ? sumHl / hlCount : null,
+    })
+  }
+
+  return smoothed
+}
+
 export function useExchangeProfile(
   slug: string | undefined,
   cgId: string | null
@@ -276,6 +344,14 @@ export function useExchangeProfile(
 
     let cancelled = false
 
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        setError('Request timed out — this exchange may not exist or the data source is unavailable.')
+        setLoading(false)
+        cancelled = true
+      }
+    }, 15000)
+
     async function load() {
       try {
         setLoading(true)
@@ -283,15 +359,19 @@ export function useExchangeProfile(
 
         // Phase 1: Core data (parallel)
         // Use lightweight derivatives overview (excludeBreakdown) for comparables — saves ~7MB vs old approach
-        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, derivativesOverview, feeOverview, cgExchangesList] = await Promise.all([
+        const isHyperliquid = slug!.toLowerCase() === 'hyperliquid-perps'
+        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, holdersRevRaw, derivativesOverview, feeOverview, cgExchangesList, btcPrice, hlSummary] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
           fetchFeeSummary(slug!).catch(() => null),
           fetchRevenueSummary(slug!).catch(() => null),
           fetchTreasury(slug!).catch(() => null),
+          fetchHoldersRevenueSummary(slug!).catch(() => null),
           fetchDerivativesOverview(true).catch(() => null),
           fetchFeeOverview().catch(() => null),
           !cgId ? fetchCGDerivativesExchanges().catch(() => []) : Promise.resolve([]),
+          fetchBTCPrice().catch(() => 60000),
+          !isHyperliquid ? fetchDerivativesSummary('hyperliquid-perps').catch(() => null) : Promise.resolve(null),
         ])
 
         if (cancelled) return
@@ -431,6 +511,30 @@ export function useExchangeProfile(
           compMcapMap
         )
 
+        // Build holders revenue data
+        let holdersRevenue: HoldersRevenueData | null = null
+        if (holdersRevRaw) {
+          const hrChart: HistoricalDataPoint[] = (holdersRevRaw.totalDataChart || [])
+            .filter((entry: any): entry is [number, number] => Array.isArray(entry) && entry.length === 2)
+            .map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
+          const hrDaily = holdersRevRaw.total24h ?? null
+          const hrTotal30d = holdersRevRaw.total30d ?? null
+          if (hrDaily != null || hrChart.length > 0) {
+            holdersRevenue = { daily: hrDaily, total30d: hrTotal30d, history: hrChart }
+          }
+        }
+
+        // Compute market share history (7-day rolling average)
+        const marketShareHistory = buildMarketShareHistory(
+          historicalVolume,
+          derivativesOverview?.totalDataChart || [],
+          hlSummary?.totalDataChart || [],
+          isHyperliquid
+        )
+
+        // Builder volume data — only for Hyperliquid, fetched lazily after initial render
+        let builderVolume: BuilderVolumeData | null = null
+
         const profileData: ExchangeProfileData = {
           summary: summary || null,
           historicalVolume,
@@ -445,9 +549,22 @@ export function useExchangeProfile(
           comparables,
           feeHistory,
           revenueHistory,
+          btcPrice,
+          holdersRevenue,
+          marketShareHistory,
+          builderVolume,
         }
 
         setData(profileData)
+
+        // Lazy Phase 3: Fetch builder volume for Hyperliquid (heavy ~7MB call)
+        if (isHyperliquid && !cancelled) {
+          fetchHLBuilderVolume().then((bv) => {
+            if (!cancelled && bv.data.length > 0) {
+              setData((prev) => prev ? { ...prev, builderVolume: bv } : prev)
+            }
+          }).catch(() => {})
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to fetch exchange data')
@@ -459,9 +576,10 @@ export function useExchangeProfile(
       }
     }
 
-    load()
+    load().finally(() => clearTimeout(timeout))
     return () => {
       cancelled = true
+      clearTimeout(timeout)
     }
   }, [slug, cgId])
 

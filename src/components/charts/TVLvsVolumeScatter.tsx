@@ -12,6 +12,7 @@ import {
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatUSD } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -105,6 +106,10 @@ export function TVLvsVolumeScatter({ exchanges }: Props) {
       <p className="chart-subtitle">
         Relationship between open interest and trading activity — size indicates multi-chain presence
       </p>
+      <MetricInfo
+        description="Open interest turnover (daily volume / open interest) shows how quickly positions are being opened and closed. A low OI/VOL ratio signals that capital is 'sticky' and positions are held longer. Exchanges above the diagonal line have higher turnover, while those below indicate more static positioning."
+        source="On-chain perps data for volume and open interest. OI/VOL ratios computed by dividing 24h volume by open interest."
+      />
 
       <ResponsiveContainer width="100%" height={400}>
         <ScatterChart margin={{ top: 12, right: 16, bottom: 24, left: 8 }}>

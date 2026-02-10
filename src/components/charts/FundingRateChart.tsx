@@ -12,23 +12,37 @@ import {
 import type { CGDerivativeTicker } from '../../types/coingecko'
 import { COLORS, AXIS_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatFundingRate, formatUSD } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   tickers: CGDerivativeTicker[]
 }
 
+function cleanQuote(raw: string): string {
+  return raw
+    .replace(/^[_\-\/]+/, '')       // strip leading separators
+    .replace(/_?(PERP|PERPETUAL|SWAP|MARGIN|LINEAR|INVERSE)\b/gi, '')
+    .replace(/[_\-\/]+$/, '')       // strip trailing separators
+    .replace(/_/g, '')              // collapse remaining underscores
+    .trim() || 'USD'
+}
+
 function parsePairLabel(ticker: CGDerivativeTicker): string {
-  // symbol is like "BTCUSDT", "ETHUSDT", "SOLUSDT"
+  // symbol is like "BTCUSDT", "ETHUSDT_PERP", "BTC_USDT_PERP"
   // index_id is like "BTC", "ETH", "SOL"
   const sym = ticker.symbol || ''
   const idx = ticker.index_id || ''
 
-  if (idx && sym.startsWith(idx)) {
-    const quote = sym.slice(idx.length) || 'USD'
+  if (idx && sym.toUpperCase().startsWith(idx.toUpperCase())) {
+    const quote = cleanQuote(sym.slice(idx.length))
     return `${idx}/${quote}`
   }
-  // Fallback: just use symbol
-  return sym || '???'
+  // Fallback: clean the full symbol
+  const cleaned = sym
+    .replace(/_?(PERP|PERPETUAL|SWAP)\b/gi, '')
+    .replace(/[_\-]+/g, '/')
+    .replace(/\/+$/, '')
+  return cleaned || '???'
 }
 
 function shortenMarket(market: string): string {
@@ -55,9 +69,23 @@ export function FundingRateChart({ tickers }: Props) {
       }
     }
 
-    return Array.from(bestByPair.values())
+    // Sort by OI, then limit each exchange to max 3 pairs for diversity
+    const sorted = Array.from(bestByPair.values())
       .sort((a, b) => (b.open_interest || 0) - (a.open_interest || 0))
-      .slice(0, 20)
+
+    const exchangeCount = new Map<string, number>()
+    const diverse: CGDerivativeTicker[] = []
+    for (const t of sorted) {
+      const market = shortenMarket(t.market).toLowerCase()
+      const count = exchangeCount.get(market) || 0
+      if (count < 3) {
+        diverse.push(t)
+        exchangeCount.set(market, count + 1)
+      }
+      if (diverse.length >= 20) break
+    }
+
+    return diverse
       .map((t) => ({
         label: `${parsePairLabel(t)} · ${shortenMarket(t.market)}`,
         pair: parsePairLabel(t),
@@ -85,7 +113,7 @@ export function FundingRateChart({ tickers }: Props) {
           Current perpetual funding rates across top markets
         </p>
         <p className="font-sans text-sm text-ink-muted py-12 text-center">
-          Funding rate data unavailable. CoinGecko API may be rate-limited.
+          Funding rate data unavailable. Data source may be rate-limited.
         </p>
       </div>
     )
@@ -97,6 +125,10 @@ export function FundingRateChart({ tickers }: Props) {
       <p className="chart-subtitle">
         Top perpetual pairs by open interest — positive means longs pay shorts
       </p>
+      <MetricInfo
+        description="Funding rates show the cost of holding long/short perp positions and are a leading sentiment indicator; extreme rates signal over-leveraged markets. The basis (difference between the perp's mark price and spot price) shows whether perps trade at a premium or discount. Long-short ratios highlight whether traders are heavily long or short, helping anticipate reversals."
+        source="Funding rates, mark price, and index price from derivatives markets. Basis computed from the difference between mark and spot prices."
+      />
 
       {stats && (
         <div className="grid grid-cols-3 gap-4 mb-5 pb-4 border-b border-rule">

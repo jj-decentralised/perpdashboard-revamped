@@ -3,6 +3,7 @@ import { ResponsiveContainer, Treemap, Tooltip, Cell } from 'recharts'
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, CHART_PALETTE } from '../../utils/chartTheme'
 import { formatUSD, formatPercent, formatNumber } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -263,6 +264,10 @@ export function MarketConcentrationChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         Volume distribution and competitive dynamics across perpetual exchanges
       </p>
+      <MetricInfo
+        description="Market concentration metrics reveal how trading volume is distributed across exchanges. The Herfindahl-Hirschman Index (HHI) quantifies concentration: below 1,500 indicates a competitive market, 1,500-2,500 is moderately concentrated, and above 2,500 is highly concentrated. High concentration means liquidation cascades on a single venue can have outsized market impact."
+        source="Computed from 24h volume data. HHI calculated as the sum of squared market share percentages across all active exchanges."
+      />
 
       {/* Stacked percentage bar */}
       <div className="mb-6">
@@ -270,8 +275,8 @@ export function MarketConcentrationChart({ exchanges }: Props) {
           <span className="font-sans text-xs uppercase tracking-wider text-ink-muted">
             Top 10 Volume Share
           </span>
-          <span className="font-mono text-xs text-ink-muted">
-            {formatUSD(analysis.totalVolume, true)} total 24h
+          <span className="font-mono text-xs text-ink-muted" title="Sum of per-exchange 24h volumes; may differ from aggregate overview total">
+            {formatUSD(analysis.totalVolume, true)} total 24h (per-exchange sum)
           </span>
         </div>
         <div className="flex w-full h-8 border border-rule overflow-hidden">
@@ -406,7 +411,7 @@ export function MarketConcentrationChart({ exchanges }: Props) {
                 </div>
               </div>
               <p className="font-sans text-[11px] text-ink-muted mt-1">
-                {analysis.exchangeCount} active exchanges tracked
+                {analysis.exchangeCount} exchanges with reported volume
               </p>
             </div>
           </div>

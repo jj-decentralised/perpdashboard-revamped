@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import type { CoinGeckoMarketData, EnrichedExchange } from '../../types'
 import { formatUSD, formatPercent, percentClass, classNames } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   tokenPrices: CoinGeckoMarketData[]
@@ -92,7 +93,7 @@ export function TokenPriceTable({ tokenPrices, exchanges }: Props) {
           DEX Governance Tokens
         </h3>
         <p className="font-sans text-sm text-ink-muted">
-          Token price data unavailable — CoinGecko rate limit may apply
+          Token price data unavailable — rate limit may apply
         </p>
       </section>
     )
@@ -107,6 +108,10 @@ export function TokenPriceTable({ tokenPrices, exchanges }: Props) {
       <p className="font-sans text-sm text-ink-muted mb-6">
         Price performance of exchange governance tokens
       </p>
+      <MetricInfo
+        description="Governance token prices reflect market expectations for each protocol's future fee revenue and growth. Comparing token performance across timeframes (24h, 7d, 30d) alongside exchange volume data helps identify disconnects between token valuation and actual protocol usage. Tokens with strong volume growth but lagging price may represent relative value opportunities, while tokens outperforming their protocol's fundamentals may be overextended."
+        source="Token prices, market caps, and sparkline data from market aggregators. Exchange volume data for cross-referencing protocol activity."
+      />
 
       {/* Data table */}
       <div className="overflow-x-auto">

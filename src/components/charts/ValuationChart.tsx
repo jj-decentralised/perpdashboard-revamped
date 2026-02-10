@@ -1,21 +1,8 @@
-import React, { useMemo } from 'react'
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-  ScatterChart,
-  Scatter,
-  ZAxis,
-  Cell,
-} from 'recharts'
+import React, { useMemo, useState } from 'react'
 import type { EnrichedExchange } from '../../types'
-import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, CHART_PALETTE } from '../../utils/chartTheme'
-import { formatUSD, formatMultiple } from '../../utils/format'
+import { COLORS } from '../../utils/chartTheme'
+import { formatUSD, formatMultiple, formatPercent, percentClass } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -27,110 +14,90 @@ interface ValuationRow {
   ps: number
   mcap: number
   volume24h: number
+  fees24h: number
   change1d: number | null
+  hasToken: boolean
+  tokenSymbol: string | null
 }
 
-function CustomTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: Array<{ name: string; value: number; color: string; payload: ValuationRow }>
-  label?: string
-}) {
-  if (!active || !payload || !payload.length) return null
-  const d = payload[0].payload
+type SortKey = 'pe' | 'ps' | 'mcap' | 'volume24h' | 'name'
 
-  return (
-    <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.6 }}>
-      <p style={TOOLTIP_STYLE.labelStyle}>{d.name}</p>
-      <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>
-        P/E Ratio: {formatMultiple(d.pe)}
-      </p>
-      <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>
-        P/S Ratio: {formatMultiple(d.ps)}
-      </p>
-      <p style={{ margin: 0, color: COLORS.inkMuted, fontSize: 11 }}>
-        Market Cap: {formatUSD(d.mcap, true)}
-      </p>
-      <p style={{ margin: 0, color: COLORS.inkMuted, fontSize: 11 }}>
-        24h Volume: {formatUSD(d.volume24h, true)}
-      </p>
-    </div>
-  )
-}
-
-function ScatterTooltip({ active, payload }: { active?: boolean; payload?: any[] }) {
-  if (!active || !payload || !payload.length) return null
-  const d = payload[0].payload
-
-  return (
-    <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.6 }}>
-      <p style={TOOLTIP_STYLE.labelStyle}>{d.name}</p>
-      <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>
-        P/E: {formatMultiple(d.pe)}
-      </p>
-      <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>
-        24h Change: {d.change1d != null ? `${d.change1d.toFixed(1)}%` : '\u2014'}
-      </p>
-      <p style={{ margin: 0, color: COLORS.inkMuted, fontSize: 11 }}>
-        Market Cap: {formatUSD(d.mcap, true)}
-      </p>
-    </div>
-  )
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0
+  if (sorted.length === 1) return sorted[0]
+  const idx = (p / 100) * (sorted.length - 1)
+  const lo = Math.floor(idx)
+  const hi = Math.ceil(idx)
+  if (lo === hi) return sorted[lo]
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)
 }
 
 export function ValuationChart({ exchanges }: Props) {
-  const { barData, scatterData, medianPE, medianPS } = useMemo(() => {
+  const [sortKey, setSortKey] = useState<SortKey>('pe')
+  const [sortAsc, setSortAsc] = useState(true)
+
+  const { rows, peQ, psQ } = useMemo(() => {
     const valid = exchanges
       .filter(
-        (e) =>
-          e.peRatio != null &&
-          e.psRatio != null &&
-          e.peRatio > 0 &&
-          e.psRatio > 0 &&
-          e.peRatio < 1000 &&
-          e.psRatio < 1000 &&
-          e.mcap != null &&
-          e.mcap > 0
+        (e) => e.peRatio != null && e.psRatio != null && e.peRatio > 0 && e.psRatio > 0 && e.peRatio < 1000 && e.psRatio < 1000 && e.mcap != null && e.mcap > 0
       )
-      .sort((a, b) => (a.peRatio ?? Infinity) - (b.peRatio ?? Infinity))
 
-    const barData: ValuationRow[] = valid.map((e) => ({
+    const rows: ValuationRow[] = valid.map((e) => ({
       name: e.displayName || e.name,
       pe: e.peRatio!,
       ps: e.psRatio!,
       mcap: e.mcap!,
       volume24h: e.total24h ?? 0,
+      fees24h: e.feeData?.total24h ?? 0,
       change1d: e.change_1d,
+      hasToken: e.hasToken,
+      tokenSymbol: e.tokenSymbol,
     }))
 
-    const scatterData = valid
-      .filter((e) => e.change_1d != null)
-      .map((e) => ({
-        name: e.displayName || e.name,
-        pe: e.peRatio!,
-        change1d: e.change_1d!,
-        mcap: e.mcap!,
-        ps: e.psRatio!,
-        volume24h: e.total24h ?? 0,
-      }))
+    const peValues = rows.map((r) => r.pe).sort((a, b) => a - b)
+    const psValues = rows.map((r) => r.ps).sort((a, b) => a - b)
 
-    const peValues = valid.map((e) => e.peRatio!).sort((a, b) => a - b)
-    const psValues = valid.map((e) => e.psRatio!).sort((a, b) => a - b)
-    const mid = Math.floor(peValues.length / 2)
-    const medianPE = peValues.length > 0
-      ? peValues.length % 2 ? peValues[mid] : (peValues[mid - 1] + peValues[mid]) / 2
-      : 0
-    const medianPS = psValues.length > 0
-      ? psValues.length % 2 ? psValues[mid] : (psValues[mid - 1] + psValues[mid]) / 2
-      : 0
-
-    return { barData, scatterData, medianPE, medianPS }
+    return {
+      rows,
+      peQ: {
+        q1: percentile(peValues, 25),
+        median: percentile(peValues, 50),
+        q3: percentile(peValues, 75),
+      },
+      psQ: {
+        q1: percentile(psValues, 25),
+        median: percentile(psValues, 50),
+        q3: percentile(psValues, 75),
+      },
+    }
   }, [exchanges])
 
-  if (barData.length === 0) {
+  const sorted = useMemo(() => {
+    const s = [...rows].sort((a, b) => {
+      const av = sortKey === 'name' ? a.name.toLowerCase() : a[sortKey]
+      const bv = sortKey === 'name' ? b.name.toLowerCase() : b[sortKey]
+      if (av < bv) return sortAsc ? -1 : 1
+      if (av > bv) return sortAsc ? 1 : -1
+      return 0
+    })
+    return s
+  }, [rows, sortKey, sortAsc])
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc)
+    } else {
+      setSortKey(key)
+      setSortAsc(key === 'name')
+    }
+  }
+
+  const sortIndicator = (key: SortKey) => {
+    if (sortKey !== key) return ''
+    return sortAsc ? ' \u25B2' : ' \u25BC'
+  }
+
+  if (rows.length === 0) {
     return (
       <div className="chart-container">
         <h3 className="chart-title">Valuation Multiples</h3>
@@ -150,135 +117,107 @@ export function ValuationChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         P/E and P/S ratios for perpetual exchanges with governance tokens
       </p>
-
-      <ResponsiveContainer width="100%" height={Math.max(360, barData.length * 32)}>
-        <BarChart
-          data={barData}
-          layout="vertical"
-          margin={{ top: 8, right: 24, bottom: 0, left: 0 }}
-          barCategoryGap="20%"
-        >
-          <CartesianGrid
-            horizontal={false}
-            stroke={GRID_STYLE.stroke}
-            strokeDasharray={GRID_STYLE.strokeDasharray}
-          />
-          <XAxis
-            type="number"
-            tickFormatter={(v: number) => `${v.toFixed(0)}x`}
-            tick={AXIS_STYLE}
-            tickLine={false}
-            axisLine={{ stroke: COLORS.rule }}
-          />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={110}
-            tick={{ ...AXIS_STYLE, fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: COLORS.paperAlt }} />
-          <Legend
-            verticalAlign="top"
-            align="right"
-            iconType="square"
-            iconSize={10}
-            wrapperStyle={{
-              fontSize: 11,
-              fontFamily: AXIS_STYLE.fontFamily,
-              paddingBottom: 8,
-            }}
-          />
-          <Bar
-            dataKey="pe"
-            name="P/E Ratio"
-            fill={COLORS.blue}
-            radius={[0, 2, 2, 0]}
-            animationDuration={800}
-          />
-          <Bar
-            dataKey="ps"
-            name="P/S Ratio"
-            fill={COLORS.slate}
-            radius={[0, 2, 2, 0]}
-            animationDuration={800}
-          />
-        </BarChart>
-      </ResponsiveContainer>
-
-      {/* Scatter: P/E vs Volume Growth */}
-      {scatterData.length >= 3 && (
-        <div className="mt-8">
-          <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-3 font-semibold">
-            Value vs Momentum — P/E Ratio vs 24h Volume Change
-          </p>
-          <ResponsiveContainer width="100%" height={280}>
-            <ScatterChart margin={{ top: 8, right: 24, bottom: 24, left: 0 }}>
-              <CartesianGrid
-                stroke={GRID_STYLE.stroke}
-                strokeDasharray={GRID_STYLE.strokeDasharray}
-              />
-              <XAxis
-                type="number"
-                dataKey="pe"
-                name="P/E Ratio"
-                tick={AXIS_STYLE}
-                tickLine={false}
-                axisLine={{ stroke: COLORS.rule }}
-                label={{ value: 'P/E Ratio', position: 'bottom', offset: 8, ...AXIS_STYLE }}
-              />
-              <YAxis
-                type="number"
-                dataKey="change1d"
-                name="24h Change %"
-                tick={AXIS_STYLE}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v: number) => `${v.toFixed(0)}%`}
-                width={48}
-              />
-              <ZAxis type="number" dataKey="mcap" range={[40, 300]} />
-              <Tooltip content={<ScatterTooltip />} />
-              <Scatter data={scatterData} animationDuration={800}>
-                {scatterData.map((entry, index) => (
-                  <Cell
-                    key={`scatter-${index}`}
-                    fill={entry.change1d >= 0 ? COLORS.green : COLORS.red}
-                    opacity={0.7}
-                  />
-                ))}
-              </Scatter>
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      <MetricInfo
+        description="Valuation multiples compare a protocol's market cap to its revenue (P/E) and fees (P/S). Lower ratios suggest relative undervaluation compared to peers. Traditional finance exchange benchmarks (CME, ICE) typically trade at 20-30x P/E, providing a reference point for DeFi perpetual protocol valuations."
+        source="Market cap from market aggregators. Revenue and fees annualised from trailing on-chain data."
+      />
 
       {/* Summary stats */}
-      <div className="border-t border-rule mt-4 pt-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="font-sans text-xs text-ink-muted">Median P/E</p>
-            <p className="font-mono text-sm font-bold text-ink">{formatMultiple(medianPE)}</p>
-          </div>
-          <div>
-            <p className="font-sans text-xs text-ink-muted">Median P/S</p>
-            <p className="font-mono text-sm font-bold text-ink">{formatMultiple(medianPS)}</p>
-          </div>
-          <div>
-            <p className="font-sans text-xs text-ink-muted">Exchanges Tracked</p>
-            <p className="font-mono text-sm font-bold text-ink">{barData.length}</p>
-          </div>
-          <div>
-            <p className="font-sans text-xs text-ink-muted">TradFi Benchmark</p>
-            <p className="font-mono text-sm font-bold text-ink-muted">~20-30x P/E</p>
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5 pb-4 border-b border-rule">
+        <div>
+          <p className="font-sans text-xs text-ink-muted">P/E — Q1 / Median / Q3</p>
+          <p className="font-mono text-sm font-bold text-ink">
+            {formatMultiple(peQ.q1)} / {formatMultiple(peQ.median)} / {formatMultiple(peQ.q3)}
+          </p>
         </div>
-        <p className="font-sans text-[11px] text-ink-muted mt-2">
-          P/E = Market Cap / Annualised Revenue. P/S = Market Cap / Annualised Fees.
-          Lower ratios suggest relative undervaluation. TradFi exchange benchmarks (CME, ICE) typically trade at 20-30x P/E.
-        </p>
+        <div>
+          <p className="font-sans text-xs text-ink-muted">P/S — Q1 / Median / Q3</p>
+          <p className="font-mono text-sm font-bold text-ink">
+            {formatMultiple(psQ.q1)} / {formatMultiple(psQ.median)} / {formatMultiple(psQ.q3)}
+          </p>
+        </div>
+        <div>
+          <p className="font-sans text-xs text-ink-muted">Exchanges with Data</p>
+          <p className="font-mono text-sm font-bold text-ink">{rows.length}</p>
+        </div>
+        <div>
+          <p className="font-sans text-xs text-ink-muted">TradFi Benchmark</p>
+          <p className="font-mono text-sm font-bold text-ink-muted">~20-30x P/E</p>
+        </div>
       </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b-2 border-ink">
+              {[
+                { key: 'name' as SortKey, label: 'Exchange', align: 'text-left' },
+                { key: 'pe' as SortKey, label: 'P/E', align: 'text-right' },
+                { key: 'ps' as SortKey, label: 'P/S', align: 'text-right' },
+                { key: 'mcap' as SortKey, label: 'Market Cap', align: 'text-right' },
+                { key: 'volume24h' as SortKey, label: '24h Volume', align: 'text-right' },
+              ].map(({ key, label, align }) => (
+                <th
+                  key={key}
+                  className={`${align} py-2 px-3 font-sans text-xs font-semibold uppercase tracking-wider text-ink-muted cursor-pointer hover:text-ink select-none`}
+                  onClick={() => handleSort(key)}
+                >
+                  {label}{sortIndicator(key)}
+                </th>
+              ))}
+              <th className="text-right py-2 px-3 font-sans text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                24h Change
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row, i) => {
+              // Color-code P/E relative to median
+              const peColor = row.pe <= peQ.median ? COLORS.green : row.pe <= peQ.q3 ? COLORS.ink : COLORS.red
+              const psColor = row.ps <= psQ.median ? COLORS.green : row.ps <= psQ.q3 ? COLORS.ink : COLORS.red
+
+              return (
+                <tr key={row.name} className={`border-b border-rule ${i % 2 === 1 ? 'bg-paper-alt' : ''} hover:bg-paper-warm transition-colors`}>
+                  <td className="py-2 px-3 font-sans text-sm text-ink font-medium">
+                    {row.name}
+                    {row.tokenSymbol && (
+                      <span className="text-ink-muted text-xs ml-1.5">{row.tokenSymbol}</span>
+                    )}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono text-sm" style={{ color: peColor, fontWeight: 600 }}>
+                    {formatMultiple(row.pe)}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono text-sm" style={{ color: psColor, fontWeight: 600 }}>
+                    {formatMultiple(row.ps)}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono text-sm text-ink">
+                    {formatUSD(row.mcap, true)}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono text-sm text-ink-light">
+                    {formatUSD(row.volume24h, true)}
+                  </td>
+                  <td className={`py-2 px-3 text-right font-mono text-sm ${percentClass(row.change1d)}`}>
+                    {row.change1d != null ? formatPercent(row.change1d) : '\u2014'}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Methodology footnote */}
+      <p className="font-sans text-[11px] text-ink-muted mt-4 leading-relaxed">
+        <strong>Methodology:</strong> P/E = Circulating Market Cap / Annualised Revenue.
+        P/S = Circulating Market Cap / Annualised Fees.
+        Market cap uses circulating supply (not FDV).
+        Annualisation prefers trailing 30d fees &times; 12 when available; falls back to 24h &times; 365.
+        Revenue is estimated as fees &times; 0.3 assumed take rate where actual protocol revenue data
+        is not available; when explicit revenue figures are provided, those are used instead. Values color-coded: <span style={{ color: COLORS.green }}>green</span> = below median,
+        black = median to Q3, <span style={{ color: COLORS.red }}>red</span> = above Q3.
+        TradFi exchange benchmarks (CME, ICE) typically trade at 20&ndash;30x P/E.
+      </p>
     </div>
   )
 }

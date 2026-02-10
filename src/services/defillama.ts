@@ -7,12 +7,20 @@ import type {
   HistoricalDataPoint,
   DashboardData,
   VolumeSharePoint,
+  FundingRateEntry,
+  CarryPairData,
+  BasisMetrics,
+  AssetOIEntry,
+  TreasuryAgg,
+  FeeSharePoint,
+  PerpFeeSharePoint,
 } from '../types'
 import type { DerivativesSummary } from '../types/profile'
-import { LLAMA_BASE } from '../config/api'
-import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices, fetchCoinsList, fetchCachedCoinsList, fetchCoinMarkets } from './coingecko'
+import { LLAMA_BASE, YIELDS_BASE } from '../config/api'
+import { fetchCGDerivativesExchanges, fetchCGDerivativesTickers, fetchBTCPrice, fetchTopTokenPrices, fetchCoinsList, fetchCachedCoinsList, fetchCoinMarkets, fetchGlobalData } from './coingecko'
 import type { CoinListEntry } from './coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
+import { classifyProtocol, classifyVenue } from '../utils/classification'
 
 async function fetchJSON<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -73,6 +81,16 @@ export async function fetchTreasury(slug: string): Promise<any | null> {
   }
 }
 
+export async function fetchHoldersRevenueSummary(slug: string): Promise<any | null> {
+  try {
+    return await fetchJSON<any>(
+      `${LLAMA_BASE}/summary/fees/${slug}?dataType=dailyHoldersRevenue`
+    )
+  } catch {
+    return null
+  }
+}
+
 function median(values: number[]): number {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
@@ -85,6 +103,17 @@ function median(values: number[]): number {
 function avg(values: number[]): number {
   if (values.length === 0) return 0
   return values.reduce((a, b) => a + b, 0) / values.length
+}
+
+// Winsorized mean: cap values at 1st and 99th percentile to remove outlier influence
+function winsorizedMean(values: number[]): number {
+  if (values.length === 0) return 0
+  if (values.length < 5) return avg(values) // too few to winsorize
+  const sorted = [...values].sort((a, b) => a - b)
+  const low = sorted[Math.floor(sorted.length * 0.01)]
+  const high = sorted[Math.floor(sorted.length * 0.99)]
+  const clamped = values.map((v) => Math.max(low, Math.min(high, v)))
+  return clamped.reduce((a, b) => a + b, 0) / clamped.length
 }
 
 function buildGroupStats(
@@ -101,14 +130,15 @@ function buildGroupStats(
     totalMcap: exchanges
       .filter((e) => e.mcap)
       .reduce((s, e) => s + (e.mcap || 0), 0),
-    avgChange1d: avg(
-      exchanges.filter((e) => e.change_1d != null).map((e) => e.change_1d!)
+    // Use median of exchanges with ≥$100K volume to avoid noise from tiny protocols
+    avgChange1d: median(
+      exchanges.filter((e) => e.change_1d != null && (e.total24h || 0) >= 100_000 && Math.abs(e.change_1d!) < 500).map((e) => e.change_1d!)
     ),
-    avgChange7d: avg(
-      exchanges.filter((e) => e.change_7d != null).map((e) => e.change_7d!)
+    avgChange7d: median(
+      exchanges.filter((e) => e.change_7d != null && (e.total24h || 0) >= 100_000 && Math.abs(e.change_7d!) < 500).map((e) => e.change_7d!)
     ),
-    avgChange1m: avg(
-      exchanges.filter((e) => e.change_1m != null).map((e) => e.change_1m!)
+    avgChange1m: median(
+      exchanges.filter((e) => e.change_1m != null && (e.total24h || 0) >= 100_000 && Math.abs(e.change_1m!) < 500).map((e) => e.change_1m!)
     ),
     avgChainCount: avg(exchanges.map((e) => e.chainCount)),
     medianVolume24h: median(withVolume.map((e) => e.total24h!)),
@@ -203,7 +233,7 @@ export const SLUG_TO_GECKO_TOKEN: Record<string, string> = {
 export async function fetchDashboardData(): Promise<DashboardData> {
   // Phase 1: Fetch all data sources in parallel
   // Use lightweight overview (exclude breakdown) for enrichment — breakdown fetched lazily
-  const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers, coinsList] = await Promise.all([
+  const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers, coinsList, oiOverview, fundingRateData, spotDexOverview, globalData] = await Promise.all([
     fetchDerivativesOverview(true),
     fetchProtocols(),
     fetchFeeOverview(),
@@ -211,6 +241,10 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     fetchBTCPrice(),
     fetchCGDerivativesTickers(),
     fetchCachedCoinsList(),
+    fetchOIOverview(),
+    fetchFundingRates(),
+    fetchSpotDexOverview(),
+    fetchGlobalData(),
   ])
 
   // Build symbol → geckoId map from CoinGecko coins list
@@ -318,13 +352,25 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
     const cgMatch = matchCGExchange(dex.slug, dex.name, cgMap)
 
-    const hasToken = !!(
+    const hasTokenFromProtInfo = !!(
       protInfo &&
       protInfo.symbol &&
       protInfo.symbol !== '-' &&
       protInfo.symbol !== ''
     )
-    const tokenSymbol = hasToken ? protInfo!.symbol : null
+    // Fallback: if the slug is in our curated SLUG_TO_GECKO_TOKEN map, it has a token
+    const slugLower = dex.slug?.toLowerCase() || ''
+    const strippedSlug = slugLower.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|trade|pro|omni|markets?|interface|digital|terminal|labs)$/i, '').trim()
+    const hasTokenFromMap = !!(SLUG_TO_GECKO_TOKEN[slugLower] || (strippedSlug !== slugLower && SLUG_TO_GECKO_TOKEN[strippedSlug]))
+    const hasToken = hasTokenFromProtInfo || hasTokenFromMap
+
+    // Resolve token symbol: prefer protInfo, fall back to CoinGecko coins list
+    let tokenSymbol: string | null = hasTokenFromProtInfo ? protInfo!.symbol : null
+    if (!tokenSymbol && hasTokenFromMap) {
+      const geckoTokenId = SLUG_TO_GECKO_TOKEN[slugLower] || SLUG_TO_GECKO_TOKEN[strippedSlug]
+      const coinEntry = coinsList.find((c) => c.id === geckoTokenId)
+      if (coinEntry) tokenSymbol = coinEntry.symbol.toUpperCase()
+    }
     const tvl = protInfo?.tvl || 0
     const vol24 = dex.total24h || 0
 
@@ -335,10 +381,15 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     const perpPairsCount = cgMatch?.number_of_perpetual_pairs ?? null
     const futuresPairsCount = cgMatch?.number_of_futures_pairs ?? null
 
+    // Annualize fees: prefer trailing 30d × 12, fall back to 24h × 365
     const fees24h = feeInfo?.total24h || 0
+    const fees30d = feeInfo?.total30d || 0
+    const annualizedFees = fees30d > 0 ? fees30d * 12
+      : fees24h > 0 ? fees24h * 365 : null
+    const revenue30d = (feeInfo as any)?.revenue30d || fees30d * 0.3
     const revenue24h = (feeInfo as any)?.revenue24h || fees24h * 0.3
-    const annualizedFees = fees24h > 0 ? fees24h * 365 : null
-    const annualizedRevenue = revenue24h > 0 ? revenue24h * 365 : null
+    const annualizedRevenue = revenue30d > 0 ? revenue30d * 12
+      : revenue24h > 0 ? revenue24h * 365 : null
 
     // Resolve geckoId from all sources
     const geckoId = hasToken ? resolveGeckoTokenId(dex.slug, dex.name, protInfo, tokenSymbol) : null
@@ -366,6 +417,19 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       annualizedRevenue,
       peRatio: null, // Computed in Pass 2
       psRatio: null,
+      venueType: classifyProtocol(dex.slug, dex.name, dex.chains || []),
+      avgCarryYield: null,
+      fundingSlope: null,
+      oiHHI: null,
+      effectiveAssetCount: null,
+      holderYield: null,
+      ttRevenue: null,
+      ttEarnings: null,
+      ttTokenIncentives: null,
+      ttActiveUsers: null,
+      ttPE: null,
+      ttPS: null,
+      ttCodeCommits7d: null,
     }
   })
 
@@ -443,20 +507,22 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       if (sibling.perpPairsCount != null) {
         primary.perpPairsCount = (primary.perpPairsCount || 0) + sibling.perpPairsCount
       }
-      if (sibling.feeData?.total24h) {
+      if (sibling.feeData?.total24h || sibling.feeData?.total30d) {
         primary.feeData = primary.feeData || {} as any
-        primary.feeData!.total24h = (primary.feeData?.total24h || 0) + sibling.feeData.total24h
+        if (sibling.feeData?.total24h) primary.feeData!.total24h = (primary.feeData?.total24h || 0) + sibling.feeData.total24h
+        if (sibling.feeData?.total30d) primary.feeData!.total30d = (primary.feeData?.total30d || 0) + (sibling.feeData?.total30d || 0)
       }
     }
 
-    // Recompute P/S, P/E with aggregated fees
+    // Recompute P/S, P/E with aggregated fees (prefer 30d × 12)
+    const aggFees30d = primary.feeData?.total30d || 0
     const aggFees24h = primary.feeData?.total24h || 0
-    if (aggFees24h > 0) {
-      primary.annualizedFees = aggFees24h * 365
-      primary.annualizedRevenue = aggFees24h * 0.3 * 365
+    if (aggFees30d > 0 || aggFees24h > 0) {
+      primary.annualizedFees = aggFees30d > 0 ? aggFees30d * 12 : aggFees24h * 365
+      primary.annualizedRevenue = (primary.annualizedFees || 0) * 0.3
       if (primary.mcap && primary.mcap > 0 && (primary.total24h || 0) > 0) {
         primary.psRatio = primary.mcap / primary.annualizedFees!
-        primary.peRatio = primary.mcap / primary.annualizedRevenue!
+        primary.peRatio = primary.annualizedRevenue! > 0 ? primary.mcap / primary.annualizedRevenue! : null
       }
     }
 
@@ -487,6 +553,171 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   // Use cgMarketData for sparkline token prices too
   const topTokenPrices = cgMarketData
 
+  const historicalOI: HistoricalDataPoint[] = (
+    oiOverview.totalDataChart || []
+  ).map(([date, value]: [number, number]) => ({ date: date * 1000, value }))
+
+  // ── PASS 4: Compute carry, basis, HHI from funding rate data ──
+
+  // Build marketplace→exchange name lookup for matching
+  const marketplaceToExchange = new Map<string, EnrichedExchange>()
+  for (const ex of deduped) {
+    const nameLower = ex.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const slugBase = ex.slug.toLowerCase().replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|trade|pro|omni|markets?)/g, '')
+    marketplaceToExchange.set(ex.name.toLowerCase(), ex)
+    marketplaceToExchange.set(nameLower, ex)
+    marketplaceToExchange.set(ex.slug.toLowerCase(), ex)
+    if (slugBase !== ex.slug.toLowerCase()) marketplaceToExchange.set(slugBase, ex)
+  }
+
+  function resolveExchange(marketplace: string): EnrichedExchange | null {
+    const lower = marketplace.toLowerCase()
+    if (marketplaceToExchange.has(lower)) return marketplaceToExchange.get(lower)!
+    const normalized = lower.replace(/[^a-z0-9]/g, '')
+    if (marketplaceToExchange.has(normalized)) return marketplaceToExchange.get(normalized)!
+    return null
+  }
+
+  // Carry metrics: top pairs by OI with annualized carry
+  const carryMetrics: CarryPairData[] = []
+  // Group funding data by marketplace for per-exchange carry/slope
+  const exchangeFundingMap = new Map<string, { weightedCarry: number; totalOI: number; slopeSum: number; slopeCount: number }>()
+  // For basis computation
+  const basisByAsset = new Map<string, { weightedBasis: number; totalOI: number }>()
+  // For HHI: marketplace → asset → OI
+  const exchangeAssetOI = new Map<string, Map<string, number>>()
+  // Global asset OI
+  const globalAssetOI = new Map<string, number>()
+
+  for (const entry of fundingRateData) {
+    if (!entry.marketplace || !entry.baseAsset) continue
+    const oi = entry.openInterest || 0
+
+    // Carry computation
+    if (entry.fundingRate && isFinite(entry.fundingRate)) {
+      const annualizedCarry = entry.fundingRate * 3 * 365 * 100 // as percentage
+      const slope = entry.fundingRate30dAverage != null
+        ? (entry.fundingRate - entry.fundingRate30dAverage) * 3 * 365 * 100
+        : 0
+
+      if (oi > 100_000) {
+        carryMetrics.push({
+          asset: entry.baseAsset,
+          marketplace: entry.marketplace,
+          carry: annualizedCarry,
+          oi,
+          slope,
+          currentRate: entry.fundingRate,
+          avg7d: entry.fundingRate7dAverage,
+          avg30d: entry.fundingRate30dAverage,
+        })
+      }
+
+      // Per-exchange aggregation
+      const mpKey = entry.marketplace.toLowerCase()
+      if (oi > 0) {
+        const existing = exchangeFundingMap.get(mpKey) || { weightedCarry: 0, totalOI: 0, slopeSum: 0, slopeCount: 0 }
+        existing.weightedCarry += annualizedCarry * oi
+        existing.totalOI += oi
+        if (entry.fundingRate30dAverage != null) {
+          existing.slopeSum += slope
+          existing.slopeCount++
+        }
+        exchangeFundingMap.set(mpKey, existing)
+      }
+    }
+
+    // Basis computation
+    if (entry.markPrice != null && entry.indexPrice != null && entry.indexPrice > 0) {
+      const basisBps = ((entry.markPrice - entry.indexPrice) / entry.indexPrice) * 10000
+      if (isFinite(basisBps) && Math.abs(basisBps) < 500) { // Filter outliers
+        const asset = entry.baseAsset.toUpperCase()
+        const existing = basisByAsset.get(asset) || { weightedBasis: 0, totalOI: 0 }
+        const weight = oi > 0 ? oi : 1
+        existing.weightedBasis += basisBps * weight
+        existing.totalOI += weight
+        basisByAsset.set(asset, existing)
+      }
+    }
+
+    // HHI: accumulate OI by asset per exchange
+    if (oi > 0) {
+      const mpKey = entry.marketplace.toLowerCase()
+      if (!exchangeAssetOI.has(mpKey)) exchangeAssetOI.set(mpKey, new Map())
+      const assetMap = exchangeAssetOI.get(mpKey)!
+      assetMap.set(entry.baseAsset, (assetMap.get(entry.baseAsset) || 0) + oi)
+      globalAssetOI.set(entry.baseAsset, (globalAssetOI.get(entry.baseAsset) || 0) + oi)
+    }
+  }
+
+  // Sort carry pairs by OI desc
+  carryMetrics.sort((a, b) => b.oi - a.oi)
+  const topCarryMetrics = carryMetrics.slice(0, 50)
+
+  // Assign per-exchange carry yield and slope
+  for (const ex of deduped) {
+    const mpKey = ex.name.toLowerCase()
+    const agg = exchangeFundingMap.get(mpKey) || exchangeFundingMap.get(ex.slug.toLowerCase().replace(/-(perps?|perpetuals?|v\d+)/g, ''))
+    if (agg && agg.totalOI > 0) {
+      ex.avgCarryYield = agg.weightedCarry / agg.totalOI
+      ex.fundingSlope = agg.slopeCount > 0 ? agg.slopeSum / agg.slopeCount : null
+    }
+  }
+
+  // Compute basis metrics
+  const btcBasis = basisByAsset.get('BTC')
+  const ethBasis = basisByAsset.get('ETH')
+  let marketWideBasisNum = 0, marketWideBasisDen = 0
+  const basisTopAssets: BasisMetrics['topAssets'] = []
+  for (const [asset, data] of basisByAsset) {
+    const avgBasis = data.totalOI > 0 ? data.weightedBasis / data.totalOI : 0
+    basisTopAssets.push({ asset, basisBps: avgBasis, oi: data.totalOI })
+    marketWideBasisNum += data.weightedBasis
+    marketWideBasisDen += data.totalOI
+  }
+  basisTopAssets.sort((a, b) => b.oi - a.oi)
+
+  const basisMetrics: BasisMetrics = {
+    btcBasisBps: btcBasis && btcBasis.totalOI > 0 ? btcBasis.weightedBasis / btcBasis.totalOI : null,
+    ethBasisBps: ethBasis && ethBasis.totalOI > 0 ? ethBasis.weightedBasis / ethBasis.totalOI : null,
+    marketWideBasisBps: marketWideBasisDen > 0 ? marketWideBasisNum / marketWideBasisDen : null,
+    topAssets: basisTopAssets.slice(0, 20),
+  }
+
+  // Compute HHI per exchange and assign to deduped
+  for (const ex of deduped) {
+    const mpKey = ex.name.toLowerCase()
+    const assetMap = exchangeAssetOI.get(mpKey) || exchangeAssetOI.get(ex.slug.toLowerCase().replace(/-(perps?|perpetuals?|v\d+)/g, ''))
+    if (assetMap && assetMap.size > 0) {
+      const totalExOI = Array.from(assetMap.values()).reduce((s, v) => s + v, 0)
+      if (totalExOI > 0) {
+        let hhi = 0
+        for (const oi of assetMap.values()) {
+          const share = oi / totalExOI
+          hhi += share * share
+        }
+        ex.oiHHI = hhi
+        ex.effectiveAssetCount = Math.round(1 / hhi)
+      }
+    }
+  }
+
+  // Global asset OI breakdown
+  const totalGlobalOI = Array.from(globalAssetOI.values()).reduce((s, v) => s + v, 0)
+  const assetOIBreakdown: AssetOIEntry[] = Array.from(globalAssetOI.entries())
+    .map(([asset, oi]) => ({ asset, totalOI: oi, share: totalGlobalOI > 0 ? (oi / totalGlobalOI) * 100 : 0 }))
+    .sort((a, b) => b.totalOI - a.totalOI)
+    .slice(0, 30)
+
+  // Global crypto context
+  const globalContext = globalData ? {
+    totalCryptoVolume: globalData.totalVolume,
+    totalCryptoMcap: globalData.totalMcap,
+    btcDominance: globalData.btcDominance,
+    perpsShare: globalData.totalVolume > 0 ? (derivativesOverview.total24h / globalData.totalVolume) * 100 : 0,
+    oiToMcapRatio: globalData.totalMcap > 0 ? (totalOpenInterest / globalData.totalMcap) * 100 : 0,
+  } : null
+
   return {
     dexOverview: derivativesOverview,
     protocols: derivativeProtocols,
@@ -498,8 +729,366 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     topTokenPrices,
     totalOpenInterest,
     topFundingRates,
-    volumeShareHistory: [] as VolumeSharePoint[], // Populated lazily via fetchVolumeShareData
+    volumeShareHistory: [] as VolumeSharePoint[],
     topExchangeNames,
+    historicalOI,
+    fundingRateData,
+    spotVolume24h: spotDexOverview.total24h,
+    spotVolume7d: spotDexOverview.total7d,
+    spotVolumeHistory: [],
+    carryMetrics: topCarryMetrics,
+    basisMetrics,
+    globalContext,
+    assetOIBreakdown,
+    treasuryData: [], // Populated lazily
+    perpFeeBreakdown: [], // Populated lazily
+    perpFeeBreakdownNames: [],
+    perpFeeShareHistory: [], // Populated lazily
+    ttAggregate: null, // Populated lazily via Token Terminal
+  }
+}
+
+// Fetch historical OI time series
+export async function fetchOIOverview(): Promise<{ totalDataChart: [number, number][]; protocols: any[] }> {
+  try {
+    return await fetchJSON<any>(`${LLAMA_BASE}/overview/open-interest?excludeTotalDataChartBreakdown=true`)
+  } catch {
+    return { totalDataChart: [], protocols: [] }
+  }
+}
+
+// Fetch funding rate data from yields endpoint, classify venues
+export async function fetchFundingRates(): Promise<FundingRateEntry[]> {
+  try {
+    const data = await fetchJSON<any>(`${YIELDS_BASE}/perps`)
+    const raw = data?.data || []
+    return raw.map((d: any) => ({
+      marketplace: d.marketplace || '',
+      market: d.market || '',
+      baseAsset: d.baseAsset || '',
+      fundingRate: d.fundingRate ?? 0,
+      fundingRate7dAverage: d.fundingRate7dAverage ?? null,
+      fundingRate30dAverage: d.fundingRate30dAverage ?? null,
+      openInterest: d.openInterest ?? null,
+      indexPrice: d.indexPrice ?? null,
+      markPrice: d.markPrice ?? null,
+      venueType: classifyVenue(d.marketplace || ''),
+    }))
+  } catch {
+    return []
+  }
+}
+
+// Fetch spot DEX overview for perps vs spot comparison
+export async function fetchSpotDexOverview(): Promise<{ total24h: number; total7d: number; total30d: number }> {
+  try {
+    const data = await fetchJSON<any>(`${LLAMA_BASE}/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`)
+    return { total24h: data.total24h || 0, total7d: data.total7d || 0, total30d: data.total30d || 0 }
+  } catch {
+    return { total24h: 0, total7d: 0, total30d: 0 }
+  }
+}
+
+// Fetch historical spot DEX volume for perps/spot ratio time series (lazy loaded)
+export async function fetchSpotVolumeHistory(): Promise<HistoricalDataPoint[]> {
+  try {
+    const data = await fetchJSON<any>(`${LLAMA_BASE}/overview/dexs?excludeTotalDataChartBreakdown=true`)
+    return (data.totalDataChart || []).map(([date, value]: [number, number]) => ({
+      date: date * 1000,
+      value,
+    }))
+  } catch {
+    return []
+  }
+}
+
+// Batch-fetch holder yield for top token exchanges (Phase 2 lazy load)
+// Only attempt for protocols known to report dailyHoldersRevenue on DefiLlama
+const HOLDER_REVENUE_SLUGS = new Set([
+  'gmx', 'synthetix', 'dydx-v4', 'dydx', 'gains-network', 'jupiter-perpetual-exchange',
+  'vertex-protocol', 'drift-trade', 'aevo-perps', 'kwenta', 'perpetual-protocol',
+  'level-finance', 'gains-network-perps', 'mux-protocol',
+])
+
+export async function fetchHolderYieldBatch(exchanges: EnrichedExchange[]): Promise<Map<string, number>> {
+  const tokenExchanges = exchanges
+    .filter(e => e.hasToken && e.mcap && e.mcap > 0 && HOLDER_REVENUE_SLUGS.has(e.slug?.toLowerCase()))
+    .slice(0, 20)
+  const results = await Promise.all(
+    tokenExchanges.map(async (ex) => {
+      const data = await fetchHoldersRevenueSummary(ex.slug).catch(() => null)
+      const daily = data?.total24h || 0
+      if (daily > 0 && ex.mcap && ex.mcap > 0) {
+        return { slug: ex.slug, yield: (daily * 365 / ex.mcap) * 100 }
+      }
+      return null
+    })
+  )
+  const map = new Map<string, number>()
+  for (const r of results) {
+    if (r) map.set(r.slug, r.yield)
+  }
+  return map
+}
+
+// ── Treasury caching ──
+const TREASURY_CACHE_KEY = 'treasury_batch'
+const TREASURY_CACHE_TS_KEY = 'treasury_batch_ts'
+const TREASURY_CACHE_TTL = 3600000 // 1 hour
+
+/** Read cached treasury data from localStorage (instant, no network). */
+export function getCachedTreasury(): TreasuryAgg[] {
+  try {
+    const cached = localStorage.getItem(TREASURY_CACHE_KEY)
+    const ts = localStorage.getItem(TREASURY_CACHE_TS_KEY)
+    if (cached && ts && Date.now() - Number(ts) < TREASURY_CACHE_TTL) {
+      return JSON.parse(cached)
+    }
+  } catch { /* localStorage unavailable or corrupt */ }
+  return []
+}
+
+// Known protocols with treasury data on DefiLlama (use base slug, not perp variant)
+const TREASURY_SLUGS = new Set([
+  'gmx', 'synthetix', 'dydx', 'gains-network', 'jupiter', 'vertex-protocol',
+  'drift', 'aevo', 'kwenta', 'perpetual-protocol', 'level-finance',
+  'mux-protocol', 'rabbitx', 'bluefin',
+])
+
+function getBaseTreasurySlug(slug: string): string | null {
+  const lower = slug?.toLowerCase() || ''
+  if (TREASURY_SLUGS.has(lower)) return lower
+  // Strip perp-specific suffixes to find the base protocol
+  const stripped = lower.replace(/-(perps?|perpetuals?|v\d+(-perps?)?|trade|exchange|pro|omni|digital)$/i, '').trim()
+  if (stripped !== lower && TREASURY_SLUGS.has(stripped)) return stripped
+  return null
+}
+
+// Batch-fetch treasury data for top token exchanges (Phase 2 lazy load)
+export async function fetchTreasuryBatch(exchanges: EnrichedExchange[]): Promise<TreasuryAgg[]> {
+  // Only attempt for protocols known to have treasury data, deduplicate base slugs
+  const seen = new Set<string>()
+  const candidates: { ex: EnrichedExchange; treasurySlug: string }[] = []
+  for (const ex of exchanges) {
+    if (!ex.hasToken) continue
+    const ts = getBaseTreasurySlug(ex.slug)
+    if (ts && !seen.has(ts)) {
+      seen.add(ts)
+      candidates.push({ ex, treasurySlug: ts })
+    }
+    if (candidates.length >= 20) break
+  }
+
+  const results = await Promise.all(
+    candidates.map(async ({ ex, treasurySlug }) => {
+      const raw = await fetchTreasury(treasurySlug).catch(() => null)
+      if (!raw) return null
+      const ownTokens = raw.ownTokens || 0
+      const stablecoins = raw.stablecoins || 0
+      const majors = raw.majors || 0
+      const others = raw.others || 0
+      const totalUsd = ownTokens + stablecoins + majors + others
+      if (totalUsd <= 0 && !raw.tvl) return null
+      return {
+        slug: ex.slug,
+        name: ex.displayName || ex.name,
+        totalUsd: totalUsd || raw.tvl || 0,
+        ownTokenUsd: ownTokens,
+        stablecoinsUsd: stablecoins,
+        majorsUsd: majors,
+        othersUsd: others,
+        warChestRatio: ex.mcap && ex.mcap > 0 ? (stablecoins + majors) / ex.mcap : null,
+      } as TreasuryAgg
+    })
+  )
+  const fresh = results.filter(Boolean) as TreasuryAgg[]
+
+  // Persist to localStorage for instant display on next visit
+  if (fresh.length > 0) {
+    try {
+      localStorage.setItem(TREASURY_CACHE_KEY, JSON.stringify(fresh))
+      localStorage.setItem(TREASURY_CACHE_TS_KEY, String(Date.now()))
+    } catch { /* quota exceeded */ }
+  }
+
+  return fresh
+}
+
+// ── Historical fee data for perp revenue charts (Phase 2 lazy load) ──
+
+interface FeeOverviewFull {
+  totalDataChart: [number, number][]
+  totalDataChartBreakdown: [number, Record<string, Record<string, number> | number>][]
+  protocols: Array<{ name: string; slug: string; category?: string }>
+  total24h: number
+}
+
+const FEE_HISTORY_CACHE_KEY = 'fee_history'
+const FEE_HISTORY_CACHE_TS_KEY = 'fee_history_ts'
+const FEE_HISTORY_CACHE_TTL = 3600000 // 1 hour
+
+export function getCachedFeeHistory(): {
+  perpFeeBreakdown: FeeSharePoint[]
+  perpFeeBreakdownNames: string[]
+  perpFeeShareHistory: PerpFeeSharePoint[]
+} {
+  try {
+    const cached = localStorage.getItem(FEE_HISTORY_CACHE_KEY)
+    const ts = localStorage.getItem(FEE_HISTORY_CACHE_TS_KEY)
+    if (cached && ts && Date.now() - Number(ts) < FEE_HISTORY_CACHE_TTL) {
+      return JSON.parse(cached)
+    }
+  } catch { /* localStorage unavailable or corrupt */ }
+  return { perpFeeBreakdown: [], perpFeeBreakdownNames: [], perpFeeShareHistory: [] }
+}
+
+export async function fetchHistoricalFeeData(
+  perpSlugs: Set<string>,
+): Promise<{
+  perpFeeBreakdown: FeeSharePoint[]
+  perpFeeBreakdownNames: string[]
+  perpFeeShareHistory: PerpFeeSharePoint[]
+}> {
+  const empty = { perpFeeBreakdown: [] as FeeSharePoint[], perpFeeBreakdownNames: [] as string[], perpFeeShareHistory: [] as PerpFeeSharePoint[] }
+
+  try {
+    // Fetch full fee overview WITH historical chart data
+    const feeData = await fetchJSON<FeeOverviewFull>(
+      `${LLAMA_BASE}/overview/fees`
+    )
+
+    const chartRaw = feeData.totalDataChart || []
+    const breakdownRaw = feeData.totalDataChartBreakdown || []
+
+    if (chartRaw.length === 0) return empty
+
+    // Build set of perp protocol names (lowercase) from the fee protocols list
+    const perpNameSet = new Set<string>()
+    for (const p of feeData.protocols) {
+      const slug = p.slug?.toLowerCase() || ''
+      const name = p.name?.toLowerCase() || ''
+      if (perpSlugs.has(slug) || perpSlugs.has(name)) {
+        perpNameSet.add(p.name)
+      }
+    }
+
+    // Filter to data from 2022 onwards, sample monthly
+    const startTs = new Date('2022-01-01').getTime() / 1000
+
+    // ── Chart 2: Perps % of total DeFi fees (use totalDataChart + breakdown) ──
+    // Build a map of timestamp → perp fees from breakdown
+    const perpFeesMap = new Map<number, number>()
+    for (const [ts, breakdown] of breakdownRaw) {
+      if (ts < startTs) continue
+      let perpTotal = 0
+      for (const [name, chains] of Object.entries(breakdown)) {
+        if (!perpNameSet.has(name)) continue
+        const val = typeof chains === 'number'
+          ? chains
+          : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
+        perpTotal += val
+      }
+      perpFeesMap.set(ts, perpTotal)
+    }
+
+    // Monthly sample for the time series
+    const perpFeeShareHistory: PerpFeeSharePoint[] = []
+    const monthBuckets = new Map<string, { perpFees: number; totalFees: number; ts: number }>()
+
+    for (const [ts, totalFees] of chartRaw) {
+      if (ts < startTs || totalFees <= 0) continue
+      const d = new Date(ts * 1000)
+      const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`
+      const existing = monthBuckets.get(key)
+      const perpFees = perpFeesMap.get(ts) || 0
+      if (!existing) {
+        monthBuckets.set(key, { perpFees, totalFees, ts })
+      } else {
+        existing.perpFees += perpFees
+        existing.totalFees += totalFees
+      }
+    }
+
+    for (const [, bucket] of [...monthBuckets.entries()].sort((a, b) => a[1].ts - b[1].ts)) {
+      perpFeeShareHistory.push({
+        date: bucket.ts * 1000,
+        perpFees: bucket.perpFees,
+        totalFees: bucket.totalFees,
+        perpShare: bucket.totalFees > 0 ? (bucket.perpFees / bucket.totalFees) * 100 : 0,
+      })
+    }
+
+    // ── Chart 1: Per-protocol revenue breakdown (top 8 perp protocols + Other) ──
+    // Aggregate monthly fees per perp protocol
+    const protocolMonthlyFees = new Map<string, Map<string, number>>() // monthKey → { protocolName → fees }
+    const protocolTotals = new Map<string, number>() // protocolName → total fees
+
+    for (const [ts, breakdown] of breakdownRaw) {
+      if (ts < startTs) continue
+      const d = new Date(ts * 1000)
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`
+
+      for (const [name, chains] of Object.entries(breakdown)) {
+        if (!perpNameSet.has(name)) continue
+        const val = typeof chains === 'number'
+          ? chains
+          : Object.values(chains).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
+        if (val <= 0) continue
+
+        if (!protocolMonthlyFees.has(monthKey)) protocolMonthlyFees.set(monthKey, new Map())
+        const month = protocolMonthlyFees.get(monthKey)!
+        month.set(name, (month.get(name) || 0) + val)
+
+        protocolTotals.set(name, (protocolTotals.get(name) || 0) + val)
+      }
+    }
+
+    // Top 8 protocols by total fees
+    const topProtocols = [...protocolTotals.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name]) => name)
+    const perpFeeBreakdownNames = [...topProtocols, 'Other']
+
+    // Build chart data points
+    const sortedMonths = [...protocolMonthlyFees.keys()].sort()
+    const perpFeeBreakdown: FeeSharePoint[] = sortedMonths.map(monthKey => {
+      const monthData = protocolMonthlyFees.get(monthKey)!
+      const [year, month] = monthKey.split('-').map(Number)
+      const date = new Date(year, month, 1).getTime()
+
+      // Total perp fees this month
+      let totalPerpFees = 0
+      for (const val of monthData.values()) totalPerpFees += val
+
+      if (totalPerpFees === 0) {
+        const point: FeeSharePoint = { date }
+        for (const n of perpFeeBreakdownNames) point[n] = 0
+        return point
+      }
+
+      const point: FeeSharePoint = { date }
+      let otherPct = 100
+      for (const name of topProtocols) {
+        const pct = ((monthData.get(name) || 0) / totalPerpFees) * 100
+        point[name] = Math.round(pct * 100) / 100
+        otherPct -= point[name]
+      }
+      point['Other'] = Math.max(0, Math.round(otherPct * 100) / 100)
+      return point
+    })
+
+    const result = { perpFeeBreakdown, perpFeeBreakdownNames, perpFeeShareHistory }
+
+    // Cache for instant loading next visit
+    try {
+      localStorage.setItem(FEE_HISTORY_CACHE_KEY, JSON.stringify(result))
+      localStorage.setItem(FEE_HISTORY_CACHE_TS_KEY, String(Date.now()))
+    } catch { /* quota exceeded */ }
+
+    return result
+  } catch {
+    return empty
   }
 }
 
@@ -543,5 +1132,110 @@ export async function fetchVolumeShareData(topNames: string[]): Promise<VolumeSh
     })
   } catch {
     return []
+  }
+}
+
+export interface BuilderVolumePoint {
+  date: number
+  [builder: string]: number
+}
+
+/**
+ * Extract per-builder volume on Hyperliquid chain from derivatives overview breakdown.
+ * Returns weekly-sampled data with top builders + "Other" bucket.
+ */
+interface HLBuilderResult {
+  data: BuilderVolumePoint[]
+  builders: string[]
+  builderSharePct: Array<{ date: number; pct: number }>
+  cumulativeIncome: Array<{ date: number; income: number }>
+}
+
+export async function fetchHLBuilderVolume(): Promise<HLBuilderResult> {
+  const empty: HLBuilderResult = { data: [], builders: [], builderSharePct: [], cumulativeIncome: [] }
+  try {
+    const overview = await fetchDerivativesOverview(false)
+    const breakdownRaw = overview.totalDataChartBreakdown || []
+
+    // Sample weekly for performance
+    const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
+
+    // First pass: aggregate total volume per builder on HL chain to find top builders
+    const builderTotals = new Map<string, number>()
+    for (const [, breakdown] of sampled) {
+      for (const [protocolName, chains] of Object.entries(breakdown)) {
+        if (typeof chains === 'number') continue
+        const hlVol = chains['Hyperliquid'] || chains['hyperliquid'] || 0
+        if (hlVol <= 0) continue
+        const nameLower = protocolName.toLowerCase()
+        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid-perps') continue
+        builderTotals.set(protocolName, (builderTotals.get(protocolName) || 0) + hlVol)
+      }
+    }
+
+    if (builderTotals.size === 0) return empty
+
+    // Top 8 builders by total volume
+    const sorted = [...builderTotals.entries()].sort((a, b) => b[1] - a[1])
+    const topBuilders = sorted.slice(0, 8).map(([name]) => name)
+    let hasOther = false
+
+    // Second pass: build time series + compute share % and cumulative income
+    const data: BuilderVolumePoint[] = []
+    const builderSharePct: Array<{ date: number; pct: number }> = []
+    const cumulativeIncome: Array<{ date: number; income: number }> = []
+    let runningIncome = 0
+
+    for (const [timestamp, breakdown] of sampled) {
+      const point: BuilderVolumePoint = { date: timestamp * 1000 }
+      let totalBuilderVol = 0
+      let otherVol = 0
+      let hlNativeVol = 0
+
+      for (const [protocolName, chains] of Object.entries(breakdown)) {
+        if (typeof chains === 'number') continue
+        const hlVol = chains['Hyperliquid'] || chains['hyperliquid'] || 0
+        if (hlVol <= 0) continue
+        const nameLower = protocolName.toLowerCase()
+
+        // HL's own native volume
+        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid-perps') {
+          hlNativeVol += hlVol
+          continue
+        }
+
+        totalBuilderVol += hlVol
+        if (topBuilders.includes(protocolName)) {
+          point[protocolName] = hlVol
+        } else {
+          otherVol += hlVol
+        }
+      }
+
+      for (const b of topBuilders) {
+        if (point[b] == null) point[b] = 0
+      }
+      if (otherVol > 0) {
+        point['Other'] = otherVol
+        hasOther = true
+      }
+
+      data.push(point)
+
+      // Builder share of total HL volume (builder + native)
+      const totalHlVol = totalBuilderVol + hlNativeVol
+      if (totalHlVol > 0) {
+        builderSharePct.push({ date: timestamp * 1000, pct: (totalBuilderVol / totalHlVol) * 100 })
+      }
+
+      // Cumulative estimated income at ~1bp referral rate
+      runningIncome += totalBuilderVol * 0.0001
+      cumulativeIncome.push({ date: timestamp * 1000, income: runningIncome })
+    }
+
+    const builders = hasOther ? [...topBuilders, 'Other'] : topBuilders
+    return { data, builders, builderSharePct, cumulativeIncome }
+  } catch {
+    return empty
   }
 }

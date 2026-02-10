@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import type { DashboardData } from '../../types'
 import { formatUSD, formatPercent, formatNumber, percentClass } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   data: DashboardData
@@ -15,13 +16,35 @@ function currentDateFormatted(): string {
   })
 }
 
+function useTimeSinceLoad() {
+  const [loadTime] = useState(() => new Date())
+  const [elapsed, setElapsed] = useState('')
+
+  useEffect(() => {
+    function update() {
+      const diff = Math.floor((Date.now() - loadTime.getTime()) / 1000)
+      if (diff < 60) setElapsed('just now')
+      else if (diff < 3600) setElapsed(`${Math.floor(diff / 60)}m ago`)
+      else setElapsed(`${Math.floor(diff / 3600)}h ago`)
+    }
+    update()
+    const interval = setInterval(update, 30000)
+    return () => clearInterval(interval)
+  }, [loadTime])
+
+  return { loadTime, elapsed }
+}
+
 export function KPIHeader({ data }: Props) {
   const { dexOverview, enrichedExchanges, feeOverview } = data
+  const { loadTime, elapsed } = useTimeSinceLoad()
 
   const withToken = enrichedExchanges.filter((e) => e.hasToken).length
   const withoutToken = enrichedExchanges.length - withToken
 
-  const totalFees24h = feeOverview?.total24h ?? 0
+  const totalDefiFees24h = feeOverview?.total24h ?? 0
+  const perpFees24h = enrichedExchanges.reduce((sum, e) => sum + ((e.feeData?.total24h as number) || 0), 0)
+  const perpFeeShare = totalDefiFees24h > 0 ? (perpFees24h / totalDefiFees24h) * 100 : null
 
   const kpis: {
     label: string
@@ -40,7 +63,7 @@ export function KPIHeader({ data }: Props) {
       change: dexOverview.change_1m,
     },
     {
-      label: 'Active Exchanges',
+      label: 'Exchanges Tracked',
       value: formatNumber(enrichedExchanges.length),
       sublabel: `${formatNumber(withToken)} with token / ${formatNumber(withoutToken)} without`,
     },
@@ -49,18 +72,54 @@ export function KPIHeader({ data }: Props) {
       value: formatUSD(data.totalOpenInterest, true),
     },
     {
-      label: 'Perp Pairs',
-      value: formatNumber(enrichedExchanges.reduce((s, e) => s + (e.perpPairsCount || 0), 0)),
-    },
-    {
-      label: 'Total 24h Fees',
-      value: formatUSD(totalFees24h, true),
+      label: 'Perp 24h Fees',
+      value: formatUSD(perpFees24h, true),
+      sublabel: perpFeeShare != null ? `${perpFeeShare.toFixed(1)}% of all DeFi fees` : undefined,
     },
     {
       label: 'All-Time Cumulative Volume',
       value: formatUSD(dexOverview.totalAllTime, true),
     },
   ]
+
+  // Add perps dominance KPI if spot volume data is available
+  const perpsDominance = data.spotVolume24h > 0
+    ? (dexOverview.total24h / (dexOverview.total24h + data.spotVolume24h)) * 100
+    : null
+  if (perpsDominance != null) {
+    kpis.push({
+      label: 'Perps Dominance',
+      value: `${perpsDominance.toFixed(1)}%`,
+      sublabel: `vs ${formatUSD(data.spotVolume24h, true)} spot`,
+    })
+  }
+
+  // Perps fee revenue share of all DeFi
+  if (perpFeeShare != null && perpFeeShare > 0) {
+    kpis.push({
+      label: 'Perps Fee Share',
+      value: `${perpFeeShare.toFixed(1)}%`,
+      sublabel: `of ${formatUSD(totalDefiFees24h, true)} total DeFi`,
+    })
+  }
+
+  // Global context KPIs
+  if (data.globalContext) {
+    kpis.push({
+      label: 'Perps % of Crypto Vol',
+      value: `${data.globalContext.perpsShare.toFixed(1)}%`,
+      sublabel: `of ${formatUSD(data.globalContext.totalCryptoVolume, true)} total`,
+    })
+  }
+
+  // BTC basis KPI
+  if (data.basisMetrics?.btcBasisBps != null) {
+    kpis.push({
+      label: 'BTC Basis',
+      value: `${data.basisMetrics.btcBasisBps.toFixed(1)} bps`,
+      sublabel: data.basisMetrics.btcBasisBps >= 0 ? 'premium (bullish)' : 'discount (bearish)',
+    })
+  }
 
   return (
     <header className="bg-paper">
@@ -70,17 +129,26 @@ export function KPIHeader({ data }: Props) {
           {currentDateFormatted()}
         </p>
         <h1 className="font-serif text-4xl font-bold text-ink leading-tight tracking-tight">
-          Perpetual Exchange Analytics
+          Perpetual Exchanges in Numbers
         </h1>
-        <div className="border-t border-rule mt-3 pt-2">
+        <div className="border-t border-rule mt-3 pt-2 flex items-center justify-between">
           <p className="font-serif text-sm text-ink-light italic">
-            Perpetual Derivatives Analytics — Open Interest, Volume &amp; Token Classification
+            Maintained by <a href="https://x.com/joeljohn" target="_blank" rel="noopener noreferrer" className="underline hover:text-ink transition-colors">Joel John</a> for Decentralised.co
+          </p>
+          <p className="font-sans text-[11px] text-ink-muted" title={`Data loaded at ${loadTime.toLocaleTimeString()}`}>
+            Updated {elapsed}
           </p>
         </div>
       </div>
 
+      {/* KPI description */}
+      <MetricInfo
+        description="These headline figures provide a real-time snapshot of the perpetual futures market. Total volume and open interest gauge overall trading activity and leverage exposure, while perps dominance shows the balance between derivatives and spot trading. BTC basis indicates whether futures trade at a premium or discount to spot, signaling market sentiment. All figures refresh on each page load."
+        source="Perps and DEX overview data for volume and OI. Global crypto volume for context. Funding rate and basis data from on-chain sources."
+      />
+
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 py-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 py-6">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="kpi-card">
             <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-2 leading-tight">

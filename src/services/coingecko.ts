@@ -142,3 +142,18 @@ export async function fetchCoinDetail(geckoId: string): Promise<any | null> {
     return null
   }
 }
+
+export async function fetchGlobalData(): Promise<{ totalVolume: number; totalMcap: number; btcDominance: number } | null> {
+  try {
+    const res = await fetchGeckoJSON<any>(`${GECKO_BASE}/global`)
+    const d = res?.data
+    if (!d) return null
+    return {
+      totalVolume: d.total_volume?.usd || 0,
+      totalMcap: d.total_market_cap?.usd || 0,
+      btcDominance: d.market_cap_percentage?.btc || 0,
+    }
+  } catch {
+    return null
+  }
+}

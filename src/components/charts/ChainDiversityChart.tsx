@@ -12,6 +12,7 @@ import {
 import type { EnrichedExchange } from '../../types'
 import { COLORS, TOKEN_COLOR, NO_TOKEN_COLOR, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../utils/chartTheme'
 import { formatNumber, formatPercent } from '../../utils/format'
+import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
@@ -152,6 +153,10 @@ export function ChainDiversityChart({ exchanges }: Props) {
       <p className="chart-subtitle">
         Multi-chain presence comparison between tokenised and non-tokenised exchanges
       </p>
+      <MetricInfo
+        description="Chain diversity measures how many distinct blockchains each exchange is deployed on. Protocols that expand to more chains can capture fragmented liquidity and reach new user bases, but multi-chain deployment also increases operational complexity and can dilute liquidity. Comparing token-bearing vs. non-token exchanges reveals whether tokenized governance models correlate with more aggressive cross-chain expansion strategies."
+        source="Chain deployment data from protocol metadata. Each exchange's chain list is counted and bucketed into ranges for the histogram."
+      />
 
       <ResponsiveContainer width="100%" height={360}>
         <BarChart
