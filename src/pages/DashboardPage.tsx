@@ -24,8 +24,6 @@ import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { ValuationChecker } from '../components/charts/ValuationChecker'
 import { SolanaChainGrowthChart } from '../components/charts/SolanaChainGrowthChart'
 import { LiquidationChart } from '../components/charts/LiquidationChart'
-import { FundingRateHeatmap } from '../components/charts/FundingRateHeatmap'
-import { FundingTermStructure } from '../components/charts/FundingTermStructure'
 import { ValuationScatterChart } from '../components/charts/ValuationScatterChart'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
@@ -37,7 +35,6 @@ import type { Tab } from '../components/TabNavigation'
 const TABS: Tab[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'market', label: 'Market Structure' },
-  { id: 'funding', label: 'Funding & Carry' },
   { id: 'fees', label: 'Fees & Valuation' },
   { id: 'rankings', label: 'Rankings' },
 ]
@@ -75,9 +72,6 @@ export default function DashboardPage() {
           )}
           {activeTab === 'market' && (
             <MarketStructureTab data={data} />
-          )}
-          {activeTab === 'funding' && (
-            <FundingCarryTab data={data} />
           )}
           {activeTab === 'fees' && (
             <FeesValuationTab data={data} />
@@ -221,31 +215,6 @@ function MarketStructureTab({ data }: { data: any }) {
         </ErrorBoundary>
       </section>
 
-    </>
-  )
-}
-
-function FundingCarryTab({ data }: { data: any }) {
-  return (
-    <>
-      {data.fundingRateData.length > 0 && (
-        <section>
-          <ErrorBoundary fallbackLabel="Funding rate heatmap">
-            <FundingRateHeatmap data={data.fundingRateData} />
-          </ErrorBoundary>
-        </section>
-      )}
-
-      {data.fundingRateData.length > 0 && (
-        <section className="section-rule">
-          <ErrorBoundary fallbackLabel="Funding term structure">
-            <FundingTermStructure
-              carryMetrics={data.carryMetrics}
-              fundingRateData={data.fundingRateData}
-            />
-          </ErrorBoundary>
-        </section>
-      )}
     </>
   )
 }
