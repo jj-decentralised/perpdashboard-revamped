@@ -610,6 +610,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
           currentRate: entry.fundingRate,
           avg7d: entry.fundingRate7dAverage,
           avg30d: entry.fundingRate30dAverage,
+          venueType: entry.venueType,
         })
       }
 

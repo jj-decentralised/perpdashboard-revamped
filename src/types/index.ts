@@ -182,6 +182,7 @@ export interface CarryPairData {
   currentRate: number
   avg7d: number | null
   avg30d: number | null
+  venueType?: 'defi' | 'cefi'
 }
 
 export interface BasisMetrics {

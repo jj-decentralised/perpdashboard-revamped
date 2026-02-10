@@ -21,11 +21,12 @@ interface Props {
 }
 
 export function FundingTermStructure({ carryMetrics, fundingRateData }: Props) {
-  // Aggregate by asset: OI-weighted current, 7d, 30d rates for top assets
+  // Aggregate by asset: OI-weighted current, 7d, 30d rates for DEX venues only
   const termStructureData = useMemo(() => {
     const assetMap = new Map<string, { oi: number; currentSum: number; avg7dSum: number; avg30dSum: number; avg7dOI: number; avg30dOI: number }>()
 
     for (const entry of fundingRateData) {
+      if (entry.venueType !== 'defi') continue
       if (!entry.baseAsset || !entry.fundingRate || !isFinite(entry.fundingRate)) continue
       const oi = entry.openInterest || 0
       if (oi < 10_000) continue
@@ -60,7 +61,7 @@ export function FundingTermStructure({ carryMetrics, fundingRateData }: Props) {
   // Top carry opportunities
   const topCarry = useMemo(() =>
     carryMetrics
-      .filter(c => Math.abs(c.carry) > 1)
+      .filter(c => Math.abs(c.carry) > 1 && c.venueType === 'defi')
       .sort((a, b) => b.carry - a.carry)
       .slice(0, 8),
     [carryMetrics]

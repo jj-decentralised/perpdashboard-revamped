@@ -32,7 +32,7 @@ function formatRate(rate: number | null): string {
 
 export function FundingRateHeatmap({ data }: Props) {
   const [view, setView] = useState<'heatmap' | 'arb' | 'rateAvg'>('heatmap')
-  const [category, setCategory] = useState<CategorySelection>('all')
+  const [category, setCategory] = useState<CategorySelection>('defi')
 
   const defiCount = data.filter(d => d.venueType === 'defi').length
   const cefiCount = data.filter(d => d.venueType === 'cefi').length
