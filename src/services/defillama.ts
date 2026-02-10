@@ -1134,3 +1134,77 @@ export async function fetchVolumeShareData(topNames: string[]): Promise<VolumeSh
     return []
   }
 }
+
+export interface BuilderVolumePoint {
+  date: number
+  [builder: string]: number
+}
+
+/**
+ * Extract per-builder volume on Hyperliquid chain from derivatives overview breakdown.
+ * Returns weekly-sampled data with top builders + "Other" bucket.
+ */
+export async function fetchHLBuilderVolume(): Promise<{ data: BuilderVolumePoint[]; builders: string[] }> {
+  try {
+    const overview = await fetchDerivativesOverview(false)
+    const breakdownRaw = overview.totalDataChartBreakdown || []
+
+    // Sample weekly for performance
+    const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
+
+    // First pass: aggregate total volume per builder on HL chain to find top builders
+    const builderTotals = new Map<string, number>()
+    for (const [, breakdown] of sampled) {
+      for (const [protocolName, chains] of Object.entries(breakdown)) {
+        if (typeof chains === 'number') continue
+        const hlVol = chains['Hyperliquid'] || chains['hyperliquid'] || 0
+        if (hlVol <= 0) continue
+        const nameLower = protocolName.toLowerCase()
+        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid-perps') continue
+        builderTotals.set(protocolName, (builderTotals.get(protocolName) || 0) + hlVol)
+      }
+    }
+
+    if (builderTotals.size === 0) return { data: [], builders: [] }
+
+    // Top 8 builders by total volume
+    const sorted = [...builderTotals.entries()].sort((a, b) => b[1] - a[1])
+    const topBuilders = sorted.slice(0, 8).map(([name]) => name)
+    let hasOther = false
+
+    // Second pass: build time series
+    const data: BuilderVolumePoint[] = sampled.map(([timestamp, breakdown]) => {
+      const point: BuilderVolumePoint = { date: timestamp * 1000 }
+      let otherVol = 0
+
+      for (const [protocolName, chains] of Object.entries(breakdown)) {
+        if (typeof chains === 'number') continue
+        const hlVol = chains['Hyperliquid'] || chains['hyperliquid'] || 0
+        if (hlVol <= 0) continue
+        const nameLower = protocolName.toLowerCase()
+        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid-perps') continue
+
+        if (topBuilders.includes(protocolName)) {
+          point[protocolName] = hlVol
+        } else {
+          otherVol += hlVol
+        }
+      }
+
+      for (const b of topBuilders) {
+        if (point[b] == null) point[b] = 0
+      }
+      if (otherVol > 0) {
+        point['Other'] = otherVol
+        hasOther = true
+      }
+
+      return point
+    })
+
+    const builders = hasOther ? [...topBuilders, 'Other'] : topBuilders
+    return { data, builders }
+  } catch {
+    return { data: [], builders: [] }
+  }
+}

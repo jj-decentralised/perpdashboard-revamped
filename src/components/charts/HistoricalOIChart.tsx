@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -75,6 +75,23 @@ export function HistoricalOIChart({ oiData, volumeData }: Props) {
     }
   }, [chartData])
 
+  const downloadCSV = useCallback(() => {
+    if (chartData.length === 0) return
+    const header = 'Date,Open Interest (USD),Volume (USD),OI/Volume Ratio,OI Delta (USD)\n'
+    const rows = chartData.map((d) => {
+      const date = new Date(d.date).toISOString().split('T')[0]
+      const ratio = d.volume > 0 ? (d.oi / d.volume).toFixed(4) : ''
+      return `${date},${d.oi.toFixed(2)},${d.volume.toFixed(2)},${ratio},${d.oiDelta.toFixed(2)}`
+    }).join('\n')
+    const blob = new Blob([header + rows], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `oi_volume_${period}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [chartData, period])
+
   if (chartData.length === 0) {
     return (
       <div className="chart-container">
@@ -108,6 +125,13 @@ export function HistoricalOIChart({ oiData, volumeData }: Props) {
             Volume overlay
           </label>
           <TimePeriodSelector selected={period} onChange={setPeriod} />
+          <button
+            onClick={downloadCSV}
+            className="font-sans text-[11px] text-ink-muted border border-rule px-2 py-1 hover:bg-paper-alt transition-colors"
+            title="Download OI + Volume CSV"
+          >
+            CSV
+          </button>
         </div>
       </div>
 

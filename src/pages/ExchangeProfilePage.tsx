@@ -11,14 +11,16 @@ import {
   Tooltip,
   CartesianGrid,
   LineChart,
+  BarChart,
+  Bar,
 } from 'recharts'
 import { useExchangeProfile } from '../hooks/useExchangeProfile'
 import { ErrorBoundary } from '../components/ErrorBoundary'
-import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../utils/chartTheme'
+import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, CHART_PALETTE } from '../utils/chartTheme'
 import { EMISSIONS_BASE } from '../config/api'
 import { formatUSD, formatDateShort, formatFundingRate, formatNumber, formatPercent, formatMultiple, percentClass, classNames } from '../utils/format'
 import type { CGExchangeTicker } from '../types/coingecko'
-import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint, MarketSharePoint } from '../types/profile'
+import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint, MarketSharePoint, BuilderVolumeData } from '../types/profile'
 
 function ProfileSkeleton() {
   return (
@@ -1141,6 +1143,69 @@ export default function ExchangeProfilePage() {
                   </span>
                 )}
               </div>
+            </section>
+          </ErrorBoundary>
+        )}
+
+        {/* Builder Volume on Hyperliquid */}
+        {data.builderVolume && data.builderVolume.data.length > 0 && (
+          <ErrorBoundary fallbackLabel="Builder volume">
+            <section className="section-rule">
+              <h3 className="chart-title">Builder Economy on Hyperliquid</h3>
+              <p className="chart-subtitle">
+                Weekly volume by protocols building on Hyperliquid — estimated builder income assumes ~1 bp referral fee
+              </p>
+              <ResponsiveContainer width="100%" height={380}>
+                <BarChart data={data.builderVolume.data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                  <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false}
+                    axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
+                  <YAxis tickFormatter={fmtAxis} tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
+                  <Tooltip content={({ active, payload, label }: any) => {
+                    if (!active || !payload?.length) return null
+                    const total = payload.reduce((s: number, e: any) => s + (e.value || 0), 0)
+                    return (
+                      <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
+                        <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
+                        {payload.filter((e: any) => e.value > 0).map((entry: any) => (
+                          <p key={entry.name} style={{ margin: 0, color: entry.color || COLORS.inkLight, fontSize: 12 }}>
+                            {entry.name}: {formatUSD(entry.value, true)}
+                          </p>
+                        ))}
+                        <p style={{ margin: '4px 0 0', color: COLORS.ink, fontSize: 12, fontWeight: 600, borderTop: `1px solid ${COLORS.rule}`, paddingTop: 4 }}>
+                          Total: {formatUSD(total, true)}
+                        </p>
+                        <p style={{ margin: '2px 0 0', color: COLORS.inkMuted, fontSize: 11 }}>
+                          Est. income: {formatUSD(total * 0.0001, true)}
+                        </p>
+                      </div>
+                    )
+                  }} />
+                  {data.builderVolume.builders.map((builder, i) => (
+                    <Bar
+                      key={builder}
+                      dataKey={builder}
+                      stackId="builders"
+                      fill={CHART_PALETTE[i % CHART_PALETTE.length]}
+                      fillOpacity={builder === 'Other' ? 0.3 : 0.75}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                {data.builderVolume.builders.map((builder, i) => (
+                  <span key={builder} className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3" style={{
+                      backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
+                      opacity: builder === 'Other' ? 0.3 : 0.75,
+                    }} />
+                    <span className="font-sans text-[11px] text-ink-muted">{builder}</span>
+                  </span>
+                ))}
+              </div>
+              <p className="font-sans text-[10px] text-ink-muted mt-3 italic">
+                Indicative only — shows protocols tracked by DefiLlama that deploy on Hyperliquid chain. Actual builder volumes may differ. Income estimated at ~1 bp referral rate.
+              </p>
             </section>
           </ErrorBoundary>
         )}

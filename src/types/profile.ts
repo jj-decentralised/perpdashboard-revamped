@@ -92,6 +92,11 @@ export interface MarketSharePoint {
   hlPct: number | null
 }
 
+export interface BuilderVolumeData {
+  data: Array<{ date: number; [builder: string]: number }>
+  builders: string[]
+}
+
 export interface ExchangeProfileData {
   summary: DerivativesSummary | null
   historicalVolume: HistoricalDataPoint[]
@@ -110,4 +115,5 @@ export interface ExchangeProfileData {
   btcPrice: number
   holdersRevenue: HoldersRevenueData | null
   marketShareHistory: MarketSharePoint[]
+  builderVolume: BuilderVolumeData | null
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData, MarketSharePoint } from '../types/profile'
+import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData, MarketSharePoint, BuilderVolumeData } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets, fetchBTCPrice } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
@@ -532,6 +532,9 @@ export function useExchangeProfile(
           isHyperliquid
         )
 
+        // Builder volume data — only for Hyperliquid, fetched lazily after initial render
+        let builderVolume: BuilderVolumeData | null = null
+
         const profileData: ExchangeProfileData = {
           summary: summary || null,
           historicalVolume,
@@ -549,9 +552,19 @@ export function useExchangeProfile(
           btcPrice,
           holdersRevenue,
           marketShareHistory,
+          builderVolume,
         }
 
         setData(profileData)
+
+        // Lazy Phase 3: Fetch builder volume for Hyperliquid (heavy ~7MB call)
+        if (isHyperliquid && !cancelled) {
+          fetchHLBuilderVolume().then((bv) => {
+            if (!cancelled && bv.data.length > 0) {
+              setData((prev) => prev ? { ...prev, builderVolume: bv } : prev)
+            }
+          }).catch(() => {})
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to fetch exchange data')
