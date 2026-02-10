@@ -1165,10 +1165,10 @@ export async function fetchHLBuilderVolume(): Promise<HLBuilderResult> {
     for (const [, breakdown] of sampled) {
       for (const [protocolName, chains] of Object.entries(breakdown)) {
         if (typeof chains === 'number') continue
-        const hlVol = chains['Hyperliquid'] || chains['hyperliquid'] || 0
+        const hlVol = chains['Hyperliquid L1'] || chains['Hyperliquid'] || chains['hyperliquid'] || 0
         if (hlVol <= 0) continue
         const nameLower = protocolName.toLowerCase()
-        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid-perps') continue
+        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid perps' || nameLower === 'hyperliquid-perps') continue
         builderTotals.set(protocolName, (builderTotals.get(protocolName) || 0) + hlVol)
       }
     }
@@ -1194,12 +1194,12 @@ export async function fetchHLBuilderVolume(): Promise<HLBuilderResult> {
 
       for (const [protocolName, chains] of Object.entries(breakdown)) {
         if (typeof chains === 'number') continue
-        const hlVol = chains['Hyperliquid'] || chains['hyperliquid'] || 0
+        const hlVol = chains['Hyperliquid L1'] || chains['Hyperliquid'] || chains['hyperliquid'] || 0
         if (hlVol <= 0) continue
         const nameLower = protocolName.toLowerCase()
 
         // HL's own native volume
-        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid-perps') {
+        if (nameLower === 'hyperliquid' || nameLower === 'hyperliquid perps' || nameLower === 'hyperliquid-perps') {
           hlNativeVol += hlVol
           continue
         }
