@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchDexCexVolumeShare } from '../services/defillama'
-import { TT_ENABLED } from '../config/api'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchDexCexVolumeShare, fetchEnhancedDexCexShare } from '../services/defillama'
+import { TT_ENABLED, COINGLASS_ENABLED } from '../config/api'
+import { fetchCEXVolumeHistory } from '../services/coinglass'
 import { getCachedTTMetrics, fetchTTMetricsBatch, cacheTTMetrics, computeTTAggregate, mergeTTIntoExchanges } from '../services/tokenterminal'
 
 interface UseDashboardDataReturn {
@@ -76,13 +77,27 @@ export function useDashboardData(): UseDashboardDataReturn {
           })
         )
 
-        // DEX vs CEX volume share (reuses the same breakdown call as volume share)
+        // DEX vs CEX volume share — use CoinGlass for accurate CEX data when available
         lazyPromises.push(
-          fetchDexCexVolumeShare().then((dexCexShareHistory) => {
-            if (!cancelled && dexCexShareHistory.length > 0) {
-              setData((prev) => prev ? { ...prev, dexCexShareHistory } : prev)
+          (async () => {
+            try {
+              // Try CoinGlass first for accurate CEX volume
+              const cexHistory = COINGLASS_ENABLED
+                ? await fetchCEXVolumeHistory().catch(() => null)
+                : null
+              // Merge CoinGlass CEX + DefiLlama DEX (falls back to DefiLlama-only if null)
+              const dexCexShareHistory = await fetchEnhancedDexCexShare(cexHistory)
+              if (!cancelled && dexCexShareHistory.length > 0) {
+                setData((prev) => prev ? { ...prev, dexCexShareHistory } : prev)
+              }
+            } catch {
+              // Final fallback: pure DefiLlama
+              const dexCexShareHistory = await fetchDexCexVolumeShare().catch(() => [])
+              if (!cancelled && dexCexShareHistory.length > 0) {
+                setData((prev) => prev ? { ...prev, dexCexShareHistory } : prev)
+              }
             }
-          }).catch(() => {})
+          })()
         )
 
         // Holder yield batch (top 20 token exchanges)

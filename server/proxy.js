@@ -7,6 +7,7 @@ import { cacheGet, cacheSet } from './cache.js'
 
 const GECKO_KEY = process.env.VITE_COINGECKO_API_KEY || process.env.COINGECKO_API_KEY || ''
 const TT_KEY = process.env.VITE_TT_API_KEY || process.env.TT_API_KEY || ''
+const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
 
 const TARGETS = {
   '/api/llama': 'https://api.llama.fi',
@@ -16,6 +17,7 @@ const TARGETS = {
   '/api/yields': 'https://yields.llama.fi',
   '/api/emissions': 'https://api.llama.fi',
   ...(TT_KEY ? { '/api/tt': 'https://api.tokenterminal.com/v2' } : {}),
+  ...(CG_KEY ? { '/api/coinglass': 'https://open-api-v4.coinglass.com/api' } : {}),
 }
 
 // TTL by path pattern (ms)
@@ -33,6 +35,8 @@ const TTL_RULES = [
   { pattern: /\/perps/, ttl: 5 * 60 * 1000 },           // yields/perps: 5 min
   { pattern: /\/emissions/, ttl: 30 * 60 * 1000 },      // emissions: 30 min
   { pattern: /\/projects\/.*\/metrics/, ttl: 60 * 60 * 1000 }, // TT metrics: 1 hour
+  { pattern: /\/futures\/exchange-rank/, ttl: 5 * 60 * 1000 }, // CoinGlass exchange rank: 5 min
+  { pattern: /\/futures\/aggregated-taker/, ttl: 10 * 60 * 1000 }, // CoinGlass taker volume: 10 min
 ]
 
 function getTTL(path) {
@@ -74,6 +78,9 @@ export async function proxyRequest(reqPath, reqQuery) {
   }
   if (TT_KEY && resolved.target.includes('tokenterminal')) {
     headers['Authorization'] = `Bearer ${TT_KEY}`
+  }
+  if (CG_KEY && resolved.target.includes('coinglass')) {
+    headers['CG-API-KEY'] = CG_KEY
   }
 
   const res = await fetch(externalUrl, { headers })
