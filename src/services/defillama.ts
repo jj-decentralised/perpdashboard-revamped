@@ -1142,7 +1142,7 @@ export async function fetchVolumeShareData(topNames: string[]): Promise<VolumeSh
 const CHAIN_ALIASES: Record<string, string> = {
   'hyperliquid l1': 'Hyperliquid', 'hyperliquid': 'Hyperliquid',
   'arbitrum': 'Arbitrum', 'solana': 'Solana', 'base': 'Base',
-  'blast': 'Blast', 'optimism': 'Optimism', 'polygon': 'Polygon',
+  'blast': 'Blast', 'optimism': 'Optimism', 'op mainnet': 'Optimism', 'polygon': 'Polygon',
   'bsc': 'BSC', 'bnb chain': 'BSC', 'binance': 'BSC',
   'avalanche': 'Avalanche', 'avax': 'Avalanche',
   'ethereum': 'Ethereum', 'zksync era': 'zkSync', 'zksync': 'zkSync',
@@ -1150,6 +1150,7 @@ const CHAIN_ALIASES: Record<string, string> = {
   'sonic': 'Sonic', 'gnosis': 'Gnosis', 'mode': 'Mode', 'scroll': 'Scroll',
   'linea': 'Linea', 'manta': 'Manta', 'starknet': 'Starknet',
   'injective': 'Injective', 'berachain': 'Berachain', 'abstract': 'Abstract',
+  'dydx': 'dYdX', 'opbnb': 'opBNB', 'taiko': 'Taiko',
 }
 
 function normalizeChainName(raw: string): string {
@@ -1185,6 +1186,22 @@ export async function fetchChainGrowthData(): Promise<import('../types').ChainGr
     const breakdownRaw = overview.totalDataChartBreakdown || []
     const sampled = breakdownRaw.filter((_: any, i: number) => i % 7 === 0 || i === breakdownRaw.length - 1)
 
+    // Build protocol→chain lookup from overview.protocols metadata
+    // For single-chain protocols, map name → chain; for multi-chain, skip (they have breakdown objects)
+    const protocolChainLookup = new Map<string, string>()
+    const protocols = (overview as any).protocols || []
+    for (const p of protocols) {
+      const name = (p.name || p.displayName || '').toLowerCase().trim()
+      const chains: string[] = p.chains || []
+      if (name && chains.length === 1) {
+        protocolChainLookup.set(name, normalizeChainName(chains[0]))
+      }
+    }
+    // Also add hardcoded overrides for known protocols the API might name differently
+    for (const [key, chain] of Object.entries(SINGLE_CHAIN_PROTOCOLS)) {
+      protocolChainLookup.set(key, chain)
+    }
+
     // First pass: collect per-chain volumes for each timestamp
     const timeSeries: Array<{ timestamp: number; totalDexVol: number; chainVols: Map<string, number> }> = []
 
@@ -1197,9 +1214,16 @@ export async function fetchChainGrowthData(): Promise<import('../types').ChainGr
 
         if (typeof chains === 'number') {
           totalDexVol += chains
-          const knownChain = getSingleChain(name)
-          if (knownChain) {
-            chainVols.set(knownChain, (chainVols.get(knownChain) || 0) + chains)
+          // Try lookup: first exact match, then prefix match
+          const lower = name.toLowerCase().trim()
+          let chain = protocolChainLookup.get(lower)
+          if (!chain) {
+            // Try partial: strip suffixes like " V2", " Perps", etc.
+            const stripped = lower.replace(/\s+(v\d+|perps?|perpetuals?|exchange|trade|protocol|pro)$/g, '').trim()
+            chain = protocolChainLookup.get(stripped)
+          }
+          if (chain) {
+            chainVols.set(chain, (chainVols.get(chain) || 0) + chains)
           }
         } else {
           const chainEntries = chains as Record<string, number>
