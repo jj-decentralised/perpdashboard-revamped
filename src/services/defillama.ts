@@ -228,6 +228,20 @@ export const SLUG_TO_GECKO_TOKEN: Record<string, string> = {
   'apex': 'apex-protocol-2',
   'lighter-perps': 'lighter',
   'lighter': 'lighter',
+  // ── Additional verified token mappings ──
+  'storm-trade': 'storm-trade',
+  'storm': 'storm-trade',
+  'woofi-pro-perps': 'woo-network',
+  'woofi': 'woo-network',
+  'raydium-perps': 'raydium',
+  'raydium': 'raydium',
+  'boros': 'pendle',
+  'helix-perp': 'helix-2',
+  'helix': 'helix-2',
+  'foxify': 'foxify',
+  'ethereal-dex': 'ethereal',
+  'ethereal': 'ethereal',
+  'sunx': 'sun-token',
 }
 
 export async function fetchDashboardData(): Promise<DashboardData> {

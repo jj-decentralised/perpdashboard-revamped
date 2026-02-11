@@ -85,7 +85,6 @@ const DEFI_PROTOCOLS = new Set([
   'y2k-finance',
   'satori',
   'filament-finance', 'filament',
-  'backpack-exchange', 'backpack',
   'eddy-finance',
   'merkle-trade', 'merkle',
   'avantis',
@@ -104,6 +103,39 @@ const DEFI_PROTOCOLS = new Set([
   'fenix-finance',
   'swapbased',
   'urdex',
+  // Newer DeFi perp protocols
+  'aster', 'aster-perps',
+  'edgex', 'edgex-perps',
+  'grvt', 'grvt-perps',
+  'pacifica',
+  'variational',
+  'extended',
+  'standx', 'standx-perps',
+  'nado', 'nado-perps',
+  'myx-finance', 'myx',
+  'privex',
+  'reya', 'reya-perps',
+  'elfi-protocol', 'elfi',
+  'dipcoin', 'dipcoin-perps',
+  'aark-digital', 'aark',
+  'rho-x',
+  'sunx',
+  'satori-perp',
+  'gmtrade',
+  'evedex',
+  'speedtrading',
+  'tread.fi-perps', 'tread.fi',
+  'boros',
+  'ethereal-dex', 'ethereal',
+  'storm-trade', 'storm',
+  'woofi-pro-perps', 'woofi',
+  'raydium-perps',
+  'helix-perp', 'helix',
+  '01-exchange',
+  'hibachi',
+  'citrex-markets', 'citrex',
+  'ln-exchange-perps',
+  'gate-perp-dex',
 ])
 
 /**
@@ -139,6 +171,16 @@ const CEFI_EXCHANGES = new Set([
   'toobit',
   'orangex',
   'woo', 'woo-x', 'woox',
+  // Additional CeFi exchanges
+  'backpack-exchange', 'backpack',
+  'bitmart',
+  'btse',
+  'ascendex',
+  'blofin',
+  'hashkey',
+  'coinw',
+  'bitrue',
+  'pionex',
 ])
 
 /**
@@ -180,8 +222,18 @@ export function classifyProtocol(slug: string, name: string, chains: string[]): 
   const stripped = lower.replace(/[- ](futures?|perps?|international)$/g, '').trim()
   if (stripped && CEFI_EXCHANGES.has(stripped)) return 'cefi'
 
+  // Check DeFi list explicitly (handles edge cases like Off Chain protocols we know are DeFi)
+  if (DEFI_PROTOCOLS.has(lower)) return 'defi'
+  const strippedDefi = lower
+    .replace(/[- ](v\d+|perps?|perpetuals?|protocol|finance|exchange|dex|swap|derivatives?|trade|pro|omni|markets?|labs|futures?|interface|digital|terminal)$/g, '')
+    .trim()
+  if (strippedDefi && DEFI_PROTOCOLS.has(strippedDefi)) return 'defi'
+
+  // If only chain is "Off Chain", treat as CeFi unless explicitly matched above
+  const realChains = (chains || []).filter(c => c !== 'Off Chain')
+  if (chains && chains.length > 0 && realChains.length === 0) return 'cefi'
+
   // DefiLlama derivatives protocols are on-chain — default to DeFi
-  // Also: if it has chain data, it's on-chain
   if (chains && chains.length > 0) return 'defi'
 
   return 'defi'
