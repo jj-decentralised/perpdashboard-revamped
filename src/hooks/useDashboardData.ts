@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
-import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchSolanaChainGrowth } from '../services/defillama'
+import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchChainGrowthData } from '../services/defillama'
 import { TT_ENABLED, COINGLASS_ENABLED } from '../config/api'
 import { fetchLiquidationHistory } from '../services/coinglass'
 import { getCachedTTMetrics, fetchTTMetricsBatch, cacheTTMetrics, computeTTAggregate, mergeTTIntoExchanges } from '../services/tokenterminal'
@@ -77,11 +77,11 @@ export function useDashboardData(): UseDashboardDataReturn {
           })
         )
 
-        // Solana chain growth share
+        // Chain growth share (top 10 chains)
         lazyPromises.push(
-          fetchSolanaChainGrowth().then((solanaGrowthHistory) => {
-            if (!cancelled && solanaGrowthHistory.length > 0) {
-              setData((prev) => prev ? { ...prev, solanaGrowthHistory } : prev)
+          fetchChainGrowthData().then((chainGrowthData) => {
+            if (!cancelled && chainGrowthData.chains.length > 0) {
+              setData((prev) => prev ? { ...prev, chainGrowthData } : prev)
             }
           }).catch(() => {})
         )

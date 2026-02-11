@@ -271,14 +271,19 @@ export interface DashboardData {
   // Token Terminal aggregate (lazy-loaded, optional)
   ttAggregate: TTAggregateData | null
   // Solana chain growth (lazy-loaded)
-  solanaGrowthHistory: SolanaGrowthPoint[]
+  chainGrowthData: ChainGrowthData
   // CoinGlass data (lazy-loaded)
   liquidationHistory: import('../services/coinglass').LiquidationPoint[]
 }
 
-export interface SolanaGrowthPoint {
+export interface ChainGrowthPoint {
   date: number
-  solanaVol: number
+  chainVol: number
   totalDexVol: number
-  solanaPct: number
+  chainPct: number
+}
+
+export interface ChainGrowthData {
+  chains: string[]  // top chains sorted by recent volume
+  data: Record<string, ChainGrowthPoint[]>
 }

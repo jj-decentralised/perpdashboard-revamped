@@ -142,10 +142,10 @@ function OverviewTab({ data }: { data: any }) {
         </section>
       )}
 
-      {data.solanaGrowthHistory.length > 0 && (
+      {data.chainGrowthData.chains.length > 0 && (
         <section className="section-rule">
-          <ErrorBoundary fallbackLabel="Solana chain growth chart">
-            <SolanaChainGrowthChart data={data.solanaGrowthHistory} />
+          <ErrorBoundary fallbackLabel="Chain volume share chart">
+            <SolanaChainGrowthChart data={data.chainGrowthData} />
           </ErrorBoundary>
         </section>
       )}

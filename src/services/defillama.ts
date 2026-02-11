@@ -746,7 +746,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     perpFeeBreakdownNames: [],
     perpFeeShareHistory: [], // Populated lazily
     ttAggregate: null, // Populated lazily via Token Terminal
-    solanaGrowthHistory: [], // Populated lazily
+    chainGrowthData: { chains: [], data: {} }, // Populated lazily
     liquidationHistory: [], // Populated lazily via CoinGlass
   }
 }
@@ -1138,74 +1138,118 @@ export async function fetchVolumeShareData(topNames: string[]): Promise<VolumeSh
   }
 }
 
-// Known Solana-native perp protocols (lowercase for matching)
-const SOLANA_PERP_PROTOCOLS = new Set([
-  'drift', 'drift protocol', 'drift-protocol',
-  'jupiter perps', 'jupiter-perps',
-  'flash trade', 'flash-trade',
-  'zeta', 'zeta markets', 'zeta-markets',
-  'adrena', 'adrena-protocol',
-  'backpack',
-  'mango', 'mango markets', 'mango-markets',
-  'parcl',
-  'phoenix',
-  'hxro',
-  '01', 'cypher',
-  'orderly network', 'orderly-network',
-  'goosefx',
-  'surfx',
-])
-
-function isSolanaPerp(name: string): boolean {
-  const lower = name.toLowerCase().trim()
-  if (SOLANA_PERP_PROTOCOLS.has(lower)) return true
-  for (const known of SOLANA_PERP_PROTOCOLS) {
-    if (lower.startsWith(known)) return true
-  }
-  return false
+// Canonical chain name mapping: normalize variants to a single name
+const CHAIN_ALIASES: Record<string, string> = {
+  'hyperliquid l1': 'Hyperliquid', 'hyperliquid': 'Hyperliquid',
+  'arbitrum': 'Arbitrum', 'solana': 'Solana', 'base': 'Base',
+  'blast': 'Blast', 'optimism': 'Optimism', 'polygon': 'Polygon',
+  'bsc': 'BSC', 'bnb chain': 'BSC', 'binance': 'BSC',
+  'avalanche': 'Avalanche', 'avax': 'Avalanche',
+  'ethereum': 'Ethereum', 'zksync era': 'zkSync', 'zksync': 'zkSync',
+  'sui': 'Sui', 'sei': 'Sei', 'mantle': 'Mantle', 'fantom': 'Fantom',
+  'sonic': 'Sonic', 'gnosis': 'Gnosis', 'mode': 'Mode', 'scroll': 'Scroll',
+  'linea': 'Linea', 'manta': 'Manta', 'starknet': 'Starknet',
+  'injective': 'Injective', 'berachain': 'Berachain', 'abstract': 'Abstract',
 }
 
-// Solana chain growth — tracks Solana's share of DEX perp volume over time
-export async function fetchSolanaChainGrowth(): Promise<import('../types').SolanaGrowthPoint[]> {
+function normalizeChainName(raw: string): string {
+  return CHAIN_ALIASES[raw.toLowerCase()] || raw
+}
+
+// Known single-chain perp protocols — map to their chain directly
+const SINGLE_CHAIN_PROTOCOLS: Record<string, string> = {
+  'jupiter perps': 'Solana', 'jupiter-perps': 'Solana',
+  'drift': 'Solana', 'drift-protocol': 'Solana', 'drift protocol': 'Solana',
+  'flash trade': 'Solana', 'flash-trade': 'Solana',
+  'zeta': 'Solana', 'zeta markets': 'Solana', 'zeta-markets': 'Solana',
+  'mango': 'Solana', 'mango markets': 'Solana', 'mango-markets': 'Solana',
+  'adrena': 'Solana', 'adrena-protocol': 'Solana',
+  'parcl': 'Solana', 'goosefx': 'Solana', 'surfx': 'Solana',
+  'hyperliquid': 'Hyperliquid', 'hyperliquid perps': 'Hyperliquid', 'hyperliquid-perps': 'Hyperliquid',
+}
+
+function getSingleChain(name: string): string | null {
+  const lower = name.toLowerCase().trim()
+  if (SINGLE_CHAIN_PROTOCOLS[lower]) return SINGLE_CHAIN_PROTOCOLS[lower]
+  for (const [prefix, chain] of Object.entries(SINGLE_CHAIN_PROTOCOLS)) {
+    if (lower.startsWith(prefix)) return chain
+  }
+  return null
+}
+
+// Multi-chain growth — tracks each chain's share of DEX perp volume over time
+export async function fetchChainGrowthData(): Promise<import('../types').ChainGrowthData> {
+  const empty: import('../types').ChainGrowthData = { chains: [], data: {} }
   try {
     const overview = await fetchDerivativesOverview(false)
     const breakdownRaw = overview.totalDataChartBreakdown || []
-    const sampled = breakdownRaw.filter((_, i) => i % 7 === 0 || i === breakdownRaw.length - 1)
+    const sampled = breakdownRaw.filter((_: any, i: number) => i % 7 === 0 || i === breakdownRaw.length - 1)
 
-    return sampled.map(([timestamp, breakdown]) => {
-      let solanaVol = 0
+    // First pass: collect per-chain volumes for each timestamp
+    const timeSeries: Array<{ timestamp: number; totalDexVol: number; chainVols: Map<string, number> }> = []
+
+    for (const [timestamp, breakdown] of sampled) {
       let totalDexVol = 0
+      const chainVols = new Map<string, number>()
 
       for (const [name, chains] of Object.entries(breakdown)) {
         if (classifyVenue(name) !== 'defi') continue
 
-        // Handle both shapes: flat number or { chain: volume } object
-        const vol = typeof chains === 'number'
-          ? chains
-          : Object.values(chains as Record<string, number>).reduce((s, v) => s + (Number(v) || 0), 0)
-
-        totalDexVol += vol
-
-        // Check by protocol name first (covers flat-number entries)
-        if (isSolanaPerp(name)) {
-          solanaVol += vol
-        } else if (typeof chains !== 'number') {
-          // For multi-chain protocols, add only their Solana chain volume
+        if (typeof chains === 'number') {
+          totalDexVol += chains
+          const knownChain = getSingleChain(name)
+          if (knownChain) {
+            chainVols.set(knownChain, (chainVols.get(knownChain) || 0) + chains)
+          }
+        } else {
           const chainEntries = chains as Record<string, number>
-          const solVol = chainEntries['Solana'] || 0
-          if (solVol > 0) solanaVol += solVol
+          for (const [rawChain, vol] of Object.entries(chainEntries)) {
+            const v = Number(vol) || 0
+            if (v <= 0) continue
+            totalDexVol += v
+            const chain = normalizeChainName(rawChain)
+            chainVols.set(chain, (chainVols.get(chain) || 0) + v)
+          }
         }
       }
 
-      return {
-        date: timestamp * 1000,
-        solanaVol,
-        totalDexVol,
-        solanaPct: totalDexVol > 0 ? (solanaVol / totalDexVol) * 100 : 0,
+      timeSeries.push({ timestamp, totalDexVol, chainVols })
+    }
+
+    // Rank chains by recent volume (last ~90 days of weekly samples ≈ last 13 entries)
+    const recentCount = Math.min(13, timeSeries.length)
+    const recentSlice = timeSeries.slice(-recentCount)
+    const chainTotals = new Map<string, number>()
+    for (const { chainVols } of recentSlice) {
+      for (const [chain, vol] of chainVols) {
+        chainTotals.set(chain, (chainTotals.get(chain) || 0) + vol)
       }
-    })
+    }
+
+    const topChains = [...chainTotals.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([chain]) => chain)
+
+    // Build per-chain time series
+    const data: Record<string, import('../types').ChainGrowthPoint[]> = {}
+    for (const chain of topChains) data[chain] = []
+
+    for (const { timestamp, totalDexVol, chainVols } of timeSeries) {
+      for (const chain of topChains) {
+        const chainVol = chainVols.get(chain) || 0
+        data[chain].push({
+          date: timestamp * 1000,
+          chainVol,
+          totalDexVol,
+          chainPct: totalDexVol > 0 ? (chainVol / totalDexVol) * 100 : 0,
+        })
+      }
+    }
+
+    return { chains: topChains, data }
   } catch {
-    return []
+    return empty
   }
 }
 
