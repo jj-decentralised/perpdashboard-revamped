@@ -13,6 +13,7 @@
  */
 
 import express from 'express'
+import compression from 'compression'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { proxyRequest } from './proxy.js'
@@ -27,6 +28,9 @@ const app = express()
 
 // Trust proxy (Railway, Render, etc.)
 app.set('trust proxy', 1)
+
+// Gzip/brotli compression — large JSON payloads compress 70-85%
+app.use(compression())
 
 // CORS for dev mode
 app.use((req, res, next) => {
@@ -61,6 +65,7 @@ async function handleProxy(req, res) {
 
     res.setHeader('Content-Type', 'application/json')
     res.setHeader('X-Cache', result.fromCache ? 'HIT' : 'MISS')
+    if (result.stale) res.setHeader('X-Cache-Stale', 'true')
     res.setHeader('Cache-Control', 'public, max-age=60')
     res.send(result.data)
   } catch (err) {
@@ -69,7 +74,13 @@ async function handleProxy(req, res) {
   }
 }
 
-// Serve static SPA files
+// Serve hashed assets with long-lived cache (filenames change on rebuild)
+app.use('/assets', express.static(join(DIST, 'assets'), {
+  maxAge: '365d',
+  immutable: true,
+}))
+
+// Serve other static files with moderate cache
 app.use(express.static(DIST, { maxAge: '1h' }))
 
 // SPA fallback — all non-API routes serve index.html

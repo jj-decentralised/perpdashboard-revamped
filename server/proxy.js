@@ -1,9 +1,9 @@
 /**
  * Caching proxy middleware.
- * Proxies requests to external APIs and caches responses.
+ * Proxies requests to external APIs with request coalescing + stale-while-revalidate.
  */
 
-import { cacheGet, cacheSet } from './cache.js'
+import { cacheGetOrFetch } from './cache.js'
 
 const GECKO_KEY = process.env.VITE_COINGECKO_API_KEY || process.env.COINGECKO_API_KEY || ''
 const TT_KEY = process.env.VITE_TT_API_KEY || process.env.TT_API_KEY || ''
@@ -56,6 +56,20 @@ function resolveTarget(reqPath) {
   return null
 }
 
+function buildHeaders(target) {
+  const headers = {}
+  if (GECKO_KEY && target.includes('coingecko')) {
+    headers['x-cg-pro-api-key'] = GECKO_KEY
+  }
+  if (TT_KEY && target.includes('tokenterminal')) {
+    headers['Authorization'] = `Bearer ${TT_KEY}`
+  }
+  if (CG_KEY && target.includes('coinglass')) {
+    headers['CG-API-KEY'] = CG_KEY
+  }
+  return headers
+}
+
 export async function proxyRequest(reqPath, reqQuery) {
   const resolved = resolveTarget(reqPath)
   if (!resolved) return null
@@ -64,33 +78,15 @@ export async function proxyRequest(reqPath, reqQuery) {
   const queryString = new URLSearchParams(reqQuery).toString()
   const externalUrl = `${resolved.target}${resolved.path}${queryString ? '?' + queryString : ''}`
 
-  // Check cache
-  const cacheKey = externalUrl
-  const cached = cacheGet(cacheKey)
-  if (cached) {
-    return { data: cached, fromCache: true }
-  }
-
-  // Fetch from external API
-  const headers = {}
-  if (GECKO_KEY && resolved.target.includes('coingecko')) {
-    headers['x-cg-pro-api-key'] = GECKO_KEY
-  }
-  if (TT_KEY && resolved.target.includes('tokenterminal')) {
-    headers['Authorization'] = `Bearer ${TT_KEY}`
-  }
-  if (CG_KEY && resolved.target.includes('coinglass')) {
-    headers['CG-API-KEY'] = CG_KEY
-  }
-
-  const res = await fetch(externalUrl, { headers })
-  if (!res.ok) {
-    throw new Error(`Upstream ${res.status}: ${externalUrl}`)
-  }
-
-  const data = await res.text()
   const ttl = getTTL(resolved.path)
-  cacheSet(cacheKey, data, ttl)
+  const headers = buildHeaders(resolved.target)
 
-  return { data, fromCache: false }
+  // Use coalescing cache: deduplicates concurrent requests + stale-while-revalidate
+  return cacheGetOrFetch(externalUrl, async () => {
+    const res = await fetch(externalUrl, { headers })
+    if (!res.ok) {
+      throw new Error(`Upstream ${res.status}: ${externalUrl}`)
+    }
+    return res.text()
+  }, ttl)
 }
