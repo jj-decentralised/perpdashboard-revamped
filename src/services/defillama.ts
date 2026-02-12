@@ -779,6 +779,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     ttAggregate: null, // Populated lazily via Token Terminal
     chainGrowthData: { chains: [], data: {} }, // Populated lazily
     liquidationHistory: [], // Populated lazily via CoinGlass
+    cexFuturesVolumeHistory: [], // Populated lazily via CoinGlass
+    cexSpotVolumeHistory: [], // Populated lazily via CoinGlass
   }
 }
 

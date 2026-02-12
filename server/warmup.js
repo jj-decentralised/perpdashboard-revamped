@@ -38,6 +38,8 @@ if (CG_KEY) {
   WARMUP_URLS.push(
     '/api/coinglass/futures/exchange-rank',
     '/api/coinglass/futures/liquidation/aggregated-history?symbol=BTC&interval=24h&limit=365',
+    '/api/coinglass/futures/aggregated-taker-buy-sell-volume/history?symbol=BTC&interval=1d&limit=365',
+    '/api/coinglass/spot/aggregated-taker-buy-sell-volume/history?symbol=BTC&interval=1d&limit=365',
   )
 }
 

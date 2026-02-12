@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import type { DashboardData } from '../types'
 import { fetchDashboardData, fetchVolumeShareData, fetchSpotVolumeHistory, fetchHolderYieldBatch, fetchTreasuryBatch, getCachedTreasury, fetchHistoricalFeeData, getCachedFeeHistory, fetchChainGrowthData } from '../services/defillama'
 import { TT_ENABLED, COINGLASS_ENABLED } from '../config/api'
-import { fetchLiquidationHistory } from '../services/coinglass'
+import { fetchLiquidationHistory, fetchCEXFuturesVolumeHistory, fetchCEXSpotVolumeHistory } from '../services/coinglass'
 import { getCachedTTMetrics, fetchTTMetricsBatch, cacheTTMetrics, computeTTAggregate, mergeTTIntoExchanges } from '../services/tokenterminal'
 
 interface UseDashboardDataReturn {
@@ -86,12 +86,26 @@ export function useDashboardData(): UseDashboardDataReturn {
           }).catch(() => {})
         )
 
-        // CoinGlass enrichment (liquidations, long/short ratio)
+        // CoinGlass enrichment (liquidations, CEX volume history)
         if (COINGLASS_ENABLED) {
           lazyPromises.push(
             fetchLiquidationHistory('BTC', '24h', 365).then((liquidations) => {
               if (!cancelled && liquidations?.length) {
                 setData((prev) => prev ? { ...prev, liquidationHistory: liquidations } : prev)
+              }
+            }).catch(() => {})
+          )
+          lazyPromises.push(
+            Promise.all([
+              fetchCEXFuturesVolumeHistory('BTC', '1d', 365),
+              fetchCEXSpotVolumeHistory('BTC', '1d', 365),
+            ]).then(([cexFutures, cexSpot]) => {
+              if (!cancelled) {
+                setData((prev) => prev ? {
+                  ...prev,
+                  ...(cexFutures.length > 0 ? { cexFuturesVolumeHistory: cexFutures } : {}),
+                  ...(cexSpot.length > 0 ? { cexSpotVolumeHistory: cexSpot } : {}),
+                } : prev)
               }
             }).catch(() => {})
           )

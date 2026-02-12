@@ -1,9 +1,11 @@
 /**
- * CoinGlass API service — provides CEX futures data.
+ * CoinGlass API service — provides CEX futures + spot data.
  *
  * Endpoints used:
  *   - /futures/exchange-rank — current OI + volume snapshot per exchange
  *   - /futures/liquidation/aggregated-history — historical liquidation data
+ *   - /futures/aggregated-taker-buy-sell-volume/history — historical CEX futures volume
+ *   - /spot/aggregated-taker-buy-sell-volume/history — historical CEX spot volume
  */
 
 import { COINGLASS_BASE, COINGLASS_ENABLED, coinglassHeaders } from '../config/api'
@@ -28,6 +30,11 @@ export interface LiquidationPoint {
   longLiq: number
   shortLiq: number
   total: number
+}
+
+export interface CEXVolumePoint {
+  date: number
+  volume: number
 }
 
 // --- Fetch helper ---
@@ -107,4 +114,51 @@ export async function fetchLiquidationHistory(
   })
 }
 
+/**
+ * Parse taker buy/sell volume history into total volume per day.
+ * CoinGlass returns buy + sell separately; total volume = buy + sell.
+ */
+interface RawTakerVolume {
+  time: number
+  buy_volume: number | string
+  sell_volume: number | string
+}
 
+function parseTakerVolume(data: RawTakerVolume[] | null): CEXVolumePoint[] {
+  if (!data?.length) return []
+  return data.map((d) => ({
+    date: d.time,
+    volume: (Number(d.buy_volume) || 0) + (Number(d.sell_volume) || 0),
+  }))
+}
+
+/**
+ * Fetch historical aggregate CEX futures volume (all exchanges, all coins).
+ * Uses taker buy/sell volume as a proxy for total traded volume.
+ */
+export async function fetchCEXFuturesVolumeHistory(
+  symbol = 'BTC',
+  interval = '1d',
+  limit = 365,
+): Promise<CEXVolumePoint[]> {
+  const data = await fetchCG<RawTakerVolume[]>(
+    '/futures/aggregated-taker-buy-sell-volume/history',
+    { symbol, interval, limit: String(limit) },
+  )
+  return parseTakerVolume(data)
+}
+
+/**
+ * Fetch historical aggregate CEX spot volume (all exchanges, all coins).
+ */
+export async function fetchCEXSpotVolumeHistory(
+  symbol = 'BTC',
+  interval = '1d',
+  limit = 365,
+): Promise<CEXVolumePoint[]> {
+  const data = await fetchCG<RawTakerVolume[]>(
+    '/spot/aggregated-taker-buy-sell-volume/history',
+    { symbol, interval, limit: String(limit) },
+  )
+  return parseTakerVolume(data)
+}

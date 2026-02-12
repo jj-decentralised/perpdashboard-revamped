@@ -24,6 +24,7 @@ import { TreasuryOverview } from '../components/charts/TreasuryOverview'
 import { ValuationChecker } from '../components/charts/ValuationChecker'
 import { SolanaChainGrowthChart } from '../components/charts/SolanaChainGrowthChart'
 import { LiquidationChart } from '../components/charts/LiquidationChart'
+import { DEXvsCEXChart } from '../components/charts/DEXvsCEXChart'
 import { ValuationScatterChart } from '../components/charts/ValuationScatterChart'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
@@ -138,6 +139,19 @@ function OverviewTab({ data }: { data: any }) {
         <section className="section-rule">
           <ErrorBoundary fallbackLabel="Perps dominance chart">
             <PerpsDominanceChart perpVolume={data.historicalVolume} spotVolume={data.spotVolumeHistory} />
+          </ErrorBoundary>
+        </section>
+      )}
+
+      {data.cexFuturesVolumeHistory.length > 0 && (
+        <section className="section-rule">
+          <ErrorBoundary fallbackLabel="DEX vs CEX chart">
+            <DEXvsCEXChart
+              dexPerpVolume={data.historicalVolume}
+              dexSpotVolume={data.spotVolumeHistory}
+              cexFuturesVolume={data.cexFuturesVolumeHistory}
+              cexSpotVolume={data.cexSpotVolumeHistory}
+            />
           </ErrorBoundary>
         </section>
       )}

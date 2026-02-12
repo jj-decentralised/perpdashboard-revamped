@@ -274,6 +274,8 @@ export interface DashboardData {
   chainGrowthData: ChainGrowthData
   // CoinGlass data (lazy-loaded)
   liquidationHistory: import('../services/coinglass').LiquidationPoint[]
+  cexFuturesVolumeHistory: import('../services/coinglass').CEXVolumePoint[]
+  cexSpotVolumeHistory: import('../services/coinglass').CEXVolumePoint[]
 }
 
 export interface ChainGrowthPoint {
