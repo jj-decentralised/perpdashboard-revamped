@@ -380,10 +380,69 @@ function buildTVLData(protocolData: any): TVLData | null {
     ? allPoints.filter((_, i) => i % 7 === 0 || i === allPoints.length - 1)
     : allPoints
 
+  // Build token-level composition from tokensInUsd (across all base chains)
+  const tokenDateMap = new Map<number, Record<string, number>>()
+  const latestTokens: Record<string, number> = {}
+
+  for (const chain of chainNames) {
+    const tokenEntries: Array<{ date: number; tokens: Record<string, number> }> = chainTvls[chain]?.tokensInUsd || []
+    for (const entry of tokenEntries) {
+      const dayKey = entry.date * 1000
+      if (!tokenDateMap.has(dayKey)) tokenDateMap.set(dayKey, { date: dayKey })
+      const row = tokenDateMap.get(dayKey)!
+      for (const [token, val] of Object.entries(entry.tokens || {})) {
+        if (typeof val === 'number') {
+          row[token] = (row[token] || 0) + val
+        }
+      }
+    }
+  }
+
+  let tokenHistory: TVLHistoryPoint[] | undefined
+  let tokenNames: string[] | undefined
+  let currentTokens: Record<string, number> | undefined
+
+  const tokenPoints = Array.from(tokenDateMap.values()).sort((a, b) => a.date - b.date)
+  if (tokenPoints.length > 0) {
+    // Find top tokens by latest values
+    const lastPoint = tokenPoints[tokenPoints.length - 1]
+    const tokenValues = Object.entries(lastPoint)
+      .filter(([k, v]) => k !== 'date' && typeof v === 'number' && v > 0)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
+
+    const topTokens = tokenValues.slice(0, 8).map(([k]) => k)
+    const otherTokenNames = tokenValues.slice(8).map(([k]) => k)
+    const displayTokens = otherTokenNames.length > 0 ? [...topTokens, 'Other'] : topTokens
+
+    // Rebuild with grouped "Other"
+    const groupedPoints: TVLHistoryPoint[] = tokenPoints.map((p) => {
+      const row: TVLHistoryPoint = { date: p.date }
+      for (const t of topTokens) row[t] = p[t] || 0
+      if (otherTokenNames.length > 0) {
+        row['Other'] = otherTokenNames.reduce((sum, t) => sum + ((p[t] as number) || 0), 0)
+      }
+      return row
+    })
+
+    // Resample weekly if needed
+    tokenHistory = groupedPoints.length > 180
+      ? groupedPoints.filter((_, i) => i % 7 === 0 || i === groupedPoints.length - 1)
+      : groupedPoints
+    tokenNames = displayTokens
+
+    currentTokens = {}
+    for (const [token, val] of tokenValues) {
+      currentTokens[token] = val as number
+    }
+  }
+
   return {
     history: sampled as TVLHistoryPoint[],
     chains: displayChains,
     currentChainTvls,
+    tokenHistory,
+    tokenNames,
+    currentTokens,
   }
 }
 

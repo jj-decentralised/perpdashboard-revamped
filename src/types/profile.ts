@@ -108,6 +108,9 @@ export interface TVLData {
   history: TVLHistoryPoint[]
   chains: string[]
   currentChainTvls: Record<string, number>
+  tokenHistory?: TVLHistoryPoint[]
+  tokenNames?: string[]
+  currentTokens?: Record<string, number>
 }
 
 export interface ExchangeProfileData {
