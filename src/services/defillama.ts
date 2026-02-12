@@ -85,6 +85,7 @@ export interface ProtocolTVLResponse {
   tvl: Array<{ date: number; totalLiquidityUSD: number }>
   chainTvls: Record<string, { tvl: Array<{ date: number; totalLiquidityUSD: number }> }>
   currentChainTvls: Record<string, number>
+  parentProtocol?: string
 }
 
 export async function fetchProtocolTVL(slug: string): Promise<ProtocolTVLResponse | null> {

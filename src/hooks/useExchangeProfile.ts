@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData, MarketSharePoint, BuilderVolumeData, TVLData, TVLHistoryPoint } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, fetchProtocolTVL, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, fetchProtocolTVL, fetchProtocols, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets, fetchBTCPrice } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
@@ -387,6 +387,28 @@ function buildTVLData(protocolData: any): TVLData | null {
   }
 }
 
+/**
+ * When a perps sub-protocol has no TVL, find the highest-TVL sibling under the
+ * same parent (typically a bridge or lending protocol) and use its TVL instead.
+ */
+async function resolveSiblingTVL(parentProtocol: string, currentSlug: string): Promise<TVLData | null> {
+  try {
+    const allProtocols = await fetchProtocols()
+    const siblings = allProtocols
+      .filter((p: any) => p.parentProtocol === parentProtocol && p.slug !== currentSlug)
+      .sort((a: any, b: any) => (b.tvl || 0) - (a.tvl || 0))
+
+    // Try siblings in TVL order until we find one with chart data
+    for (const sibling of siblings.slice(0, 3)) {
+      if (!sibling.tvl || sibling.tvl < 10000) continue
+      const siblingTVL = await fetchProtocolTVL(sibling.slug).catch(() => null)
+      const tvlData = buildTVLData(siblingTVL)
+      if (tvlData) return tvlData
+    }
+  } catch { /* protocols list unavailable */ }
+  return null
+}
+
 export function useExchangeProfile(
   slug: string | undefined,
   cgId: string | null
@@ -595,8 +617,11 @@ export function useExchangeProfile(
         // Builder volume data — only for Hyperliquid, fetched lazily after initial render
         let builderVolume: BuilderVolumeData | null = null
 
-        // Build TVL history from protocol data
-        const tvlData = buildTVLData(protocolTVLRaw)
+        // Build TVL history from protocol data, falling back to parent/sibling protocol
+        let tvlData = buildTVLData(protocolTVLRaw)
+        if (!tvlData && protocolTVLRaw?.parentProtocol) {
+          tvlData = await resolveSiblingTVL(protocolTVLRaw.parentProtocol, slug!)
+        }
 
         const profileData: ExchangeProfileData = {
           summary: summary || null,
