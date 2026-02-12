@@ -81,6 +81,22 @@ export async function fetchTreasury(slug: string): Promise<any | null> {
   }
 }
 
+export interface ProtocolTVLResponse {
+  tvl: Array<{ date: number; totalLiquidityUSD: number }>
+  chainTvls: Record<string, { tvl: Array<{ date: number; totalLiquidityUSD: number }> }>
+  currentChainTvls: Record<string, number>
+}
+
+export async function fetchProtocolTVL(slug: string): Promise<ProtocolTVLResponse | null> {
+  try {
+    return await fetchJSON<ProtocolTVLResponse>(
+      `${LLAMA_BASE}/protocol/${slug}`
+    )
+  } catch {
+    return null
+  }
+}
+
 export async function fetchHoldersRevenueSummary(slug: string): Promise<any | null> {
   try {
     return await fetchJSON<any>(

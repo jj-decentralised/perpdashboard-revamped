@@ -21,7 +21,7 @@ import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, CHART_PALETTE } from '..
 import { EMISSIONS_BASE } from '../config/api'
 import { formatUSD, formatDateShort, formatFundingRate, formatNumber, formatPercent, formatMultiple, percentClass, classNames } from '../utils/format'
 import type { CGExchangeTicker } from '../types/coingecko'
-import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint, MarketSharePoint, BuilderVolumeData } from '../types/profile'
+import type { TokenInfo, QuarterlyData, ComparableExchange, TreasuryInfo, HistoricalPEPoint, MarketSharePoint, BuilderVolumeData, TVLData } from '../types/profile'
 
 function ProfileSkeleton() {
   return (
@@ -87,6 +87,98 @@ function MarketShareTooltip({ active, payload, label }: any) {
         </p>
       ))}
     </div>
+  )
+}
+
+// --- TVL History Section (Stacked Column Chart) ---
+function TVLHistorySection({ tvlData }: { tvlData: TVLData }) {
+  const { history, chains } = tvlData
+
+  // Compute current total TVL from the last data point
+  const lastPoint = history[history.length - 1]
+  const currentTotal = chains.reduce((sum, c) => sum + (lastPoint?.[c] || 0), 0)
+
+  return (
+    <ErrorBoundary fallbackLabel="TVL History">
+      <section className="section-rule">
+        <div className="flex items-baseline justify-between mb-1">
+          <div>
+            <h3 className="chart-title">Total Value Locked</h3>
+            <p className="chart-subtitle">
+              Historical TVL breakdown by chain {currentTotal > 0 ? `— currently ${fmtAxis(currentTotal)}` : ''}
+            </p>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={360}>
+          <BarChart data={history} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+            <XAxis
+              dataKey="date"
+              tickFormatter={formatDateShort}
+              tick={AXIS_STYLE}
+              tickLine={false}
+              axisLine={{ stroke: COLORS.rule }}
+              minTickGap={60}
+            />
+            <YAxis
+              tickFormatter={fmtAxis}
+              tick={AXIS_STYLE}
+              tickLine={false}
+              axisLine={false}
+              width={58}
+            />
+            <Tooltip
+              content={({ active, payload, label }: any) => {
+                if (!active || !payload?.length) return null
+                // Sort by value descending in tooltip
+                const sorted = [...payload].sort((a: any, b: any) => (b.value || 0) - (a.value || 0))
+                const total = sorted.reduce((s: number, e: any) => s + (e.value || 0), 0)
+                return (
+                  <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
+                    <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
+                    {sorted.map((entry: any) => (
+                      entry.value > 0 && (
+                        <p key={entry.name} style={{ margin: 0, color: entry.color || COLORS.inkLight, fontSize: 12 }}>
+                          {entry.name}: {formatUSD(entry.value, true)}
+                        </p>
+                      )
+                    ))}
+                    {total > 0 && (
+                      <p style={{ margin: '4px 0 0', borderTop: `1px solid ${COLORS.rule}`, paddingTop: 4, fontWeight: 600, color: COLORS.ink, fontSize: 12 }}>
+                        Total: {formatUSD(total, true)}
+                      </p>
+                    )}
+                  </div>
+                )
+              }}
+            />
+            {chains.map((chain, i) => (
+              <Bar
+                key={chain}
+                dataKey={chain}
+                name={chain}
+                stackId="tvl"
+                fill={CHART_PALETTE[i % CHART_PALETTE.length]}
+                fillOpacity={0.85}
+                animationDuration={800}
+                radius={i === chains.length - 1 ? [2, 2, 0, 0] : undefined}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+          {chains.map((chain, i) => (
+            <span key={chain} className="flex items-center gap-1.5">
+              <span
+                className="inline-block w-3 h-3"
+                style={{ backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length], opacity: 0.85 }}
+              />
+              <span className="font-sans text-[11px] text-ink-muted">{chain}</span>
+            </span>
+          ))}
+        </div>
+      </section>
+    </ErrorBoundary>
   )
 }
 
@@ -1576,6 +1668,11 @@ export default function ExchangeProfilePage() {
               </div>
             </section>
           </ErrorBoundary>
+        )}
+
+        {/* TVL History */}
+        {data.tvlData && data.tvlData.history.length > 3 && (
+          <TVLHistorySection tvlData={data.tvlData} />
         )}
 
         {/* Historical Fees & Revenue */}

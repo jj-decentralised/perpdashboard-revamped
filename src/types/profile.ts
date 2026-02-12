@@ -99,6 +99,17 @@ export interface BuilderVolumeData {
   cumulativeIncome: Array<{ date: number; income: number }>
 }
 
+export interface TVLHistoryPoint {
+  date: number
+  [chain: string]: number
+}
+
+export interface TVLData {
+  history: TVLHistoryPoint[]
+  chains: string[]
+  currentChainTvls: Record<string, number>
+}
+
 export interface ExchangeProfileData {
   summary: DerivativesSummary | null
   historicalVolume: HistoricalDataPoint[]
@@ -118,4 +129,5 @@ export interface ExchangeProfileData {
   holdersRevenue: HoldersRevenueData | null
   marketShareHistory: MarketSharePoint[]
   builderVolume: BuilderVolumeData | null
+  tvlData: TVLData | null
 }

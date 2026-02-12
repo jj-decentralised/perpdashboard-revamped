@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData, MarketSharePoint, BuilderVolumeData } from '../types/profile'
+import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData, MarketSharePoint, BuilderVolumeData, TVLData, TVLHistoryPoint } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, fetchProtocolTVL, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets, fetchBTCPrice } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
@@ -328,6 +328,65 @@ function buildMarketShareHistory(
   return smoothed
 }
 
+function buildTVLData(protocolData: any): TVLData | null {
+  if (!protocolData) return null
+
+  const chainTvls = protocolData.chainTvls || {}
+  const currentChainTvls = protocolData.currentChainTvls || {}
+
+  // Filter out staking/borrowed/pool2 sub-chains — only use base chain names
+  const skipSuffixes = ['-staking', '-borrowed', '-pool2', '-vesting']
+  const chainNames = Object.keys(chainTvls).filter((name) =>
+    !skipSuffixes.some((s) => name.toLowerCase().endsWith(s))
+  )
+
+  if (chainNames.length === 0) return null
+
+  // Sort chains by current TVL descending; keep top 6 + "Other"
+  const sorted = [...chainNames].sort((a, b) => (currentChainTvls[b] || 0) - (currentChainTvls[a] || 0))
+  const topChains = sorted.slice(0, 6)
+  const otherChains = sorted.slice(6)
+  const displayChains = otherChains.length > 0 ? [...topChains, 'Other'] : topChains
+
+  // Build date → chain → value map
+  const dateMap = new Map<number, Record<string, number>>()
+
+  for (const chain of chainNames) {
+    const entries = chainTvls[chain]?.tvl || []
+    const isOther = !topChains.includes(chain)
+    const displayName = isOther ? 'Other' : chain
+
+    for (const entry of entries) {
+      const dayKey = entry.date * 1000 // convert to ms
+      if (!dateMap.has(dayKey)) dateMap.set(dayKey, { date: dayKey })
+      const row = dateMap.get(dayKey)!
+      row[displayName] = (row[displayName] || 0) + (entry.totalLiquidityUSD || 0)
+    }
+  }
+
+  // Convert to sorted array and resample to weekly for performance
+  const allPoints = Array.from(dateMap.values()).sort((a, b) => a.date - b.date)
+  if (allPoints.length === 0) return null
+
+  // Check if there's meaningful TVL (total > $10k at any point)
+  const hasMeaningfulTVL = allPoints.some((p) => {
+    const total = displayChains.reduce((sum, c) => sum + (p[c] || 0), 0)
+    return total > 10000
+  })
+  if (!hasMeaningfulTVL) return null
+
+  // Resample: weekly if > 180 points
+  const sampled = allPoints.length > 180
+    ? allPoints.filter((_, i) => i % 7 === 0 || i === allPoints.length - 1)
+    : allPoints
+
+  return {
+    history: sampled as TVLHistoryPoint[],
+    chains: displayChains,
+    currentChainTvls,
+  }
+}
+
 export function useExchangeProfile(
   slug: string | undefined,
   cgId: string | null
@@ -360,7 +419,7 @@ export function useExchangeProfile(
         // Phase 1: Core data (parallel)
         // Use lightweight derivatives overview (excludeBreakdown) for comparables — saves ~7MB vs old approach
         const isHyperliquid = slug!.toLowerCase() === 'hyperliquid-perps'
-        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, holdersRevRaw, derivativesOverview, feeOverview, cgExchangesList, btcPrice, hlSummary] = await Promise.all([
+        const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, holdersRevRaw, derivativesOverview, feeOverview, cgExchangesList, btcPrice, hlSummary, protocolTVLRaw] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
           fetchFeeSummary(slug!).catch(() => null),
@@ -372,6 +431,7 @@ export function useExchangeProfile(
           !cgId ? fetchCGDerivativesExchanges().catch(() => []) : Promise.resolve([]),
           fetchBTCPrice().catch(() => 60000),
           !isHyperliquid ? fetchDerivativesSummary('hyperliquid-perps').catch(() => null) : Promise.resolve(null),
+          fetchProtocolTVL(slug!).catch(() => null),
         ])
 
         if (cancelled) return
@@ -535,6 +595,9 @@ export function useExchangeProfile(
         // Builder volume data — only for Hyperliquid, fetched lazily after initial render
         let builderVolume: BuilderVolumeData | null = null
 
+        // Build TVL history from protocol data
+        const tvlData = buildTVLData(protocolTVLRaw)
+
         const profileData: ExchangeProfileData = {
           summary: summary || null,
           historicalVolume,
@@ -553,6 +616,7 @@ export function useExchangeProfile(
           holdersRevenue,
           marketShareHistory,
           builderVolume,
+          tvlData,
         }
 
         setData(profileData)
