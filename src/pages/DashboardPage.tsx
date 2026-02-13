@@ -28,6 +28,7 @@ import { DEXvsCEXChart } from '../components/charts/DEXvsCEXChart'
 import { ValuationScatterChart } from '../components/charts/ValuationScatterChart'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
+import { VolumeFeesTreeTable } from '../components/charts/VolumeFeesTreeTable'
 import { CommandPalette } from '../components/CommandPalette'
 import { DataMethodology } from '../components/DataMethodology'
 import { TabNavigation, useTabNavigation } from '../components/TabNavigation'
@@ -237,6 +238,12 @@ function FeesValuationTab({ data }: { data: any }) {
   return (
     <>
       <section>
+        <ErrorBoundary fallbackLabel="Volume & fees tree table">
+          <VolumeFeesTreeTable exchanges={data.enrichedExchanges} />
+        </ErrorBoundary>
+      </section>
+
+      <section className="section-rule">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ErrorBoundary fallbackLabel="OI vs Volume scatter">
             <TVLvsVolumeScatter exchanges={data.enrichedExchanges} />
