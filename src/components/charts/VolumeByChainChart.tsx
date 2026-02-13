@@ -115,7 +115,10 @@ export function VolumeByChainChart({ exchanges }: Props) {
     const volumeByChain: Record<string, number> = {}
     const exchangesByChain: Record<string, Map<string, ExchangeContribution>> = {}
 
-    for (const exchange of exchanges) {
+    // Filter for DEX-only to match Chain Volume Share chart
+    const dexExchanges = exchanges.filter((e) => e.venueType === 'defi')
+
+    for (const exchange of dexExchanges) {
       if (exchange.breakdown24h && Object.keys(exchange.breakdown24h).length > 0) {
         for (const [chain, exchangeVolumes] of Object.entries(exchange.breakdown24h)) {
           const chainTotal = Object.values(exchangeVolumes).reduce(
@@ -199,7 +202,7 @@ export function VolumeByChainChart({ exchanges }: Props) {
     <div className="chart-container">
       <h3 className="chart-title">Volume Distribution by Chain</h3>
       <p className="chart-subtitle">
-        24-hour trading volume concentration across blockchain networks
+        24-hour on-chain DEX perpetual volume concentration across blockchain networks
       </p>
       <MetricInfo
         description="Chain-level volume distribution shows where perpetual trading activity is concentrated. This helps identify which L1/L2 ecosystems are capturing the most derivatives activity and reveals infrastructure preferences. Stablecoin collateral composition on each chain further affects capital efficiency and risk profiles."
