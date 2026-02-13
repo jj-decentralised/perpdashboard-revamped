@@ -44,14 +44,6 @@ export function DataMethodology() {
             </h4>
             <dl className="font-sans text-xs text-ink-light leading-relaxed space-y-1.5">
               <div>
-                <dt className="inline font-medium" style={{ color: COLORS.inkLight }}>P/E Ratio:</dt>{' '}
-                <dd className="inline">
-                  Circulating Market Cap / Annualised Revenue. Annualisation prefers trailing 30d fees &times; 12
-                  when available; falls back to 24h &times; 365. Revenue estimated as fees &times; 0.3 assumed
-                  take rate when explicit revenue figures are not available.
-                </dd>
-              </div>
-              <div>
                 <dt className="inline font-medium" style={{ color: COLORS.inkLight }}>P/S Ratio:</dt>{' '}
                 <dd className="inline">
                   Circulating Market Cap / Annualised Fees. Uses trailing 30d &times; 12 when available.

@@ -46,7 +46,6 @@ const METRICS: MetricDef[] = [
   { key: 'tvl', label: 'TVL', getValue: (e) => e.tvl > 0 ? e.tvl : null, format: (v) => formatUSD(v, true), logScale: true },
   { key: 'dailyFees', label: 'Daily Fees', getValue: getDailyFees, format: (v) => formatUSD(v, true), logScale: true },
   { key: 'psRatio', label: 'P/S Ratio', getValue: (e) => e.psRatio, format: (v) => formatMultiple(v) },
-  { key: 'peRatio', label: 'P/E Ratio', getValue: (e) => e.peRatio, format: (v) => formatMultiple(v) },
   { key: 'takeRate', label: 'Take Rate (bps)', getValue: getTakeRate, format: (v) => `${v.toFixed(1)} bps` },
   { key: 'volumeToTvl', label: 'Volume/TVL', getValue: (e) => e.volumeToTvl != null && isFinite(e.volumeToTvl) ? e.volumeToTvl : null, format: (v) => `${v.toFixed(1)}x` },
   { key: 'change_1d', label: '1d Change %', getValue: (e) => e.change_1d, format: (v) => formatPercent(v) ?? `${v.toFixed(1)}%` },

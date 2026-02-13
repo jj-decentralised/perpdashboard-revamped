@@ -76,7 +76,6 @@ function buildHistoricalPE(
 
       return {
         date: ts,
-        pe: mcap > 0 && annualizedRev > 0 ? mcap / annualizedRev : null,
         ps: mcap > 0 && annualizedFees > 0 ? mcap / annualizedFees : null,
         price,
         mcap,
@@ -242,7 +241,6 @@ function buildComparables(
       hasToken,
       tokenSymbol,
       mcap: dexMcap,
-      peRatio: dexMcap && annualRev > 0 ? dexMcap / annualRev : null,
       psRatio: dexMcap && annualFees > 0 ? dexMcap / annualFees : null,
       change1d: dex.change_1d ?? null,
       matchReason: reasons.join(' · '),

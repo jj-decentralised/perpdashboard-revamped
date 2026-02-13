@@ -41,7 +41,6 @@ export interface TokenInfo {
 
 export interface HistoricalPEPoint {
   date: number
-  pe: number | null
   ps: number | null
   price: number
   mcap: number
@@ -74,7 +73,6 @@ export interface ComparableExchange {
   hasToken: boolean
   tokenSymbol: string | null
   mcap: number | null
-  peRatio: number | null
   psRatio: number | null
   change1d: number | null
   matchReason: string

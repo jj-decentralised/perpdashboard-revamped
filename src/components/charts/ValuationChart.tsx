@@ -12,7 +12,6 @@ type ValuationMode = 'mcap' | 'fdv'
 
 interface ValuationRow {
   name: string
-  pe: number
   ps: number
   valuation: number
   volume24h: number
@@ -22,7 +21,7 @@ interface ValuationRow {
   tokenSymbol: string | null
 }
 
-type SortKey = 'pe' | 'ps' | 'valuation' | 'volume24h' | 'name'
+type SortKey = 'ps' | 'valuation' | 'volume24h' | 'name'
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0
@@ -35,26 +34,23 @@ function percentile(sorted: number[], p: number): number {
 }
 
 export function ValuationChart({ exchanges }: Props) {
-  const [sortKey, setSortKey] = useState<SortKey>('pe')
+  const [sortKey, setSortKey] = useState<SortKey>('ps')
   const [sortAsc, setSortAsc] = useState(true)
   const [valuationMode, setValuationMode] = useState<ValuationMode>('fdv')
 
-  const { rows, peQ, psQ } = useMemo(() => {
+  const { rows, psQ } = useMemo(() => {
     const valid = exchanges.filter((e) => {
       const v = valuationMode === 'fdv' ? (e.fdv ?? e.mcap) : e.mcap
       if (!v || v <= 0) return false
       if (!e.annualizedFees || e.annualizedFees <= 0) return false
-      if (!e.annualizedRevenue || e.annualizedRevenue <= 0) return false
-      const pe = v / e.annualizedRevenue
       const ps = v / e.annualizedFees
-      return pe > 0 && ps > 0 && pe < 1000 && ps < 1000
+      return ps > 0 && ps < 1000
     })
 
     const rows: ValuationRow[] = valid.map((e) => {
       const v = (valuationMode === 'fdv' ? (e.fdv ?? e.mcap) : e.mcap)!
       return {
         name: e.displayName || e.name,
-        pe: v / e.annualizedRevenue!,
         ps: v / e.annualizedFees!,
         valuation: v,
         volume24h: e.total24h ?? 0,
@@ -65,16 +61,10 @@ export function ValuationChart({ exchanges }: Props) {
       }
     })
 
-    const peValues = rows.map((r) => r.pe).sort((a, b) => a - b)
     const psValues = rows.map((r) => r.ps).sort((a, b) => a - b)
 
     return {
       rows,
-      peQ: {
-        q1: percentile(peValues, 25),
-        median: percentile(peValues, 50),
-        q3: percentile(peValues, 75),
-      },
       psQ: {
         q1: percentile(psValues, 25),
         median: percentile(psValues, 50),
@@ -113,7 +103,7 @@ export function ValuationChart({ exchanges }: Props) {
       <div className="chart-container">
         <h3 className="chart-title">Valuation Multiples</h3>
         <p className="chart-subtitle">
-          P/E and P/S ratios for token-based perpetual exchanges
+          P/S ratios for token-based perpetual exchanges
         </p>
         <p className="font-sans text-sm text-ink-muted py-12 text-center">
           Insufficient data — requires exchanges with both market cap and fee data.
@@ -126,11 +116,11 @@ export function ValuationChart({ exchanges }: Props) {
     <div className="chart-container">
       <h3 className="chart-title">Valuation Multiples</h3>
       <p className="chart-subtitle">
-        P/E and P/S ratios for perpetual exchanges with governance tokens
+        P/S ratios for perpetual exchanges with governance tokens
       </p>
       <MetricInfo
-        description={`Valuation multiples compare a protocol's ${valuationMode === 'fdv' ? 'fully diluted valuation (FDV)' : 'market cap'} to its revenue (P/E) and fees (P/S). Lower ratios suggest relative undervaluation compared to peers. Traditional finance exchange benchmarks (CME, ICE) typically trade at 20-30x P/E, providing a reference point for DeFi perpetual protocol valuations.`}
-        source={`${valuationMode === 'fdv' ? 'FDV' : 'Market cap'} from market aggregators. Revenue and fees annualised from trailing on-chain data.`}
+        description={`Valuation multiples compare a protocol's ${valuationMode === 'fdv' ? 'fully diluted valuation (FDV)' : 'market cap'} to its fees (P/S). Lower ratios suggest relative undervaluation compared to peers.`}
+        source={`${valuationMode === 'fdv' ? 'FDV' : 'Market cap'} from market aggregators. Fees annualised from trailing on-chain data.`}
       />
 
       {/* Mcap / FDV toggle */}
@@ -161,13 +151,7 @@ export function ValuationChart({ exchanges }: Props) {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5 pb-4 border-b border-rule">
-        <div>
-          <p className="font-sans text-xs text-ink-muted">P/E — Q1 / Median / Q3</p>
-          <p className="font-mono text-sm font-bold text-ink">
-            {formatMultiple(peQ.q1)} / {formatMultiple(peQ.median)} / {formatMultiple(peQ.q3)}
-          </p>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-5 pb-4 border-b border-rule">
         <div>
           <p className="font-sans text-xs text-ink-muted">P/S — Q1 / Median / Q3</p>
           <p className="font-mono text-sm font-bold text-ink">
@@ -178,10 +162,6 @@ export function ValuationChart({ exchanges }: Props) {
           <p className="font-sans text-xs text-ink-muted">Exchanges with Data</p>
           <p className="font-mono text-sm font-bold text-ink">{rows.length}</p>
         </div>
-        <div>
-          <p className="font-sans text-xs text-ink-muted">TradFi Benchmark</p>
-          <p className="font-mono text-sm font-bold text-ink-muted">~20-30x P/E</p>
-        </div>
       </div>
 
       {/* Table */}
@@ -191,7 +171,6 @@ export function ValuationChart({ exchanges }: Props) {
             <tr className="border-b-2 border-ink">
               {[
                 { key: 'name' as SortKey, label: 'Exchange', align: 'text-left' },
-                { key: 'pe' as SortKey, label: 'P/E', align: 'text-right' },
                 { key: 'ps' as SortKey, label: 'P/S', align: 'text-right' },
                 { key: 'valuation' as SortKey, label: valuationMode === 'fdv' ? 'FDV' : 'Market Cap', align: 'text-right' },
                 { key: 'volume24h' as SortKey, label: '24h Volume', align: 'text-right' },
@@ -211,8 +190,6 @@ export function ValuationChart({ exchanges }: Props) {
           </thead>
           <tbody>
             {sorted.map((row, i) => {
-              // Color-code P/E relative to median
-              const peColor = row.pe <= peQ.median ? COLORS.green : row.pe <= peQ.q3 ? COLORS.ink : COLORS.red
               const psColor = row.ps <= psQ.median ? COLORS.green : row.ps <= psQ.q3 ? COLORS.ink : COLORS.red
 
               return (
@@ -222,9 +199,6 @@ export function ValuationChart({ exchanges }: Props) {
                     {row.tokenSymbol && (
                       <span className="text-ink-muted text-xs ml-1.5">{row.tokenSymbol}</span>
                     )}
-                  </td>
-                  <td className="py-2 px-3 text-right font-mono text-sm" style={{ color: peColor, fontWeight: 600 }}>
-                    {formatMultiple(row.pe)}
                   </td>
                   <td className="py-2 px-3 text-right font-mono text-sm" style={{ color: psColor, fontWeight: 600 }}>
                     {formatMultiple(row.ps)}
@@ -247,16 +221,13 @@ export function ValuationChart({ exchanges }: Props) {
 
       {/* Methodology footnote */}
       <p className="font-sans text-[11px] text-ink-muted mt-4 leading-relaxed">
-        <strong>Methodology:</strong> P/E = {valuationMode === 'fdv' ? 'Fully Diluted Valuation' : 'Circulating Market Cap'} / Annualised Revenue.
-        P/S = {valuationMode === 'fdv' ? 'Fully Diluted Valuation' : 'Circulating Market Cap'} / Annualised Fees.
+        <strong>Methodology:</strong> P/S = {valuationMode === 'fdv' ? 'Fully Diluted Valuation' : 'Circulating Market Cap'} / Annualised Fees.
         {valuationMode === 'fdv'
-          ? 'FDV assumes all tokens are in circulation at the current price.'
-          : 'Market cap uses circulating supply (not FDV).'}
+          ? ' FDV assumes all tokens are in circulation at the current price.'
+          : ' Market cap uses circulating supply (not FDV).'}
         {' '}Annualisation prefers trailing 30d fees &times; 12 when available; falls back to 24h &times; 365.
-        Revenue is estimated as fees &times; 0.3 assumed take rate where actual protocol revenue data
-        is not available; when explicit revenue figures are provided, those are used instead. Values color-coded: <span style={{ color: COLORS.green }}>green</span> = below median,
+        Values color-coded: <span style={{ color: COLORS.green }}>green</span> = below median,
         black = median to Q3, <span style={{ color: COLORS.red }}>red</span> = above Q3.
-        TradFi exchange benchmarks (CME, ICE) typically trade at 20&ndash;30x P/E.
       </p>
     </div>
   )

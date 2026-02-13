@@ -158,7 +158,7 @@ export function TokenUnlockCalendar({ exchanges }: Props) {
         Vesting progress and unlock pressure for governance tokens of perpetual exchanges
       </p>
       <MetricInfo
-        description="Token unlocks create sell pressure as vested tokens enter circulation. The 30-day unlock pressure score shows what percentage of circulating supply will be unlocked in the next month. High pressure combined with low P/E can signal buying opportunities, while high pressure with high valuation flags dilution risk."
+        description="Token unlocks create sell pressure as vested tokens enter circulation. The 30-day unlock pressure score shows what percentage of circulating supply will be unlocked in the next month. High pressure combined with low P/S can signal buying opportunities, while high pressure with high valuation flags dilution risk."
         source="Emissions data providing circulating supply, total locked, daily unlock rates, and upcoming unlock events per protocol."
       />
 

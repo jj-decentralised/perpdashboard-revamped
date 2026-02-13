@@ -61,14 +61,13 @@ function VolumeWithPriceTooltip({ active, payload, label }: any) {
   )
 }
 
-function PETooltip({ active, payload, label }: any) {
+function PSTooltip({ active, payload, label }: any) {
   if (!active || !payload || !payload.length) return null
   const d = payload[0]?.payload as HistoricalPEPoint
   if (!d) return null
   return (
     <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
       <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
-      <p style={{ margin: 0, color: COLORS.blue, fontSize: 12 }}>P/E: {d.pe != null ? formatMultiple(d.pe) : '\u2014'}</p>
       <p style={{ margin: 0, color: COLORS.inkMuted, fontSize: 12 }}>P/S: {d.ps != null ? formatMultiple(d.ps) : '\u2014'}</p>
       <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>Price: ${d.price?.toFixed(4)}</p>
       <p style={{ margin: 0, color: COLORS.inkLight, fontSize: 12 }}>Mcap: {formatUSD(d.mcap, true)}</p>
@@ -924,7 +923,6 @@ function ComparablesSection({ comparables, currentSlug }: { comparables: Compara
                 <th className="text-right">24h Volume</th>
                 <th className="text-right">Mcap</th>
                 <th className="text-right">P/S</th>
-                <th className="text-right">P/E</th>
                 <th className="text-right">1d Change</th>
                 <th className="text-left">Match</th>
               </tr>
@@ -943,7 +941,6 @@ function ComparablesSection({ comparables, currentSlug }: { comparables: Compara
                   <td className="text-right font-mono text-sm">{formatUSD(comp.volume24h, true)}</td>
                   <td className="text-right font-mono text-sm">{comp.mcap ? formatUSD(comp.mcap, true) : '\u2014'}</td>
                   <td className="text-right font-mono text-sm">{comp.psRatio != null ? formatMultiple(comp.psRatio) : '\u2014'}</td>
-                  <td className="text-right font-mono text-sm">{comp.peRatio != null ? formatMultiple(comp.peRatio) : '\u2014'}</td>
                   <td className={classNames('text-right font-mono text-sm', percentClass(comp.change1d))}>
                     {formatPercent(comp.change1d)}
                   </td>
@@ -1193,10 +1190,10 @@ export default function ExchangeProfilePage() {
     })
   }, [data?.historicalVolume, data?.priceHistory])
 
-  // Filter valid P/E data points (cap at 500x to remove noise)
+  // Filter valid P/S data points (cap at 500x to remove noise)
   const validPE = useMemo(() => {
     if (!data?.historicalPE?.length) return []
-    return data.historicalPE.filter((p) => (p.pe != null && p.pe > 0 && p.pe < 500) || (p.ps != null && p.ps > 0 && p.ps < 500))
+    return data.historicalPE.filter((p) => p.ps != null && p.ps > 0 && p.ps < 500)
   }, [data?.historicalPE])
 
   // Historical fee/revenue data — merge into single series, weekly smoothing
@@ -1261,54 +1258,6 @@ export default function ExchangeProfilePage() {
   const { activeTab, selectTab } = useTabNavigation(profileTabs, 'overview')
   const showTabs = isHyperliquid && data?.builderVolume != null && data.builderVolume.data.length > 0
 
-  // PE + Volume dual chart data (for exchanges with tokens)
-  const peVolumeData = useMemo(() => {
-    if (!data?.historicalPE?.length || !data?.historicalVolume?.length) return []
-    // Build volume lookup by day
-    const volMap = new Map<number, number>()
-    for (const v of data.historicalVolume) {
-      const dayKey = Math.floor(v.date / 86400000) * 86400000
-      volMap.set(dayKey, v.value)
-    }
-    // 7-day rolling average for volume to reduce noise
-    const raw = data.historicalPE
-      .filter((p) => p.pe != null && p.pe > 0 && p.pe < 500)
-      .map((p) => {
-        const dayKey = Math.floor(p.date / 86400000) * 86400000
-        return { date: p.date, pe: p.pe!, volume: volMap.get(dayKey) || null }
-      })
-      .filter((p) => p.volume != null && p.volume > 0)
-    return raw
-  }, [data?.historicalPE, data?.historicalVolume])
-
-  // P/E chart mode: 'daily' | 'monthly'
-  const [peMode, setPeMode] = useState<'daily' | 'monthly'>('daily')
-
-  // Monthly aggregated P/E + volume data
-  const peVolumeMonthly = useMemo(() => {
-    if (!peVolumeData.length) return []
-    const buckets = new Map<string, { date: number; peSum: number; peCount: number; volSum: number }>()
-    for (const d of peVolumeData) {
-      const dt = new Date(d.date)
-      const key = `${dt.getFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
-      const existing = buckets.get(key)
-      if (existing) {
-        existing.peSum += d.pe
-        existing.peCount += 1
-        existing.volSum += d.volume!
-      } else {
-        buckets.set(key, {
-          date: new Date(dt.getFullYear(), dt.getUTCMonth(), 1).getTime(),
-          peSum: d.pe,
-          peCount: 1,
-          volSum: d.volume!,
-        })
-      }
-    }
-    return Array.from(buckets.values())
-      .sort((a, b) => a.date - b.date)
-      .map((b) => ({ date: b.date, pe: b.peSum / b.peCount, volume: b.volSum }))
-  }, [peVolumeData])
 
   // SEO: update document title and meta description
   // NOTE: This must be before any early returns to satisfy React's rules of hooks
@@ -1805,13 +1754,13 @@ export default function ExchangeProfilePage() {
           </ErrorBoundary>
         )}
 
-        {/* Historical P/E Ratio */}
+        {/* Historical P/S Ratio */}
         {validPE.length > 3 && (
-          <ErrorBoundary fallbackLabel="Historical P/E">
+          <ErrorBoundary fallbackLabel="Historical P/S">
             <section className="section-rule">
-              <h3 className="chart-title">Historical Valuation Multiples</h3>
+              <h3 className="chart-title">Historical P/S Ratio</h3>
               <p className="chart-subtitle">
-                P/E and P/S ratios over time — lower ratios suggest relative undervaluation
+                P/S ratio over time — lower ratios suggest relative undervaluation
               </p>
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={validPE} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -1820,91 +1769,15 @@ export default function ExchangeProfilePage() {
                     axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
                   <YAxis tickFormatter={(v: number) => `${v.toFixed(0)}x`} tick={AXIS_STYLE} tickLine={false}
                     axisLine={false} width={48} />
-                  <Tooltip content={<PETooltip />} />
-                  <Line type="monotone" dataKey="pe" name="P/E" stroke={COLORS.blue} strokeWidth={2}
+                  <Tooltip content={<PSTooltip />} />
+                  <Line type="monotone" dataKey="ps" name="P/S" stroke={COLORS.inkMuted} strokeWidth={2}
                     dot={false} animationDuration={800} connectNulls />
-                  <Line type="monotone" dataKey="ps" name="P/S" stroke={COLORS.inkMuted} strokeWidth={1.5}
-                    dot={false} animationDuration={800} strokeDasharray="4 3" connectNulls />
                 </LineChart>
               </ResponsiveContainer>
               <div className="flex items-center gap-4 mt-2">
                 <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
-                  <span className="font-sans text-[11px] text-ink-muted">P/E Ratio</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-4 h-0.5 border-t border-dashed" style={{ borderColor: COLORS.inkMuted }} />
+                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.inkMuted }} />
                   <span className="font-sans text-[11px] text-ink-muted">P/S Ratio</span>
-                </span>
-              </div>
-            </section>
-          </ErrorBoundary>
-        )}
-
-        {/* P/E vs Volume */}
-        {peVolumeData.length > 3 && (
-          <ErrorBoundary fallbackLabel="P/E vs Volume">
-            <section className="section-rule">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="chart-title mb-0">P/E Ratio vs Volume</h3>
-                <div className="flex gap-1">
-                  {(['daily', 'monthly'] as const).map((m) => (
-                    <button key={m} onClick={() => setPeMode(m)}
-                      className={`px-2.5 py-0.5 text-[11px] font-sans rounded border transition-colors ${peMode === m ? 'bg-ink text-paper border-ink' : 'bg-transparent text-ink-muted border-rule hover:border-ink'}`}>
-                      {m.charAt(0).toUpperCase() + m.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-
-              <ResponsiveContainer width="100%" height={340}>
-                <ComposedChart data={peMode === 'monthly' ? peVolumeMonthly : peVolumeData} margin={{ top: 8, right: 60, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="peVolGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.1} />
-                      <stop offset="95%" stopColor={COLORS.ink} stopOpacity={0.01} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
-                  <XAxis dataKey="date" tickFormatter={formatDateShort} tick={AXIS_STYLE} tickLine={false}
-                    axisLine={{ stroke: COLORS.rule }} minTickGap={60} />
-                  <YAxis yAxisId="pe" tickFormatter={(v: number) => `${v.toFixed(0)}x`}
-                    tick={{ ...AXIS_STYLE, fill: COLORS.blue }} tickLine={false} axisLine={false} width={48} />
-                  <YAxis yAxisId="vol" orientation="right" tickFormatter={fmtAxis}
-                    tick={AXIS_STYLE} tickLine={false} axisLine={false} width={58} />
-                  <Tooltip content={({ active, payload, label }: any) => {
-                    if (!active || !payload?.length) return null
-                    return (
-                      <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.5 }}>
-                        <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
-                        {payload.map((entry: any) => (
-                          <p key={entry.name} style={{ margin: 0, color: entry.color || COLORS.inkLight, fontSize: 12 }}>
-                            {entry.name === 'pe' ? 'P/E' : 'Volume'}: {entry.name === 'pe' ? `${entry.value?.toFixed(1)}x` : formatUSD(entry.value, true)}
-                          </p>
-                        ))}
-                      </div>
-                    )
-                  }} />
-                  {peMode === 'monthly' ? (
-                    <Bar yAxisId="vol" dataKey="volume" name="volume" fill={COLORS.ink} fillOpacity={0.15}
-                      stroke={COLORS.ink} strokeWidth={1} animationDuration={600} radius={[2, 2, 0, 0]} />
-                  ) : (
-                    <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke={COLORS.ink} strokeWidth={1}
-                      fill="url(#peVolGrad)" animationDuration={800} />
-                  )}
-                  <Line yAxisId="pe" type="monotone" dataKey="pe" name="pe" stroke={COLORS.blue} strokeWidth={2}
-                    dot={false} animationDuration={800} connectNulls />
-                </ComposedChart>
-              </ResponsiveContainer>
-              <div className="flex items-center gap-4 mt-2">
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.blue }} />
-                  <span className="font-sans text-[11px] text-ink-muted">{peMode === 'monthly' ? 'Avg' : ''} P/E Ratio</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
-                  <span className="font-sans text-[11px] text-ink-muted">{peMode === 'monthly' ? 'Monthly' : 'Daily'} Volume</span>
                 </span>
               </div>
             </section>

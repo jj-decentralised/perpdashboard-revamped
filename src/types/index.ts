@@ -59,7 +59,6 @@ export interface EnrichedExchange extends DexProtocol {
   volumeToOI: number | null
   annualizedFees: number | null
   annualizedRevenue: number | null
-  peRatio: number | null
   psRatio: number | null
   venueType: 'defi' | 'cefi'
   // Funding carry metrics
@@ -75,7 +74,6 @@ export interface EnrichedExchange extends DexProtocol {
   ttEarnings: number | null
   ttTokenIncentives: number | null
   ttActiveUsers: number | null
-  ttPE: number | null
   ttPS: number | null
   ttCodeCommits7d: number | null
 }

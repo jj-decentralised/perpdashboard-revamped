@@ -247,7 +247,6 @@ export function mergeTTIntoExchanges(
       ttEarnings: snap.earnings,
       ttTokenIncentives: snap.tokenIncentives,
       ttActiveUsers: snap.activeUsers,
-      ttPE: snap.priceToEarnings,
       ttPS: snap.priceToSales,
       ttCodeCommits7d: snap.codeCommits7d,
     }

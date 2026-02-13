@@ -118,7 +118,6 @@ function getColumns(valuationMode: ValuationMode): ColumnDef[] {
     { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' },
     { key: 'valuation', label: valLabel, sortable: true, align: 'right' },
     { key: 'psRatio', label: 'P/S', sortable: true, align: 'right', tooltip: `Price-to-Sales: ${valLabel} / Annualized Fees` },
-    { key: 'peRatio', label: 'P/E', sortable: true, align: 'right', tooltip: `Price-to-Earnings: ${valLabel} / Annualized Revenue` },
     { key: 'dailyFees', label: 'Daily Fees', sortable: true, align: 'right' },
     { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
     { key: 'tvl', label: 'TVL', sortable: true, align: 'right', tooltip: 'Total Value Locked — deposited collateral/liquidity' },
@@ -138,12 +137,6 @@ function getPS(exchange: EnrichedExchange, mode: ValuationMode): number | null {
   const v = getValuation(exchange, mode)
   if (!v || v <= 0 || !exchange.annualizedFees || exchange.annualizedFees <= 0) return null
   return v / exchange.annualizedFees
-}
-
-function getPE(exchange: EnrichedExchange, mode: ValuationMode): number | null {
-  const v = getValuation(exchange, mode)
-  if (!v || v <= 0 || !exchange.annualizedRevenue || exchange.annualizedRevenue <= 0) return null
-  return v / exchange.annualizedRevenue
 }
 
 const PAGE_SIZE = 50
@@ -201,8 +194,6 @@ function getSortValue(exchange: EnrichedExchange, key: string, valuationMode: Va
       return getValuation(exchange, valuationMode) ?? -Infinity
     case 'psRatio':
       return getPS(exchange, valuationMode) ?? Infinity
-    case 'peRatio':
-      return getPE(exchange, valuationMode) ?? Infinity
     case 'effectiveAssets':
       return exchange.effectiveAssetCount ?? -Infinity
     case 'change_1d':
@@ -325,7 +316,7 @@ function ScrollableTable({ children }: { children: React.ReactNode }) {
 
 function exportCSV(exchanges: EnrichedExchange[], valuationMode: ValuationMode) {
   const valLabel = valuationMode === 'fdv' ? 'FDV' : 'Mcap'
-  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', valLabel, `P/S (${valLabel})`, `P/E (${valLabel})`, 'Effective Assets', '1d Change %', '7d Change %']
+  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', valLabel, `P/S (${valLabel})`, 'Effective Assets', '1d Change %', '7d Change %']
   const rows = exchanges.map((e, i) => [
     i + 1,
     e.displayName || e.name,
@@ -340,7 +331,6 @@ function exportCSV(exchanges: EnrichedExchange[], valuationMode: ValuationMode) 
     getTakeRate(e)?.toFixed(2) ?? '',
     getValuation(e, valuationMode) ?? '',
     getPS(e, valuationMode)?.toFixed(1) ?? '',
-    getPE(e, valuationMode)?.toFixed(1) ?? '',
     e.effectiveAssetCount?.toFixed(0) ?? '',
     e.change_1d?.toFixed(2) ?? '',
     e.change_7d?.toFixed(2) ?? '',
@@ -380,7 +370,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
       setSortDir(sortDir === 'desc' ? 'asc' : 'desc')
     } else {
       setSortBy(key)
-      const ascByDefault = ['name', 'psRatio', 'peRatio', 'volPer1MFees']
+      const ascByDefault = ['name', 'psRatio', 'volPer1MFees']
       setSortDir(ascByDefault.includes(key) ? 'asc' : 'desc')
     }
     setPage(0)
@@ -464,7 +454,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
             All {filtered.length} perpetual exchanges by 24-hour trading volume
           </p>
           <MetricInfo
-            description="The comprehensive rankings table aggregates volume, open interest, fees, valuation ratios, and growth metrics for every tracked perpetual exchange. Use sorting and filtering to compare protocols across dimensions — P/S and P/E ratios help assess whether a token is over- or under-valued relative to fee generation, while take rate and Vol/TVL reveal capital efficiency. Holder yield and carry yield highlight which protocols return value to token holders and traders respectively."
+            description="The comprehensive rankings table aggregates volume, open interest, fees, valuation ratios, and growth metrics for every tracked perpetual exchange. Use sorting and filtering to compare protocols across dimensions — P/S ratio helps assess whether a token is over- or under-valued relative to fee generation, while take rate and Vol/TVL reveal capital efficiency. Holder yield and carry yield highlight which protocols return value to token holders and traders respectively."
             source="Volume, OI, and fees from on-chain data. Market cap and token data from market aggregators."
           />
         </div>
@@ -648,7 +638,6 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : <DashCell tooltip="OI data requires exchange listing on data aggregator" />}</td>
                   <td className="text-right">{(() => { const v = getValuation(exchange, valuationMode); return v && v > 0 ? formatUSD(v, true) : <DashCell tooltip={valuationMode === 'fdv' ? 'No FDV data available' : 'No governance token or market cap data unavailable'} /> })()}</td>
                   <td className="text-right">{(() => { const ps = getPS(exchange, valuationMode); return ps != null ? formatMultiple(ps) : <DashCell tooltip={`Requires ${valuationMode === 'fdv' ? 'FDV' : 'market cap'} and fee data`} /> })()}</td>
-                  <td className="text-right">{(() => { const pe = getPE(exchange, valuationMode); return pe != null ? formatMultiple(pe) : <DashCell tooltip={`Requires ${valuationMode === 'fdv' ? 'FDV' : 'market cap'} and revenue data`} /> })()}</td>
                   <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : <DashCell tooltip="Fee data not tracked for this exchange" />}</td>
                   <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : <DashCell tooltip="Requires both fee and volume data" />}</td>
                   <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available" />}</td>
@@ -754,7 +743,6 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         <span><strong>Vol/TVL</strong> = Capital turnover (24h Volume / TVL)</span>
         <span><strong>Take Rate</strong> = Daily Fees / Daily Volume (bps)</span>
         <span><strong>P/S</strong> = {valuationMode === 'fdv' ? 'FDV' : 'Mcap'} / Annualized Fees</span>
-        <span><strong>P/E</strong> = {valuationMode === 'fdv' ? 'FDV' : 'Mcap'} / Annualized Revenue</span>
         <span><strong>Assets</strong> = Effective listed assets (1/HHI)</span>
         <span><strong>{'\u2014'}</strong> = Data not available from source (hover for details)</span>
         <span><strong>&#9888;</strong> = Possible data anomaly</span>

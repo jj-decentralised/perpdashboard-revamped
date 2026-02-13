@@ -447,7 +447,6 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       volumeToOI: openInterest > 0 ? vol24 / openInterest : null,
       annualizedFees,
       annualizedRevenue,
-      peRatio: null, // Computed in Pass 2
       psRatio: null,
       venueType: classifyProtocol(dex.slug, dex.name, dex.chains || []),
       avgCarryYield: null,
@@ -459,7 +458,6 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       ttEarnings: null,
       ttTokenIncentives: null,
       ttActiveUsers: null,
-      ttPE: null,
       ttPS: null,
       ttCodeCommits7d: null,
     }
@@ -483,7 +481,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     }
   }
 
-  // ── PASS 2: Fill mcap + FDV from CoinGecko and compute P/S, P/E ──
+  // ── PASS 2: Fill mcap + FDV from CoinGecko and compute P/S ──
 
   for (const ex of enrichedExchanges) {
     // Fill mcap and FDV from CoinGecko
@@ -495,13 +493,10 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       }
     }
 
-    // Compute P/S and P/E with mcap (default; UI can toggle to FDV-based)
+    // Compute P/S with mcap (default; UI can toggle to FDV-based)
     if (ex.mcap && ex.mcap > 0 && (ex.total24h || 0) > 0) {
       if (ex.annualizedFees && ex.annualizedFees > 0) {
         ex.psRatio = ex.mcap / ex.annualizedFees
-      }
-      if (ex.annualizedRevenue && ex.annualizedRevenue > 0) {
-        ex.peRatio = ex.mcap / ex.annualizedRevenue
       }
     }
   }
@@ -546,7 +541,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       }
     }
 
-    // Recompute P/S, P/E with aggregated fees (prefer 30d × 12)
+    // Recompute P/S with aggregated fees (prefer 30d × 12)
     const aggFees30d = primary.feeData?.total30d || 0
     const aggFees24h = primary.feeData?.total24h || 0
     if (aggFees30d > 0 || aggFees24h > 0) {
@@ -554,7 +549,6 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       primary.annualizedRevenue = (primary.annualizedFees || 0) * 0.3
       if (primary.mcap && primary.mcap > 0 && (primary.total24h || 0) > 0) {
         primary.psRatio = primary.mcap / primary.annualizedFees!
-        primary.peRatio = primary.annualizedRevenue! > 0 ? primary.mcap / primary.annualizedRevenue! : null
       }
     }
 
