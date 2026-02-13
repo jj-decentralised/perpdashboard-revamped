@@ -1,18 +1,20 @@
 import React, { useMemo, useState } from 'react'
 import type { EnrichedExchange } from '../../types'
 import { COLORS } from '../../utils/chartTheme'
-import { formatUSD, formatMultiple, formatPercent, percentClass } from '../../utils/format'
+import { formatUSD, formatMultiple, formatPercent, percentClass, classNames } from '../../utils/format'
 import { MetricInfo } from '../MetricInfo'
 
 interface Props {
   exchanges: EnrichedExchange[]
 }
 
+type ValuationMode = 'mcap' | 'fdv'
+
 interface ValuationRow {
   name: string
   pe: number
   ps: number
-  mcap: number
+  valuation: number
   volume24h: number
   fees24h: number
   change1d: number | null
@@ -20,7 +22,7 @@ interface ValuationRow {
   tokenSymbol: string | null
 }
 
-type SortKey = 'pe' | 'ps' | 'mcap' | 'volume24h' | 'name'
+type SortKey = 'pe' | 'ps' | 'valuation' | 'volume24h' | 'name'
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0
@@ -35,24 +37,33 @@ function percentile(sorted: number[], p: number): number {
 export function ValuationChart({ exchanges }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('pe')
   const [sortAsc, setSortAsc] = useState(true)
+  const [valuationMode, setValuationMode] = useState<ValuationMode>('fdv')
 
   const { rows, peQ, psQ } = useMemo(() => {
-    const valid = exchanges
-      .filter(
-        (e) => e.peRatio != null && e.psRatio != null && e.peRatio > 0 && e.psRatio > 0 && e.peRatio < 1000 && e.psRatio < 1000 && e.mcap != null && e.mcap > 0
-      )
+    const valid = exchanges.filter((e) => {
+      const v = valuationMode === 'fdv' ? (e.fdv ?? e.mcap) : e.mcap
+      if (!v || v <= 0) return false
+      if (!e.annualizedFees || e.annualizedFees <= 0) return false
+      if (!e.annualizedRevenue || e.annualizedRevenue <= 0) return false
+      const pe = v / e.annualizedRevenue
+      const ps = v / e.annualizedFees
+      return pe > 0 && ps > 0 && pe < 1000 && ps < 1000
+    })
 
-    const rows: ValuationRow[] = valid.map((e) => ({
-      name: e.displayName || e.name,
-      pe: e.peRatio!,
-      ps: e.psRatio!,
-      mcap: e.mcap!,
-      volume24h: e.total24h ?? 0,
-      fees24h: e.feeData?.total24h ?? 0,
-      change1d: e.change_1d,
-      hasToken: e.hasToken,
-      tokenSymbol: e.tokenSymbol,
-    }))
+    const rows: ValuationRow[] = valid.map((e) => {
+      const v = (valuationMode === 'fdv' ? (e.fdv ?? e.mcap) : e.mcap)!
+      return {
+        name: e.displayName || e.name,
+        pe: v / e.annualizedRevenue!,
+        ps: v / e.annualizedFees!,
+        valuation: v,
+        volume24h: e.total24h ?? 0,
+        fees24h: e.feeData?.total24h ?? 0,
+        change1d: e.change_1d,
+        hasToken: e.hasToken,
+        tokenSymbol: e.tokenSymbol,
+      }
+    })
 
     const peValues = rows.map((r) => r.pe).sort((a, b) => a - b)
     const psValues = rows.map((r) => r.ps).sort((a, b) => a - b)
@@ -70,7 +81,7 @@ export function ValuationChart({ exchanges }: Props) {
         q3: percentile(psValues, 75),
       },
     }
-  }, [exchanges])
+  }, [exchanges, valuationMode])
 
   const sorted = useMemo(() => {
     const s = [...rows].sort((a, b) => {
@@ -118,9 +129,36 @@ export function ValuationChart({ exchanges }: Props) {
         P/E and P/S ratios for perpetual exchanges with governance tokens
       </p>
       <MetricInfo
-        description="Valuation multiples compare a protocol's market cap to its revenue (P/E) and fees (P/S). Lower ratios suggest relative undervaluation compared to peers. Traditional finance exchange benchmarks (CME, ICE) typically trade at 20-30x P/E, providing a reference point for DeFi perpetual protocol valuations."
-        source="Market cap from market aggregators. Revenue and fees annualised from trailing on-chain data."
+        description={`Valuation multiples compare a protocol's ${valuationMode === 'fdv' ? 'fully diluted valuation (FDV)' : 'market cap'} to its revenue (P/E) and fees (P/S). Lower ratios suggest relative undervaluation compared to peers. Traditional finance exchange benchmarks (CME, ICE) typically trade at 20-30x P/E, providing a reference point for DeFi perpetual protocol valuations.`}
+        source={`${valuationMode === 'fdv' ? 'FDV' : 'Market cap'} from market aggregators. Revenue and fees annualised from trailing on-chain data.`}
       />
+
+      {/* Mcap / FDV toggle */}
+      <div className="flex items-center gap-1 font-sans text-xs mb-4">
+        <span className="text-ink-muted mr-1">Valuation:</span>
+        <button
+          onClick={() => setValuationMode('mcap')}
+          className={classNames(
+            'px-3 py-1.5 border transition-colors',
+            valuationMode === 'mcap'
+              ? 'bg-ink text-paper border-ink font-semibold'
+              : 'bg-paper text-ink-muted border-rule hover:border-ink'
+          )}
+        >
+          Mcap
+        </button>
+        <button
+          onClick={() => setValuationMode('fdv')}
+          className={classNames(
+            'px-3 py-1.5 border transition-colors',
+            valuationMode === 'fdv'
+              ? 'bg-ink text-paper border-ink font-semibold'
+              : 'bg-paper text-ink-muted border-rule hover:border-ink'
+          )}
+        >
+          FDV
+        </button>
+      </div>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5 pb-4 border-b border-rule">
@@ -155,7 +193,7 @@ export function ValuationChart({ exchanges }: Props) {
                 { key: 'name' as SortKey, label: 'Exchange', align: 'text-left' },
                 { key: 'pe' as SortKey, label: 'P/E', align: 'text-right' },
                 { key: 'ps' as SortKey, label: 'P/S', align: 'text-right' },
-                { key: 'mcap' as SortKey, label: 'Market Cap', align: 'text-right' },
+                { key: 'valuation' as SortKey, label: valuationMode === 'fdv' ? 'FDV' : 'Market Cap', align: 'text-right' },
                 { key: 'volume24h' as SortKey, label: '24h Volume', align: 'text-right' },
               ].map(({ key, label, align }) => (
                 <th
@@ -192,7 +230,7 @@ export function ValuationChart({ exchanges }: Props) {
                     {formatMultiple(row.ps)}
                   </td>
                   <td className="py-2 px-3 text-right font-mono text-sm text-ink">
-                    {formatUSD(row.mcap, true)}
+                    {formatUSD(row.valuation, true)}
                   </td>
                   <td className="py-2 px-3 text-right font-mono text-sm text-ink-light">
                     {formatUSD(row.volume24h, true)}
@@ -209,10 +247,12 @@ export function ValuationChart({ exchanges }: Props) {
 
       {/* Methodology footnote */}
       <p className="font-sans text-[11px] text-ink-muted mt-4 leading-relaxed">
-        <strong>Methodology:</strong> P/E = Circulating Market Cap / Annualised Revenue.
-        P/S = Circulating Market Cap / Annualised Fees.
-        Market cap uses circulating supply (not FDV).
-        Annualisation prefers trailing 30d fees &times; 12 when available; falls back to 24h &times; 365.
+        <strong>Methodology:</strong> P/E = {valuationMode === 'fdv' ? 'Fully Diluted Valuation' : 'Circulating Market Cap'} / Annualised Revenue.
+        P/S = {valuationMode === 'fdv' ? 'Fully Diluted Valuation' : 'Circulating Market Cap'} / Annualised Fees.
+        {valuationMode === 'fdv'
+          ? 'FDV assumes all tokens are in circulation at the current price.'
+          : 'Market cap uses circulating supply (not FDV).'}
+        {' '}Annualisation prefers trailing 30d fees &times; 12 when available; falls back to 24h &times; 365.
         Revenue is estimated as fees &times; 0.3 assumed take rate where actual protocol revenue data
         is not available; when explicit revenue figures are provided, those are used instead. Values color-coded: <span style={{ color: COLORS.green }}>green</span> = below median,
         black = median to Q3, <span style={{ color: COLORS.red }}>red</span> = above Q3.
