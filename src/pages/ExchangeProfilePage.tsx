@@ -847,7 +847,7 @@ function QuarterlyTable({ quarters }: { quarters: QuarterlyData[] }) {
   const rows = quarters.slice(-8).reverse()
 
   // Compute column maxes for heat-map intensity
-  const cols = ['totalVolume', 'avgDailyVolume', 'peakDailyVolume', 'totalFees', 'estimatedRevenue'] as const
+  const cols = ['totalVolume', 'avgDailyVolume', 'peakDailyVolume', 'totalFees'] as const
   const maxes = {} as Record<typeof cols[number], number>
   for (const col of cols) {
     maxes[col] = Math.max(...rows.map(q => q[col] || 0))
@@ -871,7 +871,6 @@ function QuarterlyTable({ quarters }: { quarters: QuarterlyData[] }) {
             <th className="text-right">Avg Daily Vol</th>
             <th className="text-right">Peak Daily Vol</th>
             <th className="text-right">Total Fees</th>
-            <th className="text-right">Est. Revenue</th>
             <th className="text-right">QoQ Growth</th>
           </tr>
         </thead>
@@ -890,9 +889,6 @@ function QuarterlyTable({ quarters }: { quarters: QuarterlyData[] }) {
               </td>
               <td className="text-right font-mono text-sm" style={heatBg(q.totalFees, maxes.totalFees)}>
                 {q.totalFees > 0 ? formatUSD(q.totalFees, true) : '\u2014'}
-              </td>
-              <td className="text-right font-mono text-sm" style={heatBg(q.estimatedRevenue, maxes.estimatedRevenue)}>
-                {q.estimatedRevenue > 0 ? formatUSD(q.estimatedRevenue, true) : '\u2014'}
               </td>
               <td className={classNames('text-right font-mono text-sm', percentClass(q.growthVsLast))}>
                 {q.growthVsLast != null ? formatPercent(q.growthVsLast) : '\u2014'}
@@ -1196,35 +1192,23 @@ export default function ExchangeProfilePage() {
     return data.historicalPE.filter((p) => p.ps != null && p.ps > 0 && p.ps < 500)
   }, [data?.historicalPE])
 
-  // Historical fee/revenue data — merge into single series, weekly smoothing
-  const feeRevenueData = useMemo(() => {
-    if (!data?.feeHistory?.length && !data?.revenueHistory?.length) return []
+  // Historical fee data — weekly smoothing
+  const feeHistoryData = useMemo(() => {
+    if (!data?.feeHistory?.length) return []
 
-    const revMap = new Map<number, number>()
-    for (const r of data?.revenueHistory || []) {
-      const dayKey = Math.floor(r.date / 86400000) * 86400000
-      revMap.set(dayKey, r.value)
-    }
-
-    // Use fee history as base, attach revenue
-    const raw = (data?.feeHistory || []).map((f) => {
-      const dayKey = Math.floor(f.date / 86400000) * 86400000
-      return { date: f.date, fees: f.value, revenue: revMap.get(dayKey) || 0 }
-    })
+    const raw = data.feeHistory.map((f) => ({ date: f.date, fees: f.value }))
 
     // 7-day rolling average for smoother chart
     if (raw.length < 7) return raw
     const smoothed: typeof raw = []
     for (let i = 6; i < raw.length; i++) {
-      let sumFee = 0, sumRev = 0
+      let sumFee = 0
       for (let j = i - 6; j <= i; j++) {
         sumFee += raw[j].fees
-        sumRev += raw[j].revenue
       }
       smoothed.push({
         date: raw[i].date,
         fees: sumFee / 7,
-        revenue: sumRev / 7,
       })
     }
     // Sample weekly for performance if > 365 points
@@ -1232,9 +1216,7 @@ export default function ExchangeProfilePage() {
       return smoothed.filter((_, i) => i % 7 === 0 || i === smoothed.length - 1)
     }
     return smoothed
-  }, [data?.feeHistory, data?.revenueHistory])
-
-  const hasRevenueData = feeRevenueData.some((d) => d.revenue > 0)
+  }, [data?.feeHistory])
 
   const exchangeName = data?.exchange?.name || data?.summary?.name || slug || 'Exchange'
   const description = data?.summary?.description || data?.exchange?.description || ''
@@ -1351,9 +1333,6 @@ export default function ExchangeProfilePage() {
   const latestFees = data.feeHistory.length > 0
     ? data.feeHistory[data.feeHistory.length - 1].value
     : null
-  const latestRevenue = data.revenueHistory.length > 0
-    ? data.revenueHistory[data.revenueHistory.length - 1].value
-    : null
   const hasOI = data.exchange?.open_interest_btc != null && data.exchange.open_interest_btc > 0
   const hasPerpPairs = data.exchange?.number_of_perpetual_pairs != null && data.exchange.number_of_perpetual_pairs > 0
   const hasFuturesPairs = data.exchange?.number_of_futures_pairs != null && data.exchange.number_of_futures_pairs > 0
@@ -1398,12 +1377,6 @@ export default function ExchangeProfilePage() {
                 <div className="kpi-card">
                   <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Daily Fees</p>
                   <p className="font-mono text-lg font-bold text-ink">{formatUSD(latestFees, true)}</p>
-                </div>
-              )}
-              {latestRevenue != null && latestRevenue > 0 && (
-                <div className="kpi-card">
-                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Daily Revenue</p>
-                  <p className="font-mono text-lg font-bold text-ink">{formatUSD(latestRevenue, true)}</p>
                 </div>
               )}
               {hasOI && (
@@ -1691,26 +1664,20 @@ export default function ExchangeProfilePage() {
           <TVLHistorySection tvlData={data.tvlData} />
         )}
 
-        {/* Historical Fees & Revenue */}
-        {feeRevenueData.length > 3 && (
-          <ErrorBoundary fallbackLabel="Fee & revenue history">
+        {/* Historical Fees */}
+        {feeHistoryData.length > 3 && (
+          <ErrorBoundary fallbackLabel="Fee history">
             <section className="section-rule">
-              <h3 className="chart-title">
-                Historical Fees{hasRevenueData ? ' & Revenue' : ''}
-              </h3>
+              <h3 className="chart-title">Historical Fees</h3>
               <p className="chart-subtitle">
-                7-day rolling average of daily {hasRevenueData ? 'fees and protocol revenue' : 'fee generation'}
+                7-day rolling average of daily fee generation
               </p>
               <ResponsiveContainer width="100%" height={340}>
-                <AreaChart data={feeRevenueData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <AreaChart data={feeHistoryData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="feeGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={COLORS.ink} stopOpacity={0.12} />
                       <stop offset="95%" stopColor={COLORS.ink} stopOpacity={0.01} />
-                    </linearGradient>
-                    <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={COLORS.green} stopOpacity={0.15} />
-                      <stop offset="95%" stopColor={COLORS.green} stopOpacity={0.01} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
@@ -1724,7 +1691,7 @@ export default function ExchangeProfilePage() {
                         <p style={TOOLTIP_STYLE.labelStyle}>{label ? formatDateShort(label) : ''}</p>
                         {payload.map((entry: any) => (
                           <p key={entry.name} style={{ margin: 0, color: entry.color || COLORS.inkLight, fontSize: 12 }}>
-                            {entry.name === 'fees' ? 'Fees' : 'Revenue'}: {formatUSD(entry.value, true)}
+                            Fees: {formatUSD(entry.value, true)}
                           </p>
                         ))}
                       </div>
@@ -1732,10 +1699,6 @@ export default function ExchangeProfilePage() {
                   }} />
                   <Area type="monotone" dataKey="fees" name="fees" stroke={COLORS.ink} strokeWidth={1.5}
                     fill="url(#feeGrad)" animationDuration={800} />
-                  {hasRevenueData && (
-                    <Area type="monotone" dataKey="revenue" name="revenue" stroke={COLORS.green} strokeWidth={1.5}
-                      fill="url(#revGrad)" animationDuration={800} />
-                  )}
                 </AreaChart>
               </ResponsiveContainer>
               <div className="flex items-center gap-4 mt-2">
@@ -1743,12 +1706,6 @@ export default function ExchangeProfilePage() {
                   <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.ink }} />
                   <span className="font-sans text-[11px] text-ink-muted">Daily Fees (7d avg)</span>
                 </span>
-                {hasRevenueData && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-4 h-0.5" style={{ backgroundColor: COLORS.green }} />
-                    <span className="font-sans text-[11px] text-ink-muted">Daily Revenue (7d avg)</span>
-                  </span>
-                )}
               </div>
             </section>
           </ErrorBoundary>
