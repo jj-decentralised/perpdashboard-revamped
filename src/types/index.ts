@@ -48,6 +48,7 @@ export interface EnrichedExchange extends DexProtocol {
   geckoId: string | null
   tvl: number
   mcap: number | null
+  fdv: number | null
   chainCount: number
   volumeToTvl: number | null
   feeData?: FeeProtocol

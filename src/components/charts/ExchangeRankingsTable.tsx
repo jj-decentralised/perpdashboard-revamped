@@ -106,23 +106,45 @@ interface ColumnDef {
   tooltip?: string
 }
 
-const columns: ColumnDef[] = [
-  { key: 'rank', label: '#', sortable: false, align: 'left' },
-  { key: 'name', label: 'Name', sortable: true, align: 'left' },
-  { key: 'total24h', label: '24h Volume', sortable: true, align: 'right' },
-  { key: 'total7d', label: '7d Volume', sortable: true, align: 'right' },
-  { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' },
-  { key: 'mcap', label: 'Mcap', sortable: true, align: 'right' },
-  { key: 'psRatio', label: 'P/S', sortable: true, align: 'right', tooltip: 'Price-to-Sales: Mcap / Annualized Fees' },
-  { key: 'peRatio', label: 'P/E', sortable: true, align: 'right', tooltip: 'Price-to-Earnings: Mcap / Annualized Revenue' },
-  { key: 'dailyFees', label: 'Daily Fees', sortable: true, align: 'right' },
-  { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
-  { key: 'tvl', label: 'TVL', sortable: true, align: 'right', tooltip: 'Total Value Locked — deposited collateral/liquidity' },
-  { key: 'volumeToTvl', label: 'Vol/TVL', sortable: true, align: 'right', tooltip: 'Capital turnover: 24h Volume / TVL' },
-  { key: 'effectiveAssets', label: 'Assets', sortable: true, align: 'right', tooltip: 'Effective number of listed assets (1/HHI of OI distribution)' },
-  { key: 'change_1d', label: '1d %', sortable: true, align: 'right' },
-  { key: 'change_7d', label: '7d %', sortable: true, align: 'right' },
-]
+type ValuationMode = 'mcap' | 'fdv'
+
+function getColumns(valuationMode: ValuationMode): ColumnDef[] {
+  const valLabel = valuationMode === 'fdv' ? 'FDV' : 'Mcap'
+  return [
+    { key: 'rank', label: '#', sortable: false, align: 'left' },
+    { key: 'name', label: 'Name', sortable: true, align: 'left' },
+    { key: 'total24h', label: '24h Volume', sortable: true, align: 'right' },
+    { key: 'total7d', label: '7d Volume', sortable: true, align: 'right' },
+    { key: 'openInterest', label: 'Open Interest', sortable: true, align: 'right' },
+    { key: 'valuation', label: valLabel, sortable: true, align: 'right' },
+    { key: 'psRatio', label: 'P/S', sortable: true, align: 'right', tooltip: `Price-to-Sales: ${valLabel} / Annualized Fees` },
+    { key: 'peRatio', label: 'P/E', sortable: true, align: 'right', tooltip: `Price-to-Earnings: ${valLabel} / Annualized Revenue` },
+    { key: 'dailyFees', label: 'Daily Fees', sortable: true, align: 'right' },
+    { key: 'takeRate', label: 'Take Rate', sortable: true, align: 'right', tooltip: 'Fees as % of volume (in basis points)' },
+    { key: 'tvl', label: 'TVL', sortable: true, align: 'right', tooltip: 'Total Value Locked — deposited collateral/liquidity' },
+    { key: 'volumeToTvl', label: 'Vol/TVL', sortable: true, align: 'right', tooltip: 'Capital turnover: 24h Volume / TVL' },
+    { key: 'effectiveAssets', label: 'Assets', sortable: true, align: 'right', tooltip: 'Effective number of listed assets (1/HHI of OI distribution)' },
+    { key: 'change_1d', label: '1d %', sortable: true, align: 'right' },
+    { key: 'change_7d', label: '7d %', sortable: true, align: 'right' },
+  ]
+}
+
+function getValuation(exchange: EnrichedExchange, mode: ValuationMode): number | null {
+  if (mode === 'fdv') return exchange.fdv ?? exchange.mcap
+  return exchange.mcap
+}
+
+function getPS(exchange: EnrichedExchange, mode: ValuationMode): number | null {
+  const v = getValuation(exchange, mode)
+  if (!v || v <= 0 || !exchange.annualizedFees || exchange.annualizedFees <= 0) return null
+  return v / exchange.annualizedFees
+}
+
+function getPE(exchange: EnrichedExchange, mode: ValuationMode): number | null {
+  const v = getValuation(exchange, mode)
+  if (!v || v <= 0 || !exchange.annualizedRevenue || exchange.annualizedRevenue <= 0) return null
+  return v / exchange.annualizedRevenue
+}
 
 const PAGE_SIZE = 50
 
@@ -155,7 +177,7 @@ function isDataAnomaly(exchange: EnrichedExchange): string | null {
   return issues.length > 0 ? issues.join('; ') : null
 }
 
-function getSortValue(exchange: EnrichedExchange, key: string): number | string {
+function getSortValue(exchange: EnrichedExchange, key: string, valuationMode: ValuationMode = 'mcap'): number | string {
   switch (key) {
     case 'name':
       return (exchange.displayName || exchange.name).toLowerCase()
@@ -175,12 +197,12 @@ function getSortValue(exchange: EnrichedExchange, key: string): number | string 
       return getTakeRate(exchange) ?? -Infinity
     case 'volPer1MFees':
       return getVolPer1MFees(exchange) ?? Infinity
-    case 'mcap':
-      return exchange.mcap ?? -Infinity
+    case 'valuation':
+      return getValuation(exchange, valuationMode) ?? -Infinity
     case 'psRatio':
-      return exchange.psRatio ?? Infinity
+      return getPS(exchange, valuationMode) ?? Infinity
     case 'peRatio':
-      return exchange.peRatio ?? Infinity
+      return getPE(exchange, valuationMode) ?? Infinity
     case 'effectiveAssets':
       return exchange.effectiveAssetCount ?? -Infinity
     case 'change_1d':
@@ -301,8 +323,9 @@ function ScrollableTable({ children }: { children: React.ReactNode }) {
   )
 }
 
-function exportCSV(exchanges: EnrichedExchange[]) {
-  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', 'Mcap', 'P/S', 'P/E', 'Effective Assets', '1d Change %', '7d Change %']
+function exportCSV(exchanges: EnrichedExchange[], valuationMode: ValuationMode) {
+  const valLabel = valuationMode === 'fdv' ? 'FDV' : 'Mcap'
+  const headers = ['Rank', 'Name', 'Token', 'Chains', '24h Volume', '7d Volume', 'Open Interest', 'TVL', 'Vol/TVL', 'Daily Fees', 'Take Rate (bps)', valLabel, `P/S (${valLabel})`, `P/E (${valLabel})`, 'Effective Assets', '1d Change %', '7d Change %']
   const rows = exchanges.map((e, i) => [
     i + 1,
     e.displayName || e.name,
@@ -315,9 +338,9 @@ function exportCSV(exchanges: EnrichedExchange[]) {
     e.volumeToTvl?.toFixed(2) ?? '',
     getDailyFees(e) ?? '',
     getTakeRate(e)?.toFixed(2) ?? '',
-    e.mcap ?? '',
-    e.psRatio?.toFixed(1) ?? '',
-    e.peRatio?.toFixed(1) ?? '',
+    getValuation(e, valuationMode) ?? '',
+    getPS(e, valuationMode)?.toFixed(1) ?? '',
+    getPE(e, valuationMode)?.toFixed(1) ?? '',
     e.effectiveAssetCount?.toFixed(0) ?? '',
     e.change_1d?.toFixed(2) ?? '',
     e.change_7d?.toFixed(2) ?? '',
@@ -344,7 +367,10 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
   const [tokenFilter, setTokenFilter] = useState<'all' | 'token' | 'no-token'>('all')
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
+  const [valuationMode, setValuationMode] = useState<ValuationMode>('fdv')
   const sectionRef = useRef<HTMLElement>(null)
+
+  const columns = useMemo(() => getColumns(valuationMode), [valuationMode])
 
   const filtered = category === 'all' ? exchanges : exchanges.filter(e => e.venueType === category)
 
@@ -388,8 +414,8 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
 
   const sortedExchanges = useMemo(() => {
     return [...filteredExchanges].sort((a, b) => {
-      const aVal = getSortValue(a, sortBy)
-      const bVal = getSortValue(b, sortBy)
+      const aVal = getSortValue(a, sortBy, valuationMode)
+      const bVal = getSortValue(b, sortBy, valuationMode)
 
       if (typeof aVal === 'string' && typeof bVal === 'string') {
         return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
@@ -399,7 +425,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
       const bNum = bVal as number
       return sortDir === 'asc' ? aNum - bNum : bNum - aNum
     })
-  }, [filteredExchanges, sortBy, sortDir])
+  }, [filteredExchanges, sortBy, sortDir, valuationMode])
 
   const totalPages = Math.ceil(sortedExchanges.length / PAGE_SIZE)
   const pagedExchanges = sortedExchanges.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -481,6 +507,33 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         </div>
       </div>
 
+      {/* Valuation toggle */}
+      <div className="flex items-center gap-1 font-sans text-xs mb-4">
+        <span className="text-ink-muted mr-1">Valuation:</span>
+        <button
+          onClick={() => setValuationMode('mcap')}
+          className={classNames(
+            'px-3 py-1.5 border transition-colors',
+            valuationMode === 'mcap'
+              ? 'bg-ink text-paper border-ink font-semibold'
+              : 'bg-paper text-ink-muted border-rule hover:border-ink'
+          )}
+        >
+          Mcap
+        </button>
+        <button
+          onClick={() => setValuationMode('fdv')}
+          className={classNames(
+            'px-3 py-1.5 border transition-colors',
+            valuationMode === 'fdv'
+              ? 'bg-ink text-paper border-ink font-semibold'
+              : 'bg-paper text-ink-muted border-rule hover:border-ink'
+          )}
+        >
+          FDV
+        </button>
+      </div>
+
       {/* Search + Category Filter + Export */}
       <div className="mb-4 flex items-center gap-3">
         <input
@@ -498,7 +551,7 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
           ) : null
         })()}
         <button
-          onClick={() => exportCSV(sortedExchanges)}
+          onClick={() => exportCSV(sortedExchanges, valuationMode)}
           className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-rule bg-paper text-ink-muted font-sans text-xs hover:border-ink hover:text-ink transition-colors cursor-pointer"
           type="button"
           title="Export to CSV"
@@ -593,9 +646,9 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
                   <td className="text-right">{exchange.total24h != null ? formatUSD(exchange.total24h, true) : <DashCell />}</td>
                   <td className="text-right">{exchange.total7d != null ? formatUSD(exchange.total7d, true) : <DashCell />}</td>
                   <td className="text-right">{exchange.openInterest > 0 ? formatUSD(exchange.openInterest, true) : <DashCell tooltip="OI data requires exchange listing on data aggregator" />}</td>
-                  <td className="text-right">{exchange.mcap && exchange.mcap > 0 ? formatUSD(exchange.mcap, true) : <DashCell tooltip="No governance token or market cap data unavailable" />}</td>
-                  <td className="text-right">{exchange.psRatio != null ? formatMultiple(exchange.psRatio) : <DashCell tooltip="Requires market cap and fee data" />}</td>
-                  <td className="text-right">{exchange.peRatio != null ? formatMultiple(exchange.peRatio) : <DashCell tooltip="Requires market cap and revenue data" />}</td>
+                  <td className="text-right">{(() => { const v = getValuation(exchange, valuationMode); return v && v > 0 ? formatUSD(v, true) : <DashCell tooltip={valuationMode === 'fdv' ? 'No FDV data available' : 'No governance token or market cap data unavailable'} /> })()}</td>
+                  <td className="text-right">{(() => { const ps = getPS(exchange, valuationMode); return ps != null ? formatMultiple(ps) : <DashCell tooltip={`Requires ${valuationMode === 'fdv' ? 'FDV' : 'market cap'} and fee data`} /> })()}</td>
+                  <td className="text-right">{(() => { const pe = getPE(exchange, valuationMode); return pe != null ? formatMultiple(pe) : <DashCell tooltip={`Requires ${valuationMode === 'fdv' ? 'FDV' : 'market cap'} and revenue data`} /> })()}</td>
                   <td className="text-right">{dailyFees != null && dailyFees > 0 ? formatUSD(dailyFees, true) : <DashCell tooltip="Fee data not tracked for this exchange" />}</td>
                   <td className="text-right font-mono text-xs">{takeRate != null ? formatBPS(takeRate) : <DashCell tooltip="Requires both fee and volume data" />}</td>
                   <td className="text-right">{exchange.tvl > 0 ? formatUSD(exchange.tvl, true) : <DashCell tooltip="TVL data not available" />}</td>
@@ -700,8 +753,8 @@ export function ExchangeRankingsTable({ exchanges }: Props) {
         <span><strong>TVL</strong> = Total Value Locked (deposited collateral)</span>
         <span><strong>Vol/TVL</strong> = Capital turnover (24h Volume / TVL)</span>
         <span><strong>Take Rate</strong> = Daily Fees / Daily Volume (bps)</span>
-        <span><strong>P/S</strong> = Mcap / Annualized Fees</span>
-        <span><strong>P/E</strong> = Mcap / Annualized Revenue</span>
+        <span><strong>P/S</strong> = {valuationMode === 'fdv' ? 'FDV' : 'Mcap'} / Annualized Fees</span>
+        <span><strong>P/E</strong> = {valuationMode === 'fdv' ? 'FDV' : 'Mcap'} / Annualized Revenue</span>
         <span><strong>Assets</strong> = Effective listed assets (1/HHI)</span>
         <span><strong>{'\u2014'}</strong> = Data not available from source (hover for details)</span>
         <span><strong>&#9888;</strong> = Possible data anomaly</span>

@@ -436,6 +436,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       geckoId,
       tvl,
       mcap,
+      fdv: null,
       chainCount: dex.chains?.length || 1,
       volumeToTvl: tvl > 0 ? vol24 / tvl : null,
       feeData: feeInfo || undefined,
@@ -482,19 +483,19 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     }
   }
 
-  // ── PASS 2: Fill mcap from CoinGecko and compute P/S, P/E ──
+  // ── PASS 2: Fill mcap + FDV from CoinGecko and compute P/S, P/E ──
 
   for (const ex of enrichedExchanges) {
-    // Fill mcap from CoinGecko if DefiLlama didn't have it
-    if (!ex.mcap && ex.geckoId) {
+    // Fill mcap and FDV from CoinGecko
+    if (ex.geckoId) {
       const cgData = cgMcapMap.get(ex.geckoId)
       if (cgData) {
-        ex.mcap = cgData.mcap
+        if (!ex.mcap) ex.mcap = cgData.mcap
+        ex.fdv = cgData.fdv
       }
     }
 
-    // Compute P/S and P/E with (now hopefully available) mcap
-    // Only compute if exchange has meaningful volume (not dead)
+    // Compute P/S and P/E with mcap (default; UI can toggle to FDV-based)
     if (ex.mcap && ex.mcap > 0 && (ex.total24h || 0) > 0) {
       if (ex.annualizedFees && ex.annualizedFees > 0) {
         ex.psRatio = ex.mcap / ex.annualizedFees
