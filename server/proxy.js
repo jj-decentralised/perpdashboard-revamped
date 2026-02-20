@@ -14,17 +14,27 @@
 
 import { cacheGet, cacheSet } from './cache.js'
 
+const LLAMA_KEY = process.env.DEFILLAMA_API_KEY || process.env.VITE_DEFILLAMA_API_KEY || ''
 const GECKO_KEY = process.env.VITE_COINGECKO_API_KEY || process.env.COINGECKO_API_KEY || ''
 const TT_KEY = process.env.VITE_TT_API_KEY || process.env.TT_API_KEY || ''
 const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
 
+// DefiLlama Pro API: key goes in URL path — https://pro-api.llama.fi/{KEY}/endpoint
+// Free API: https://api.llama.fi/endpoint, https://yields.llama.fi/endpoint
+const LLAMA_BASE = LLAMA_KEY
+  ? `https://pro-api.llama.fi/${LLAMA_KEY}`
+  : 'https://api.llama.fi'
+const YIELDS_BASE = LLAMA_KEY
+  ? `https://pro-api.llama.fi/${LLAMA_KEY}/yields`
+  : 'https://yields.llama.fi'
+
 const TARGETS = {
-  '/api/llama': 'https://api.llama.fi',
+  '/api/llama': LLAMA_BASE,
   '/api/gecko': GECKO_KEY
     ? 'https://pro-api.coingecko.com/api/v3'
     : 'https://api.coingecko.com/api/v3',
-  '/api/yields': 'https://yields.llama.fi',
-  '/api/emissions': 'https://api.llama.fi',
+  '/api/yields': YIELDS_BASE,
+  '/api/emissions': LLAMA_BASE,
   ...(TT_KEY ? { '/api/tt': 'https://api.tokenterminal.com/v2' } : {}),
   ...(CG_KEY ? { '/api/coinglass': 'https://open-api-v4.coinglass.com/api' } : {}),
 }

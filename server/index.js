@@ -82,6 +82,12 @@ app.listen(PORT, () => {
   console.log(`[server] Listening on port ${PORT}`)
   console.log(`[server] Serving SPA from ${DIST}`)
 
+  // Log API key status so operators can verify configuration
+  const llamaKey = process.env.DEFILLAMA_API_KEY || process.env.VITE_DEFILLAMA_API_KEY || ''
+  const geckoKey = process.env.VITE_COINGECKO_API_KEY || process.env.COINGECKO_API_KEY || ''
+  const coinglassKey = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
+  console.log(`[server] API keys: DefiLlama=${llamaKey ? 'YES (pro-api.llama.fi)' : 'NO (free tier)'}, CoinGecko=${geckoKey ? 'YES (pro)' : 'NO (free)'}, CoinGlass=${coinglassKey ? 'YES' : 'NO'}`)
+
   // Start background cache refresh
   startRefreshLoop()
 })

@@ -2,10 +2,14 @@
 // In dev mode, Vite proxies /api/* to the server (see vite.config.ts).
 // Falls back to direct API calls if VITE_DIRECT_API=true (for development without server).
 const useDirectApi = import.meta.env.VITE_DIRECT_API === 'true'
+const llamaKey = import.meta.env.VITE_DEFILLAMA_API_KEY as string | undefined
 const geckoKey = import.meta.env.VITE_COINGECKO_API_KEY as string | undefined
 
+// DefiLlama Pro API: key goes in URL path — https://pro-api.llama.fi/{KEY}/endpoint
+const LLAMA_PRO = llamaKey ? `https://pro-api.llama.fi/${llamaKey}` : null
+
 export const LLAMA_BASE = useDirectApi
-  ? 'https://api.llama.fi'
+  ? (LLAMA_PRO || 'https://api.llama.fi')
   : '/api/llama'
 
 export const GECKO_BASE = useDirectApi
@@ -13,11 +17,11 @@ export const GECKO_BASE = useDirectApi
   : '/api/gecko'
 
 export const YIELDS_BASE = useDirectApi
-  ? 'https://yields.llama.fi'
+  ? (LLAMA_PRO ? `${LLAMA_PRO}/yields` : 'https://yields.llama.fi')
   : '/api/yields'
 
 export const EMISSIONS_BASE = useDirectApi
-  ? 'https://api.llama.fi'
+  ? (LLAMA_PRO || 'https://api.llama.fi')
   : '/api/emissions'
 
 // Token Terminal (optional enrichment — dashboard works perfectly without it)
