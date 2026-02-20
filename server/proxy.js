@@ -1,9 +1,15 @@
 /**
  * Caching proxy middleware.
- * - Caches responses in memory with configurable TTL
- * - Request coalescing: concurrent requests for the same URL share one upstream fetch
- * - Negative cache (circuit breaker): after a 429, blocks all requests to that URL
- *   for 30 seconds so we stop hammering the upstream during rate limiting
+ *
+ * Protection layers (in order):
+ * 1. Cache: serve from memory/disk if available
+ * 2. Circuit breaker: block URLs that returned 429 for 30s
+ * 3. Request coalescing: concurrent requests for same URL share one fetch
+ * 4. Domain rate limiter: queue ALL requests per domain (1 per 2s for DefiLlama)
+ *    — this is the key fix. No matter how many client/warmup requests arrive,
+ *    DefiLlama never sees a burst.
+ * 5. Negative cache for 4xx: cache 400 errors for 10 min (e.g., treasury
+ *    endpoints that don't exist) so we stop retrying them.
  */
 
 import { cacheGet, cacheSet } from './cache.js'
@@ -60,45 +66,91 @@ function resolveTarget(reqPath) {
   return null
 }
 
-// Request coalescing: concurrent requests for the same URL share one upstream fetch
+// ── Domain rate limiter ──
+// Queues all upstream requests per domain group so we never burst.
+// DefiLlama (api.llama.fi + yields.llama.fi): max 1 request per 2s
+// CoinGecko: max 1 request per 500ms
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+class DomainRateLimiter {
+  constructor(minDelayMs) {
+    this.minDelay = minDelayMs
+    this.queue = Promise.resolve()
+    this.lastCompleted = 0
+  }
+
+  execute(fn) {
+    const task = this.queue.then(async () => {
+      const elapsed = Date.now() - this.lastCompleted
+      if (elapsed < this.minDelay && this.lastCompleted > 0) {
+        await sleep(this.minDelay - elapsed)
+      }
+      try {
+        return await fn()
+      } finally {
+        this.lastCompleted = Date.now()
+      }
+    })
+    // Don't let errors break the chain
+    this.queue = task.catch(() => {})
+    return task
+  }
+}
+
+const llamaLimiter = new DomainRateLimiter(2000)  // 1 req / 2s for all DefiLlama
+const geckoLimiter = new DomainRateLimiter(500)    // 1 req / 500ms for CoinGecko
+
+function getLimiter(url) {
+  if (url.includes('llama.fi')) return llamaLimiter
+  if (url.includes('coingecko')) return geckoLimiter
+  return null // no limit for CoinGlass, TokenTerminal, etc.
+}
+
+// ── Request coalescing ──
 const inflight = new Map()
 
-// Negative cache / circuit breaker: URL → timestamp when we'll allow requests again.
-// When a 429 is received, the URL is blocked for RATE_LIMIT_COOLDOWN_MS.
-// This prevents ALL callers (warmup retries + client requests) from hammering
-// the upstream during rate limiting.
+// ── Circuit breaker: URL → timestamp when requests are allowed again ──
 const rateLimitedUntil = new Map()
-const RATE_LIMIT_COOLDOWN_MS = 30_000 // 30 seconds
+const RATE_LIMIT_COOLDOWN_MS = 30_000
+
+// ── Negative cache for 4xx errors: URL → timestamp when we'll retry ──
+const errorCache = new Map()
+const ERROR_CACHE_MS = 10 * 60 * 1000 // 10 minutes for 400/404 errors
 
 export async function proxyRequest(reqPath, reqQuery) {
   const resolved = resolveTarget(reqPath)
   if (!resolved) return null
 
-  // Build the full external URL
   const queryString = new URLSearchParams(reqQuery).toString()
   const externalUrl = `${resolved.target}${resolved.path}${queryString ? '?' + queryString : ''}`
-
-  // Check cache first
   const cacheKey = externalUrl
+
+  // 1. Check cache
   const cached = cacheGet(cacheKey)
   if (cached) {
     return { data: cached, fromCache: true }
   }
 
-  // Check negative cache (circuit breaker) — don't hit upstream during cooldown
+  // 2. Check circuit breaker (429 cooldown)
   const blockedUntil = rateLimitedUntil.get(cacheKey)
   if (blockedUntil && Date.now() < blockedUntil) {
     const remaining = Math.ceil((blockedUntil - Date.now()) / 1000)
     throw new Error(`Rate limited (cooling down ${remaining}s): ${externalUrl}`)
   }
 
-  // Request coalescing: if this URL is already being fetched, wait for it
+  // 3. Check negative cache (400/404 — endpoint doesn't exist, stop retrying)
+  const errorUntil = errorCache.get(cacheKey)
+  if (errorUntil && Date.now() < errorUntil) {
+    throw new Error(`Cached error (not retrying): ${externalUrl}`)
+  }
+
+  // 4. Request coalescing: if same URL is already in-flight, wait for it
   if (inflight.has(cacheKey)) {
     const data = await inflight.get(cacheKey)
     return { data, fromCache: true }
   }
 
-  // Build headers
+  // 5. Build headers
   const headers = {}
   if (GECKO_KEY && resolved.target.includes('coingecko')) {
     headers['x-cg-pro-api-key'] = GECKO_KEY
@@ -110,23 +162,29 @@ export async function proxyRequest(reqPath, reqQuery) {
     headers['CG-API-KEY'] = CG_KEY
   }
 
-  // Start the upstream fetch and register it as in-flight
-  const fetchPromise = (async () => {
+  // 6. Rate-limited upstream fetch
+  const limiter = getLimiter(externalUrl)
+
+  const doFetch = async () => {
     const res = await fetch(externalUrl, { headers })
     if (!res.ok) {
-      // On 429, activate the circuit breaker for this URL
       if (res.status === 429) {
         rateLimitedUntil.set(cacheKey, Date.now() + RATE_LIMIT_COOLDOWN_MS)
+      } else if (res.status >= 400 && res.status < 500) {
+        // Cache 400/404 errors so we stop retrying known-bad endpoints
+        errorCache.set(cacheKey, Date.now() + ERROR_CACHE_MS)
       }
       throw new Error(`Upstream ${res.status}: ${externalUrl}`)
     }
     const data = await res.text()
     const ttl = getTTL(resolved.path)
     cacheSet(cacheKey, data, ttl)
-    // Clear any lingering rate limit on success
     rateLimitedUntil.delete(cacheKey)
+    errorCache.delete(cacheKey)
     return data
-  })()
+  }
+
+  const fetchPromise = limiter ? limiter.execute(doFetch) : doFetch()
 
   inflight.set(cacheKey, fetchPromise)
 
