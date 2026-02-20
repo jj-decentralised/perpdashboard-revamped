@@ -19,15 +19,24 @@ const GECKO_KEY = process.env.VITE_COINGECKO_API_KEY || process.env.COINGECKO_AP
 const TT_KEY = process.env.VITE_TT_API_KEY || process.env.TT_API_KEY || ''
 const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
 
-// All DefiLlama endpoints (including derivatives, emissions, yields/perps)
-// are accessible on the free API. The Pro API key is NOT needed.
+// DefiLlama: most endpoints are free on api.llama.fi.
+// Paywalled endpoints (/summary/derivatives/*, /emissions) need Pro API key.
+// Pro API format: https://pro-api.llama.fi/{KEY}/api/{path}
+const LLAMA_PRO_BASE = LLAMA_KEY ? `https://pro-api.llama.fi/${LLAMA_KEY}/api` : null
+
+// Paywalled paths under /api/llama — route through Pro API when key available
+const PAYWALLED_LLAMA_PATHS = [
+  /^\/summary\/derivatives\//,  // per-protocol derivatives data
+]
+
 const TARGETS = {
   '/api/llama': 'https://api.llama.fi',
   '/api/gecko': GECKO_KEY
     ? 'https://pro-api.coingecko.com/api/v3'
     : 'https://api.coingecko.com/api/v3',
   '/api/yields': 'https://yields.llama.fi',
-  '/api/emissions': 'https://api.llama.fi',
+  // /emissions is paywalled — route through Pro API when key available
+  '/api/emissions': LLAMA_PRO_BASE || 'https://api.llama.fi',
   ...(TT_KEY ? { '/api/tt': 'https://api.tokenterminal.com/v2' } : {}),
   ...(CG_KEY ? { '/api/coinglass': 'https://open-api-v4.coinglass.com/api' } : {}),
 }
@@ -63,6 +72,15 @@ function resolveTarget(reqPath) {
   for (const [prefix, target] of Object.entries(TARGETS)) {
     if (reqPath.startsWith(prefix)) {
       const stripped = reqPath.slice(prefix.length)
+
+      // Route paywalled /api/llama paths through Pro API when key available
+      if (prefix === '/api/llama' && LLAMA_PRO_BASE) {
+        const isPro = PAYWALLED_LLAMA_PATHS.some((p) => p.test(stripped))
+        if (isPro) {
+          return { target: LLAMA_PRO_BASE, path: stripped }
+        }
+      }
+
       return { target, path: stripped }
     }
   }

@@ -62,17 +62,52 @@ export async function fetchFeeOverview(): Promise<FeeOverview> {
   )
 }
 
+// PAYWALLED: /summary/derivatives/{slug} requires Pro API key ($300/mo)
+// Falls back gracefully to null in callers. Pro API routed by server proxy.
 export async function fetchDerivativesSummary(slug: string): Promise<DerivativesSummary> {
   return fetchJSON<DerivativesSummary>(
     `${LLAMA_BASE}/summary/derivatives/${slug}?excludeTotalDataChartBreakdown=true`
   )
 }
 
-// Lightweight per-protocol summary WITH chain breakdown (for chain time-series)
-export async function fetchDerivativesSummaryWithBreakdown(slug: string): Promise<DerivativesSummary> {
-  return fetchJSON<DerivativesSummary>(
-    `${LLAMA_BASE}/summary/derivatives/${slug}`
-  )
+// FREE fallback: extract per-protocol volume from the cached overview breakdown
+// Used when fetchDerivativesSummary fails (no Pro API key)
+export async function fetchExchangeVolumeFromOverview(slug: string): Promise<[number, number][]> {
+  try {
+    const overview = await fetchDerivativesOverview(false) // full overview with breakdown
+    const breakdown = overview.totalDataChartBreakdown || []
+    const slugLower = slug.toLowerCase()
+
+    // Find the matching protocol name in the breakdown data
+    // Format: [timestamp, { protocolName: { chainOrSubKey: volume } }]
+    let matchedName: string | null = null
+    if (breakdown.length > 0) {
+      const [, firstEntry] = breakdown[breakdown.length - 1]
+      if (firstEntry && typeof firstEntry === 'object') {
+        for (const name of Object.keys(firstEntry)) {
+          const nameLower = name.toLowerCase().replace(/\s+/g, '-')
+          if (nameLower === slugLower || nameLower.includes(slugLower) || slugLower.includes(nameLower)) {
+            matchedName = name
+            break
+          }
+        }
+      }
+    }
+
+    if (!matchedName) return []
+
+    // Extract daily volume for this protocol
+    return breakdown
+      .map(([ts, protocols]: [number, Record<string, Record<string, number>>]) => {
+        const chains = protocols[matchedName!]
+        if (!chains) return null
+        const totalVol = Object.values(chains).reduce((sum, v) => sum + (v || 0), 0)
+        return [ts, totalVol] as [number, number]
+      })
+      .filter((x): x is [number, number] => x !== null)
+  } catch {
+    return []
+  }
 }
 
 export interface ProtocolTVLPoint {

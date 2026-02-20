@@ -83,10 +83,11 @@ app.listen(PORT, () => {
   console.log(`[server] Serving SPA from ${DIST}`)
 
   // Log API key status so operators can verify configuration
+  const llamaKey = process.env.DEFILLAMA_API_KEY || process.env.VITE_DEFILLAMA_API_KEY || ''
   const geckoKey = process.env.VITE_COINGECKO_API_KEY || process.env.COINGECKO_API_KEY || ''
   const coinglassKey = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
-  console.log(`[server] API keys: CoinGecko=${geckoKey ? 'YES (pro)' : 'NO (free)'}, CoinGlass=${coinglassKey ? 'YES' : 'NO'}`)
-  console.log(`[server] DefiLlama: free API (all endpoints accessible without key)`)
+  console.log(`[server] DefiLlama: ${llamaKey ? 'Pro API key detected — paywalled endpoints (emissions, summary/derivatives) routed through pro-api.llama.fi' : 'free tier only — paywalled endpoints will gracefully fail'}`)
+  console.log(`[server] CoinGecko=${geckoKey ? 'pro' : 'free'}, CoinGlass=${coinglassKey ? 'YES' : 'NO'}`)
 
   // Start background cache refresh
   startRefreshLoop()

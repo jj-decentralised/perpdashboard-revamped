@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData, MarketSharePoint, BuilderVolumeData } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchDerivativesSummary, fetchExchangeVolumeFromOverview, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets, fetchBTCPrice } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
@@ -387,10 +387,12 @@ export function useExchangeProfile(
           }
         }
 
-        // Historical volume
-        const historicalVolume: HistoricalDataPoint[] = (
-          summary?.totalDataChart || []
-        )
+        // Historical volume — prefer Pro API summary, fallback to free overview breakdown
+        let volumeChart = summary?.totalDataChart || []
+        if (volumeChart.length === 0 && slug) {
+          volumeChart = await fetchExchangeVolumeFromOverview(slug)
+        }
+        const historicalVolume: HistoricalDataPoint[] = volumeChart
           .filter((entry): entry is [number, number] => Array.isArray(entry) && entry.length === 2)
           .map(([date, value]) => ({ date: date * 1000, value }))
 

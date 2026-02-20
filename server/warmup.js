@@ -21,8 +21,8 @@ const PASS2_WAIT = 65_000 // 65s — DefiLlama rate limit window is >35s
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// ── DefiLlama endpoints (api.llama.fi + yields.llama.fi share rate limits) ──
-// Ordered: critical first, optional/heavy last
+// ── DefiLlama FREE endpoints (api.llama.fi + yields.llama.fi) ──
+// All these return 200 on the free API. Ordered: critical first, heavy last.
 const LLAMA_URLS = [
   // Critical for dashboard rendering
   '/api/llama/overview/derivatives?excludeTotalDataChartBreakdown=true',
@@ -30,13 +30,18 @@ const LLAMA_URLS = [
   '/api/llama/overview/open-interest?excludeTotalDataChartBreakdown=true',
   '/api/llama/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true',
   '/api/llama/protocols',
-  // Optional/lazy-loaded features
   '/api/yields/perps',
-  '/api/emissions/emissions',
   '/api/llama/overview/dexs',
   // Heavy endpoint last — chain breakdown line charts
   '/api/llama/overview/derivatives',
 ]
+
+// ── DefiLlama PAYWALLED endpoints — only warm if DEFILLAMA_API_KEY is set ──
+// These return "Upgrade to the paid API plan" on the free API.
+const LLAMA_KEY = process.env.DEFILLAMA_API_KEY || process.env.VITE_DEFILLAMA_API_KEY || ''
+const LLAMA_PRO_URLS = LLAMA_KEY ? [
+  '/api/emissions/emissions',
+] : []
 
 // ── CoinGecko endpoints ──
 const GECKO_URLS = [
@@ -129,8 +134,13 @@ export async function warmupCache(isInitial = false) {
   const start = Date.now()
 
   // Warm all domain groups in parallel — they don't share rate limits
+  // Note: LLAMA_PRO_URLS share rate limits with LLAMA_URLS, so they run sequentially after
+  const allLlamaUrls = [...LLAMA_URLS, ...LLAMA_PRO_URLS]
+  if (LLAMA_PRO_URLS.length > 0) {
+    console.log(`  [warmup] DefiLlama Pro key detected — will also warm ${LLAMA_PRO_URLS.length} paywalled endpoint(s)`)
+  }
   await Promise.all([
-    warmDomainGroup(LLAMA_URLS, 'DefiLlama', LLAMA_DELAY),
+    warmDomainGroup(allLlamaUrls, 'DefiLlama', LLAMA_DELAY),
     warmDomainGroup(GECKO_URLS, 'CoinGecko', 1000),
     warmDomainGroup(COINGLASS_URLS, 'CoinGlass', 500),
   ])
