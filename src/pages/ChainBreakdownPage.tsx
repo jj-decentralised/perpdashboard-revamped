@@ -14,7 +14,7 @@ import {
   LineChart,
   Line,
 } from 'recharts'
-import { fetchDerivativesOverview, fetchDerivativesSummaryWithBreakdown, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchDerivativesOverview, fetchDerivativesSummary, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import type { DexProtocol, DexOverview } from '../types'
 import type { DerivativesSummary } from '../types/profile'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../utils/chartTheme'
@@ -173,10 +173,10 @@ export default function ChainBreakdownPage() {
         .sort((a, b) => (b.total24h || 0) - (a.total24h || 0))
         .slice(0, 10) // Top 10 is enough for meaningful line charts
 
-      // Fetch summaries in parallel (each is small, ~50-200KB)
+      // Fetch summaries in parallel (lightweight, no breakdown — ~30-100KB each)
       const results = await Promise.allSettled(
         chainProtocols.map((p) =>
-          fetchDerivativesSummaryWithBreakdown(p.slug)
+          fetchDerivativesSummary(p.slug)
             .then((summary) => ({ slug: p.slug, name: p.displayName || p.name, summary }))
         )
       )
@@ -254,60 +254,53 @@ export default function ChainBreakdownPage() {
   }, [overview, selectedChain, hideNoToken])
 
   // ── Historical time-series from individual protocol summaries ──
-  // Each protocol's summary has totalDataChart (daily [timestamp, volume])
-  // and optionally totalDataChartBreakdown for per-chain volume
+  // Each protocol's totalDataChart has daily [timestamp_seconds, volume] entries
+  // For single-chain protocols: total volume = chain volume (exact)
+  // For multi-chain protocols: approximate by dividing by chain count
   const { timeSeries, timeSeriesNames } = useMemo(() => {
-    if (protocolSummaries.size === 0) return { timeSeries: [] as ChainTimeSeriesPoint[], timeSeriesNames: [] as string[] }
+    if (protocolSummaries.size === 0 || !overview) return { timeSeries: [] as ChainTimeSeriesPoint[], timeSeriesNames: [] as string[] }
 
     const chainLower = selectedChain.toLowerCase()
 
-    // For each protocol, extract daily volume for the selected chain
-    // Structure: { protocolName: Map<dayKey, volume> }
+    // Build slug → protocol info for chain count
+    const protocolInfo = new Map<string, DexProtocol>()
+    for (const p of overview.protocols) {
+      protocolInfo.set(p.slug, p)
+    }
+
     const protocolDailyMaps: { name: string; dayMap: Map<number, number>; total: number }[] = []
 
     for (const [slug, summary] of protocolSummaries) {
       const name = summary.name || slug
-      const isSingleChain = summary.chains?.length === 1 &&
-        summary.chains[0].toLowerCase() === chainLower
-      const isOnChain = summary.chains?.some((c) => c.toLowerCase() === chainLower)
+      const chains = summary.chains || protocolInfo.get(slug)?.chains || []
+      const isSingleChain = chains.length === 1
+      const isOnChain = chains.some((c) => c.toLowerCase() === chainLower)
 
       if (!isOnChain) continue
+
+      // For multi-chain, estimate chain share from 24h snapshot ratio
+      let chainFraction = 1
+      if (!isSingleChain) {
+        const prot = protocolInfo.get(slug)
+        if (prot) {
+          const chainVol24h = getChainVolume(prot, selectedChain)
+          const totalVol24h = prot.total24h || 0
+          chainFraction = totalVol24h > 0 ? chainVol24h / totalVol24h : 1 / chains.length
+        } else {
+          chainFraction = 1 / chains.length
+        }
+      }
 
       const dayMap = new Map<number, number>()
       let total = 0
 
-      for (const entry of summary.totalDataChart || []) {
-        const [ts, vol] = entry
-        if (ts < SINCE_2023) continue
+      for (const [ts, vol] of (summary.totalDataChart || [])) {
+        if (ts < SINCE_2023 || vol <= 0) continue
 
-        let chainVol = vol // Default: use full volume
-
-        // For multi-chain protocols, try to extract per-chain volume from breakdown
-        if (!isSingleChain && summary.totalDataChartBreakdown) {
-          // totalDataChartBreakdown is array indexed same as totalDataChart
-          // but since we filtered by SINCE_2023, we need the matching index
-          // Actually, breakdown is keyed differently — it's a separate array
-          // For per-protocol summary, breakdown keys are chain names
-          // Let's find matching breakdown entry
-          const idx = (summary.totalDataChart || []).indexOf(entry)
-          const bdEntry = summary.totalDataChartBreakdown?.[idx]
-          if (bdEntry) {
-            let found = 0
-            for (const [chainKey, subMap] of Object.entries(bdEntry)) {
-              if (chainKey.toLowerCase() === chainLower) {
-                found += typeof subMap === 'number' ? subMap : Object.values(subMap).reduce((s, v) => s + (Number(v) || 0), 0)
-              }
-            }
-            if (found > 0) chainVol = found
-            else chainVol = 0 // Has breakdown but chain not present → zero
-          }
-        }
-
-        if (chainVol > 0) {
-          const dayKey = Math.floor(ts / 86400) * 86400
-          dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + chainVol)
-          total += chainVol
-        }
+        const chainVol = vol * chainFraction
+        const dayKey = Math.floor(ts / 86400) * 86400
+        dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + chainVol)
+        total += chainVol
       }
 
       if (dayMap.size > 0) {
@@ -339,7 +332,7 @@ export default function ChainBreakdownPage() {
     })
 
     return { timeSeries: series, timeSeriesNames: topNames }
-  }, [protocolSummaries, selectedChain])
+  }, [protocolSummaries, selectedChain, overview])
 
   // Compute % share version of time-series
   const timeSeriesPct = useMemo(() => {
