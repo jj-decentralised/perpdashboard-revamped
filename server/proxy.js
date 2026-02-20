@@ -19,22 +19,26 @@ const GECKO_KEY = process.env.VITE_COINGECKO_API_KEY || process.env.COINGECKO_AP
 const TT_KEY = process.env.VITE_TT_API_KEY || process.env.TT_API_KEY || ''
 const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
 
-// DefiLlama Pro API: key goes in URL path — https://pro-api.llama.fi/{KEY}/endpoint
-// Free API: https://api.llama.fi/endpoint, https://yields.llama.fi/endpoint
-const LLAMA_BASE = LLAMA_KEY
-  ? `https://pro-api.llama.fi/${LLAMA_KEY}`
-  : 'https://api.llama.fi'
-const YIELDS_BASE = LLAMA_KEY
-  ? `https://pro-api.llama.fi/${LLAMA_KEY}/yields`
-  : 'https://yields.llama.fi'
+// DefiLlama: free endpoints → api.llama.fi, paywalled → pro-api.llama.fi/{KEY}
+const LLAMA_FREE = 'https://api.llama.fi'
+const LLAMA_PRO = LLAMA_KEY ? `https://pro-api.llama.fi/${LLAMA_KEY}` : null
+
+// Paywalled DefiLlama paths — these need the Pro API key
+const LLAMA_PRO_PATHS = [
+  /^\/overview\/derivatives/,    // derivatives volume overview
+  /^\/summary\/derivatives\//,   // per-protocol derivatives summary
+  /^\/overview\/options/,        // options overview
+  /^\/summary\/options\//,       // per-protocol options summary
+]
 
 const TARGETS = {
-  '/api/llama': LLAMA_BASE,
+  '/api/llama': LLAMA_FREE,
   '/api/gecko': GECKO_KEY
     ? 'https://pro-api.coingecko.com/api/v3'
     : 'https://api.coingecko.com/api/v3',
-  '/api/yields': YIELDS_BASE,
-  '/api/emissions': LLAMA_BASE,
+  // yields/perps and emissions are entirely paywalled
+  '/api/yields': LLAMA_PRO ? `${LLAMA_PRO}/yields` : 'https://yields.llama.fi',
+  '/api/emissions': LLAMA_PRO || LLAMA_FREE,
   ...(TT_KEY ? { '/api/tt': 'https://api.tokenterminal.com/v2' } : {}),
   ...(CG_KEY ? { '/api/coinglass': 'https://open-api-v4.coinglass.com/api' } : {}),
 }
@@ -70,6 +74,15 @@ function resolveTarget(reqPath) {
   for (const [prefix, target] of Object.entries(TARGETS)) {
     if (reqPath.startsWith(prefix)) {
       const stripped = reqPath.slice(prefix.length)
+
+      // For /api/llama paths: route paywalled endpoints through Pro API
+      if (prefix === '/api/llama' && LLAMA_PRO) {
+        const isPro = LLAMA_PRO_PATHS.some((p) => p.test(stripped))
+        if (isPro) {
+          return { target: LLAMA_PRO, path: stripped }
+        }
+      }
+
       return { target, path: stripped }
     }
   }
