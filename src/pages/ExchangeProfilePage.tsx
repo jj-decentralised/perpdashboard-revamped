@@ -1171,6 +1171,26 @@ export default function ExchangeProfilePage() {
   const hasPerpPairs = data.exchange?.number_of_perpetual_pairs != null && data.exchange.number_of_perpetual_pairs > 0
   const hasFuturesPairs = data.exchange?.number_of_futures_pairs != null && data.exchange.number_of_futures_pairs > 0
 
+  // Current P/E and P/S from latest historical data point (preferred) or computed from latest fees
+  const currentPE = useMemo(() => {
+    // Try historical PE data first (more accurate, uses actual mcap history)
+    if (validPE.length > 0) {
+      const latest = validPE[validPE.length - 1]
+      return { pe: latest.pe, ps: latest.ps }
+    }
+    // Fallback: compute from tokenInfo mcap + latest fees/revenue
+    if (data.tokenInfo?.marketCap && data.tokenInfo.marketCap > 0) {
+      const mcap = data.tokenInfo.marketCap
+      const annualFees = latestFees ? latestFees * 365 : 0
+      const annualRev = latestRevenue ? latestRevenue * 365 : (annualFees > 0 ? annualFees * 0.3 : 0)
+      return {
+        pe: annualRev > 0 ? mcap / annualRev : null,
+        ps: annualFees > 0 ? mcap / annualFees : null,
+      }
+    }
+    return { pe: null, ps: null }
+  }, [validPE, data.tokenInfo, latestFees, latestRevenue])
+
   return (
     <div className="min-h-screen bg-paper">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1236,6 +1256,20 @@ export default function ExchangeProfilePage() {
                 <div className="kpi-card">
                   <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">Futures Pairs</p>
                   <p className="font-mono text-lg font-bold text-ink">{formatNumber(data.exchange!.number_of_futures_pairs)}</p>
+                </div>
+              )}
+              {currentPE.pe != null && currentPE.pe > 0 && currentPE.pe < 500 && (
+                <div className="kpi-card">
+                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">P/E Ratio</p>
+                  <p className="font-mono text-lg font-bold" style={{ color: COLORS.blue }}>{formatMultiple(currentPE.pe)}</p>
+                  <p className="font-mono text-[10px] text-ink-muted">mcap / ann. revenue</p>
+                </div>
+              )}
+              {currentPE.ps != null && currentPE.ps > 0 && currentPE.ps < 500 && (
+                <div className="kpi-card">
+                  <p className="font-sans text-xs uppercase tracking-wider text-ink-muted mb-1">P/S Ratio</p>
+                  <p className="font-mono text-lg font-bold text-ink">{formatMultiple(currentPE.ps)}</p>
+                  <p className="font-mono text-[10px] text-ink-muted">mcap / ann. fees</p>
                 </div>
               )}
               <div className="kpi-card">
