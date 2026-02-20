@@ -75,6 +75,22 @@ export async function fetchDerivativesSummaryWithBreakdown(slug: string): Promis
   )
 }
 
+export interface ProtocolTVLPoint {
+  date: number // unix seconds
+  totalLiquidityUSD: number
+}
+
+export async function fetchProtocolTVL(slug: string): Promise<{ name: string; tvl: ProtocolTVLPoint[] }> {
+  const data = await fetchJSON<any>(`${LLAMA_BASE}/protocol/${slug}`)
+  return {
+    name: data.name || slug,
+    tvl: (data.tvl || []).map((p: any) => ({
+      date: p.date,
+      totalLiquidityUSD: p.totalLiquidityUSD || 0,
+    })),
+  }
+}
+
 export async function fetchFeeSummary(slug: string): Promise<any | null> {
   try {
     return await fetchJSON<any>(

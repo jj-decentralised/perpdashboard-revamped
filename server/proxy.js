@@ -1,7 +1,9 @@
 /**
  * Caching proxy middleware.
- * Proxies requests to external APIs and caches responses.
- * Includes request coalescing to prevent thundering herd on cold cache.
+ * - Caches responses in memory with configurable TTL
+ * - Request coalescing: concurrent requests for the same URL share one upstream fetch
+ * - Negative cache (circuit breaker): after a 429, blocks all requests to that URL
+ *   for 30 seconds so we stop hammering the upstream during rate limiting
  */
 
 import { cacheGet, cacheSet } from './cache.js'
@@ -25,6 +27,7 @@ const TARGETS = {
 const TTL_RULES = [
   { pattern: /\/overview\//, ttl: 5 * 60 * 1000 },     // overviews: 5 min
   { pattern: /\/summary\//, ttl: 10 * 60 * 1000 },      // per-exchange: 10 min
+  { pattern: /\/protocol\/[^/]+$/, ttl: 15 * 60 * 1000 }, // individual protocol TVL: 15 min
   { pattern: /\/treasury\//, ttl: 30 * 60 * 1000 },     // treasury: 30 min
   { pattern: /\/protocols$/, ttl: 10 * 60 * 1000 },     // protocols list: 10 min
   { pattern: /\/coins\/list/, ttl: 60 * 60 * 1000 },    // coins list: 1 hour
@@ -57,10 +60,15 @@ function resolveTarget(reqPath) {
   return null
 }
 
-// In-flight request map for coalescing concurrent requests to the same URL.
-// Prevents thundering herd: if 4 callers request the same URL before the cache
-// is populated, only 1 upstream fetch happens and all 4 share the result.
+// Request coalescing: concurrent requests for the same URL share one upstream fetch
 const inflight = new Map()
+
+// Negative cache / circuit breaker: URL → timestamp when we'll allow requests again.
+// When a 429 is received, the URL is blocked for RATE_LIMIT_COOLDOWN_MS.
+// This prevents ALL callers (warmup retries + client requests) from hammering
+// the upstream during rate limiting.
+const rateLimitedUntil = new Map()
+const RATE_LIMIT_COOLDOWN_MS = 30_000 // 30 seconds
 
 export async function proxyRequest(reqPath, reqQuery) {
   const resolved = resolveTarget(reqPath)
@@ -70,11 +78,18 @@ export async function proxyRequest(reqPath, reqQuery) {
   const queryString = new URLSearchParams(reqQuery).toString()
   const externalUrl = `${resolved.target}${resolved.path}${queryString ? '?' + queryString : ''}`
 
-  // Check cache
+  // Check cache first
   const cacheKey = externalUrl
   const cached = cacheGet(cacheKey)
   if (cached) {
     return { data: cached, fromCache: true }
+  }
+
+  // Check negative cache (circuit breaker) — don't hit upstream during cooldown
+  const blockedUntil = rateLimitedUntil.get(cacheKey)
+  if (blockedUntil && Date.now() < blockedUntil) {
+    const remaining = Math.ceil((blockedUntil - Date.now()) / 1000)
+    throw new Error(`Rate limited (cooling down ${remaining}s): ${externalUrl}`)
   }
 
   // Request coalescing: if this URL is already being fetched, wait for it
@@ -99,11 +114,17 @@ export async function proxyRequest(reqPath, reqQuery) {
   const fetchPromise = (async () => {
     const res = await fetch(externalUrl, { headers })
     if (!res.ok) {
+      // On 429, activate the circuit breaker for this URL
+      if (res.status === 429) {
+        rateLimitedUntil.set(cacheKey, Date.now() + RATE_LIMIT_COOLDOWN_MS)
+      }
       throw new Error(`Upstream ${res.status}: ${externalUrl}`)
     }
     const data = await res.text()
     const ttl = getTTL(resolved.path)
     cacheSet(cacheKey, data, ttl)
+    // Clear any lingering rate limit on success
+    rateLimitedUntil.delete(cacheKey)
     return data
   })()
 

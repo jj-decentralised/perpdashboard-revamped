@@ -4,10 +4,11 @@
  *
  * Key design:
  * - URLs grouped by upstream domain to respect per-domain rate limits
- * - DefiLlama (api.llama.fi + yields.llama.fi) share rate limits → sequential, 1.5s apart
- * - CoinGecko, CoinGlass → sequential with shorter delays
- * - Different domain groups run in parallel (they don't share rate limits)
- * - Retry on 429 with exponential backoff (3s, 6s, 12s)
+ * - DefiLlama (api.llama.fi + yields.llama.fi): sequential, 4s apart
+ * - CoinGecko, CoinGlass: sequential with shorter delays
+ * - Different domain groups run in parallel
+ * - Two-pass approach: first pass tries all URLs, second pass retries failed
+ *   ones after a 35s cooldown (proxy circuit breaker blocks for 30s on 429)
  */
 
 import { proxyRequest } from './proxy.js'
@@ -17,17 +18,20 @@ const REFRESH_INTERVAL = 5 * 60 * 1000 // 5 minutes
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // ── DefiLlama endpoints (api.llama.fi + yields.llama.fi share rate limits) ──
-// Ordered: lightweight/critical first, heavy full-breakdown last
+// Ordered: lightweight/critical first (dashboard needs these to render),
+// heavy/optional endpoints last
 const LLAMA_URLS = [
+  // Critical for dashboard rendering
   '/api/llama/overview/derivatives?excludeTotalDataChartBreakdown=true',
   '/api/llama/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true',
   '/api/llama/overview/open-interest?excludeTotalDataChartBreakdown=true',
   '/api/llama/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true',
   '/api/llama/protocols',
+  // Optional/lazy-loaded features
   '/api/yields/perps',
   '/api/emissions/emissions',
   '/api/llama/overview/dexs',
-  // Heavy endpoint last — after all critical ones are cached
+  // Heavy endpoint last — chain breakdown line charts
   '/api/llama/overview/derivatives',
 ]
 
@@ -59,49 +63,55 @@ function parseUrlParts(url) {
   return { path, query: params }
 }
 
-/**
- * Fetch a single URL with retry on 429 (rate limit).
- * Retries up to maxRetries times with exponential backoff: 3s, 6s, 12s.
- */
-async function warmOneWithRetry(url, maxRetries = 3) {
+/** Single attempt to warm one URL. Returns true on success. */
+async function warmOne(url) {
   const { path, query } = parseUrlParts(url)
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await proxyRequest(path, query)
-      const size = result?.data?.length || 0
-      const kb = (size / 1024).toFixed(1)
-      console.log(`  [cache] ${result?.fromCache ? 'HIT' : 'MISS'} ${path} (${kb} KB)`)
-      return true
-    } catch (err) {
-      const is429 = err.message?.includes('429')
-      if (is429 && attempt < maxRetries) {
-        const waitMs = 3000 * Math.pow(2, attempt) // 3s, 6s, 12s
-        console.log(`  [cache] 429 ${path} — retry ${attempt + 1}/${maxRetries} in ${(waitMs / 1000).toFixed(0)}s`)
-        await sleep(waitMs)
-        continue
-      }
-      console.warn(`  [cache] FAIL ${path}: ${err.message}`)
-      return false
-    }
+  try {
+    const result = await proxyRequest(path, query)
+    const size = result?.data?.length || 0
+    const kb = (size / 1024).toFixed(1)
+    console.log(`  [cache] ${result?.fromCache ? 'HIT' : 'MISS'} ${path} (${kb} KB)`)
+    return true
+  } catch (err) {
+    console.warn(`  [cache] FAIL ${path}: ${err.message}`)
+    return false
   }
-  return false
 }
 
 /**
- * Fetch URLs sequentially within a domain group, with delay between each request.
- * This prevents triggering rate limits on providers that share limits across subdomains.
+ * Two-pass warmup for a domain group:
+ * Pass 1: try every URL sequentially with delayMs between each.
+ * Pass 2: after a 35s cooldown (so the proxy's 30s circuit breaker expires),
+ *          retry any URLs that failed in pass 1.
  */
 async function warmDomainGroup(urls, label, delayMs) {
   if (urls.length === 0) return
-  console.log(`  [warmup] ${label} (${urls.length} endpoints, ${delayMs}ms apart)`)
+  console.log(`  [warmup] ${label} — pass 1 (${urls.length} endpoints, ${delayMs}ms apart)`)
 
+  // Pass 1
+  const failed = []
   for (let i = 0; i < urls.length; i++) {
-    await warmOneWithRetry(urls[i])
-    // Delay between requests (not after the last one)
-    if (i < urls.length - 1) {
-      await sleep(delayMs)
-    }
+    const ok = await warmOne(urls[i])
+    if (!ok) failed.push(urls[i])
+    if (i < urls.length - 1) await sleep(delayMs)
+  }
+
+  if (failed.length === 0) return
+
+  // Pass 2: retry after circuit breaker cooldown
+  console.log(`  [warmup] ${label} — ${failed.length} failed, waiting 35s for cooldown...`)
+  await sleep(35_000)
+  console.log(`  [warmup] ${label} — pass 2 (retrying ${failed.length} endpoints)`)
+
+  const stillFailed = []
+  for (let i = 0; i < failed.length; i++) {
+    const ok = await warmOne(failed[i])
+    if (!ok) stillFailed.push(failed[i])
+    if (i < failed.length - 1) await sleep(delayMs)
+  }
+
+  if (stillFailed.length > 0) {
+    console.warn(`  [warmup] ${label} — ${stillFailed.length} endpoints still failing: ${stillFailed.map((u) => parseUrlParts(u).path).join(', ')}`)
   }
 }
 
@@ -111,8 +121,8 @@ export async function warmupCache() {
 
   // Warm all domain groups in parallel — they don't share rate limits
   await Promise.all([
-    warmDomainGroup(LLAMA_URLS, 'DefiLlama', 1500),
-    warmDomainGroup(GECKO_URLS, 'CoinGecko', 800),
+    warmDomainGroup(LLAMA_URLS, 'DefiLlama', 4000),
+    warmDomainGroup(GECKO_URLS, 'CoinGecko', 1000),
     warmDomainGroup(COINGLASS_URLS, 'CoinGlass', 500),
   ])
 
