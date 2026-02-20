@@ -51,6 +51,13 @@ export async function fetchDerivativesSummary(slug: string): Promise<Derivatives
   )
 }
 
+// Lightweight per-protocol summary WITH chain breakdown (for chain time-series)
+export async function fetchDerivativesSummaryWithBreakdown(slug: string): Promise<DerivativesSummary> {
+  return fetchJSON<DerivativesSummary>(
+    `${LLAMA_BASE}/summary/derivatives/${slug}`
+  )
+}
+
 export async function fetchFeeSummary(slug: string): Promise<any | null> {
   try {
     return await fetchJSON<any>(

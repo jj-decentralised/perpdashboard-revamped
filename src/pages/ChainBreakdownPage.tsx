@@ -14,8 +14,9 @@ import {
   LineChart,
   Line,
 } from 'recharts'
-import { fetchDerivativesOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchDerivativesOverview, fetchDerivativesSummaryWithBreakdown, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import type { DexProtocol, DexOverview } from '../types'
+import type { DerivativesSummary } from '../types/profile'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../utils/chartTheme'
 import { formatUSD, formatPercent, classNames, percentClass, formatDateShort } from '../utils/format'
 import { LoadingSkeleton, ErrorDisplay } from '../components/LoadingSkeleton'
@@ -120,8 +121,12 @@ export default function ChainBreakdownPage() {
   const [hideNoToken, setHideNoToken] = useState(false)
   const [seriesView, setSeriesView] = useState<SeriesView>('usd')
   const [seriesLoading, setSeriesLoading] = useState(false)
+  // Per-protocol historical summaries keyed by slug
+  const [protocolSummaries, setProtocolSummaries] = useState<Map<string, DerivativesSummary>>(new Map())
   const fetchedRef = useRef(false)
+  const seriesFetchedForChain = useRef<string | null>(null)
 
+  // Phase 1: Load lightweight overview
   useEffect(() => {
     if (fetchedRef.current) return
     fetchedRef.current = true
@@ -132,30 +137,10 @@ export default function ChainBreakdownPage() {
       try {
         setLoading(true)
         setError(null)
-        // Phase 1: Fast lightweight load (no breakdown — ~200KB)
         const data = await fetchDerivativesOverview(true)
         if (!cancelled) {
           setOverview(data)
           setLoading(false)
-        }
-
-        // Phase 2: Lazy background fetch of full breakdown for time-series (~7MB)
-        if (!cancelled) {
-          setSeriesLoading(true)
-          try {
-            const fullData = await fetchDerivativesOverview(false)
-            if (!cancelled) {
-              // Merge breakdown into existing overview
-              setOverview((prev) => prev ? {
-                ...prev,
-                totalDataChartBreakdown: fullData.totalDataChartBreakdown,
-              } : fullData)
-            }
-          } catch {
-            // Breakdown fetch failed — page still works with snapshot data
-          } finally {
-            if (!cancelled) setSeriesLoading(false)
-          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -168,6 +153,51 @@ export default function ChainBreakdownPage() {
     load()
     return () => { cancelled = true }
   }, [])
+
+  // Phase 2: Fetch individual protocol summaries when chain changes
+  // Each protocol summary (~50-200KB) includes totalDataChart + chain breakdown
+  useEffect(() => {
+    if (!overview || seriesFetchedForChain.current === selectedChain) return
+    seriesFetchedForChain.current = selectedChain
+
+    let cancelled = false
+
+    async function loadSeries() {
+      if (!overview) return
+      setSeriesLoading(true)
+
+      // Find top protocols on this chain by 24h volume
+      const chainProtocols = overview.protocols
+        .filter((p) => p.chains?.some((c) => c.toLowerCase() === selectedChain.toLowerCase()))
+        .filter((p) => (p.total24h || 0) > 0)
+        .sort((a, b) => (b.total24h || 0) - (a.total24h || 0))
+        .slice(0, 10) // Top 10 is enough for meaningful line charts
+
+      // Fetch summaries in parallel (each is small, ~50-200KB)
+      const results = await Promise.allSettled(
+        chainProtocols.map((p) =>
+          fetchDerivativesSummaryWithBreakdown(p.slug)
+            .then((summary) => ({ slug: p.slug, name: p.displayName || p.name, summary }))
+        )
+      )
+
+      if (cancelled) return
+
+      const newMap = new Map<string, DerivativesSummary>()
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          const { slug, summary } = result.value
+          newMap.set(slug, summary)
+        }
+      }
+
+      setProtocolSummaries(newMap)
+      setSeriesLoading(false)
+    }
+
+    loadSeries()
+    return () => { cancelled = true }
+  }, [overview, selectedChain])
 
   // Build list of all chains sorted by total volume
   const allChains = useMemo(() => {
@@ -223,88 +253,93 @@ export default function ChainBreakdownPage() {
     return { exchangeData: exchanges, totalChainVolume, hhi }
   }, [overview, selectedChain, hideNoToken])
 
-  // ── Historical time-series from totalDataChartBreakdown ──
-  // Extract per-chain daily volume for each exchange since 2023
+  // ── Historical time-series from individual protocol summaries ──
+  // Each protocol's summary has totalDataChart (daily [timestamp, volume])
+  // and optionally totalDataChartBreakdown for per-chain volume
   const { timeSeries, timeSeriesNames } = useMemo(() => {
-    if (!overview?.totalDataChartBreakdown) return { timeSeries: [] as ChainTimeSeriesPoint[], timeSeriesNames: [] as string[] }
+    if (protocolSummaries.size === 0) return { timeSeries: [] as ChainTimeSeriesPoint[], timeSeriesNames: [] as string[] }
 
-    const breakdownRaw = overview.totalDataChartBreakdown
     const chainLower = selectedChain.toLowerCase()
 
-    // Build a set of protocol names that operate on this chain
-    const chainProtocolNames = new Set<string>()
-    for (const protocol of overview.protocols) {
-      if (protocol.chains?.some((c) => c.toLowerCase() === chainLower)) {
-        chainProtocolNames.add(protocol.displayName || protocol.name)
-        chainProtocolNames.add(protocol.name)
-      }
-    }
+    // For each protocol, extract daily volume for the selected chain
+    // Structure: { protocolName: Map<dayKey, volume> }
+    const protocolDailyMaps: { name: string; dayMap: Map<number, number>; total: number }[] = []
 
-    // Accumulate per-exchange volume for this chain across all days
-    const exchangeTotals: Record<string, number> = {}
-    const rawPoints: { ts: number; exchanges: Record<string, number> }[] = []
+    for (const [slug, summary] of protocolSummaries) {
+      const name = summary.name || slug
+      const isSingleChain = summary.chains?.length === 1 &&
+        summary.chains[0].toLowerCase() === chainLower
+      const isOnChain = summary.chains?.some((c) => c.toLowerCase() === chainLower)
 
-    for (const [timestamp, breakdown] of breakdownRaw) {
-      if (timestamp < SINCE_2023) continue
+      if (!isOnChain) continue
 
-      const dayExchanges: Record<string, number> = {}
+      const dayMap = new Map<number, number>()
+      let total = 0
 
-      for (const [protocolName, chains] of Object.entries(breakdown)) {
-        if (!chainProtocolNames.has(protocolName)) continue
+      for (const entry of summary.totalDataChart || []) {
+        const [ts, vol] = entry
+        if (ts < SINCE_2023) continue
 
-        let chainVol = 0
-        if (typeof chains === 'number') {
-          // Single value — include only if protocol is single-chain on this chain
-          const prot = overview.protocols.find(
-            (p) => (p.displayName || p.name) === protocolName || p.name === protocolName
-          )
-          if (prot?.chains?.length === 1 && prot.chains[0].toLowerCase() === chainLower) {
-            chainVol = chains
-          }
-        } else {
-          // Chain-level breakdown: look for matching chain name (case-insensitive)
-          for (const [cName, cVol] of Object.entries(chains)) {
-            if (cName.toLowerCase() === chainLower) {
-              chainVol += Number(cVol) || 0
+        let chainVol = vol // Default: use full volume
+
+        // For multi-chain protocols, try to extract per-chain volume from breakdown
+        if (!isSingleChain && summary.totalDataChartBreakdown) {
+          // totalDataChartBreakdown is array indexed same as totalDataChart
+          // but since we filtered by SINCE_2023, we need the matching index
+          // Actually, breakdown is keyed differently — it's a separate array
+          // For per-protocol summary, breakdown keys are chain names
+          // Let's find matching breakdown entry
+          const idx = (summary.totalDataChart || []).indexOf(entry)
+          const bdEntry = summary.totalDataChartBreakdown?.[idx]
+          if (bdEntry) {
+            let found = 0
+            for (const [chainKey, subMap] of Object.entries(bdEntry)) {
+              if (chainKey.toLowerCase() === chainLower) {
+                found += typeof subMap === 'number' ? subMap : Object.values(subMap).reduce((s, v) => s + (Number(v) || 0), 0)
+              }
             }
+            if (found > 0) chainVol = found
+            else chainVol = 0 // Has breakdown but chain not present → zero
           }
         }
 
         if (chainVol > 0) {
-          dayExchanges[protocolName] = (dayExchanges[protocolName] || 0) + chainVol
-          exchangeTotals[protocolName] = (exchangeTotals[protocolName] || 0) + chainVol
+          const dayKey = Math.floor(ts / 86400) * 86400
+          dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + chainVol)
+          total += chainVol
         }
       }
 
-      rawPoints.push({ ts: timestamp * 1000, exchanges: dayExchanges })
+      if (dayMap.size > 0) {
+        protocolDailyMaps.push({ name, dayMap, total })
+      }
     }
 
-    // Pick top N exchanges by total volume across the period
-    const TOP_N = 8
-    const sortedNames = Object.entries(exchangeTotals)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, TOP_N)
-      .map(([name]) => name)
+    if (protocolDailyMaps.length === 0) return { timeSeries: [] as ChainTimeSeriesPoint[], timeSeriesNames: [] as string[] }
 
-    // Build time-series data with those top names + "Other"
-    const allNames = [...sortedNames, 'Other']
+    // Sort by total volume and pick top 8
+    protocolDailyMaps.sort((a, b) => b.total - a.total)
+    const topProtocols = protocolDailyMaps.slice(0, 8)
+    const topNames = topProtocols.map((p) => p.name)
 
-    const series: ChainTimeSeriesPoint[] = rawPoints.map(({ ts, exchanges }) => {
-      const point: ChainTimeSeriesPoint = { date: ts }
-      let topSum = 0
-      let totalDay = 0
-      for (const [name, vol] of Object.entries(exchanges)) totalDay += vol
+    // Collect all unique day keys
+    const allDays = new Set<number>()
+    for (const { dayMap } of topProtocols) {
+      for (const day of dayMap.keys()) allDays.add(day)
+    }
+    const sortedDays = [...allDays].sort((a, b) => a - b)
 
-      for (const name of sortedNames) {
-        point[name] = exchanges[name] || 0
-        topSum += point[name] as number
+    // Build time-series points
+    const series: ChainTimeSeriesPoint[] = sortedDays.map((day) => {
+      const point: ChainTimeSeriesPoint = { date: day * 1000 }
+      for (const p of topProtocols) {
+        point[p.name] = p.dayMap.get(day) || 0
       }
-      point['Other'] = Math.max(0, totalDay - topSum)
       return point
     })
 
-    return { timeSeries: series, timeSeriesNames: allNames }
-  }, [overview, selectedChain])
+    return { timeSeries: series, timeSeriesNames: topNames }
+  }, [protocolSummaries, selectedChain])
 
   // Compute % share version of time-series
   const timeSeriesPct = useMemo(() => {
