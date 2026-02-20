@@ -28,11 +28,28 @@ async function fetchJSON<T>(url: string): Promise<T> {
   return res.json()
 }
 
+// Deduplicate concurrent requests for the heavy full derivatives overview (~5-10MB).
+// Multiple dashboard functions (volume share, DEX/CEX share, HL builders, chain page)
+// all call fetchDerivativesOverview(false) independently. Without dedup, a cold cache
+// causes 4+ simultaneous upstream requests that trigger DefiLlama 429 rate limits.
+let _fullOverviewInflight: Promise<DexOverview> | null = null
+
 export async function fetchDerivativesOverview(excludeBreakdown = false): Promise<DexOverview> {
-  const params = excludeBreakdown ? '?excludeTotalDataChartBreakdown=true' : ''
-  return fetchJSON<DexOverview>(
-    `${LLAMA_BASE}/overview/derivatives${params}`
-  )
+  if (excludeBreakdown) {
+    return fetchJSON<DexOverview>(
+      `${LLAMA_BASE}/overview/derivatives?excludeTotalDataChartBreakdown=true`
+    )
+  }
+
+  // For the full (heavy) overview, coalesce concurrent requests
+  if (!_fullOverviewInflight) {
+    _fullOverviewInflight = fetchJSON<DexOverview>(
+      `${LLAMA_BASE}/overview/derivatives`
+    ).finally(() => {
+      _fullOverviewInflight = null
+    })
+  }
+  return _fullOverviewInflight
 }
 
 export async function fetchProtocols(): Promise<ProtocolInfo[]> {

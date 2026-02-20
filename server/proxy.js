@@ -1,6 +1,7 @@
 /**
  * Caching proxy middleware.
  * Proxies requests to external APIs and caches responses.
+ * Includes request coalescing to prevent thundering herd on cold cache.
  */
 
 import { cacheGet, cacheSet } from './cache.js'
@@ -56,6 +57,11 @@ function resolveTarget(reqPath) {
   return null
 }
 
+// In-flight request map for coalescing concurrent requests to the same URL.
+// Prevents thundering herd: if 4 callers request the same URL before the cache
+// is populated, only 1 upstream fetch happens and all 4 share the result.
+const inflight = new Map()
+
 export async function proxyRequest(reqPath, reqQuery) {
   const resolved = resolveTarget(reqPath)
   if (!resolved) return null
@@ -71,7 +77,13 @@ export async function proxyRequest(reqPath, reqQuery) {
     return { data: cached, fromCache: true }
   }
 
-  // Fetch from external API
+  // Request coalescing: if this URL is already being fetched, wait for it
+  if (inflight.has(cacheKey)) {
+    const data = await inflight.get(cacheKey)
+    return { data, fromCache: true }
+  }
+
+  // Build headers
   const headers = {}
   if (GECKO_KEY && resolved.target.includes('coingecko')) {
     headers['x-cg-pro-api-key'] = GECKO_KEY
@@ -83,14 +95,24 @@ export async function proxyRequest(reqPath, reqQuery) {
     headers['CG-API-KEY'] = CG_KEY
   }
 
-  const res = await fetch(externalUrl, { headers })
-  if (!res.ok) {
-    throw new Error(`Upstream ${res.status}: ${externalUrl}`)
+  // Start the upstream fetch and register it as in-flight
+  const fetchPromise = (async () => {
+    const res = await fetch(externalUrl, { headers })
+    if (!res.ok) {
+      throw new Error(`Upstream ${res.status}: ${externalUrl}`)
+    }
+    const data = await res.text()
+    const ttl = getTTL(resolved.path)
+    cacheSet(cacheKey, data, ttl)
+    return data
+  })()
+
+  inflight.set(cacheKey, fetchPromise)
+
+  try {
+    const data = await fetchPromise
+    return { data, fromCache: false }
+  } finally {
+    inflight.delete(cacheKey)
   }
-
-  const data = await res.text()
-  const ttl = getTTL(resolved.path)
-  cacheSet(cacheKey, data, ttl)
-
-  return { data, fromCache: false }
 }

@@ -139,21 +139,32 @@ export default function ChainBreakdownPage() {
         setLoading(false)
 
         // Phase 2: Full overview with breakdown for historical line charts
-        // This is pre-cached by the proxy warmup (~few MB, single request)
+        // Retry up to 3 times with exponential backoff — the proxy warmup may
+        // still be populating the cache on a fresh deploy
         setSeriesLoading(true)
-        try {
-          const fullData = await fetchDerivativesOverview(false)
-          if (!cancelled && fullData.totalDataChartBreakdown) {
-            setOverview((prev) => prev ? {
-              ...prev,
-              totalDataChartBreakdown: fullData.totalDataChartBreakdown,
-            } : fullData)
+        let gotBreakdown = false
+        for (let attempt = 0; attempt < 3 && !cancelled; attempt++) {
+          try {
+            const fullData = await fetchDerivativesOverview(false)
+            if (!cancelled && fullData.totalDataChartBreakdown) {
+              setOverview((prev) => prev ? {
+                ...prev,
+                totalDataChartBreakdown: fullData.totalDataChartBreakdown,
+              } : fullData)
+              gotBreakdown = true
+            }
+            break // success
+          } catch {
+            // Wait before retry: 5s, 10s (skip wait on last attempt)
+            if (attempt < 2 && !cancelled) {
+              await new Promise((r) => setTimeout(r, 5000 * Math.pow(2, attempt)))
+            }
           }
-        } catch {
-          // Full breakdown unavailable — snapshot charts still work
-        } finally {
-          if (!cancelled) setSeriesLoading(false)
         }
+        if (!gotBreakdown && !cancelled) {
+          console.warn('[chain-breakdown] Full breakdown unavailable after retries')
+        }
+        if (!cancelled) setSeriesLoading(false)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to fetch data')
