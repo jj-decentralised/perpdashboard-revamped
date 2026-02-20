@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ResponsiveContainer,
@@ -11,14 +11,16 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  LineChart,
+  Line,
 } from 'recharts'
 import { fetchDerivativesOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import type { DexProtocol, DexOverview } from '../types'
-import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, CHART_PALETTE } from '../utils/chartTheme'
-import { formatUSD, formatPercent, classNames, percentClass } from '../utils/format'
+import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../utils/chartTheme'
+import { formatUSD, formatPercent, classNames, percentClass, formatDateShort } from '../utils/format'
 import { LoadingSkeleton, ErrorDisplay } from '../components/LoadingSkeleton'
 
-// Extended palette for pie chart slices
+// Extended palette for pie chart slices and line series
 const PIE_COLORS = [
   '#1a1a1a',
   '#2e5e8e',
@@ -45,6 +47,12 @@ interface ChainExchangeData {
   hasToken: boolean
 }
 
+// Each day's data point for the time-series
+interface ChainTimeSeriesPoint {
+  date: number
+  [exchangeName: string]: number // raw volume or pct share
+}
+
 function protocolHasToken(slug: string): boolean {
   const s = slug?.toLowerCase() || ''
   if (SLUG_TO_GECKO_TOKEN[s]) return true
@@ -67,12 +75,14 @@ const TOP_CHAINS = [
   'Sui',
 ]
 
+// Jan 1 2023 in seconds
+const SINCE_2023 = 1672531200
+
 function getChainVolume(protocol: DexProtocol, chain: string): number {
   // Method 1: Use breakdown24h for precise per-chain volume
   if (protocol.breakdown24h && Object.keys(protocol.breakdown24h).length > 0) {
     let chainVol = 0
     for (const [key, subValues] of Object.entries(protocol.breakdown24h)) {
-      // breakdown24h keys can be chain names at top level
       if (key.toLowerCase() === chain.toLowerCase()) {
         chainVol += Object.values(subValues).reduce((sum, v) => sum + (v || 0), 0)
       }
@@ -93,12 +103,22 @@ function getChainVolume(protocol: DexProtocol, chain: string): number {
   return 0
 }
 
+function fmtAxis(v: number): string {
+  if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(1)}B`
+  if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(0)}M`
+  if (Math.abs(v) >= 1e3) return `$${(v / 1e3).toFixed(0)}K`
+  return `$${v.toFixed(0)}`
+}
+
+type SeriesView = 'usd' | 'pct'
+
 export default function ChainBreakdownPage() {
   const [overview, setOverview] = useState<DexOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedChain, setSelectedChain] = useState('Solana')
   const [hideNoToken, setHideNoToken] = useState(false)
+  const [seriesView, setSeriesView] = useState<SeriesView>('usd')
   const fetchedRef = useRef(false)
 
   useEffect(() => {
@@ -111,7 +131,8 @@ export default function ChainBreakdownPage() {
       try {
         setLoading(true)
         setError(null)
-        const data = await fetchDerivativesOverview(true)
+        // Fetch WITH breakdown for historical time-series
+        const data = await fetchDerivativesOverview(false)
         if (!cancelled) {
           setOverview(data)
           setLoading(false)
@@ -146,7 +167,7 @@ export default function ChainBreakdownPage() {
       .map(([chain]) => chain)
   }, [overview])
 
-  // Compute exchange breakdown for selected chain
+  // Compute exchange breakdown for selected chain (snapshot)
   const { exchangeData, totalChainVolume, hhi } = useMemo(() => {
     if (!overview) return { exchangeData: [], totalChainVolume: 0, hhi: 0 }
 
@@ -159,15 +180,13 @@ export default function ChainBreakdownPage() {
       if (vol <= 0) continue
 
       const hasToken = protocolHasToken(protocol.slug)
-
-      // Apply token filter
       if (hideNoToken && !hasToken) continue
 
       exchanges.push({
         name: protocol.displayName || protocol.name,
         slug: protocol.slug,
         volume: vol,
-        share: 0, // filled below
+        share: 0,
         change1d: protocol.change_1d,
         change7d: protocol.change_7d,
         chains: protocol.chains || [],
@@ -175,36 +194,144 @@ export default function ChainBreakdownPage() {
       })
     }
 
-    // Sort by volume desc
     exchanges.sort((a, b) => b.volume - a.volume)
-
     const totalChainVolume = exchanges.reduce((sum, e) => sum + e.volume, 0)
-
-    // Compute shares
     for (const ex of exchanges) {
       ex.share = totalChainVolume > 0 ? (ex.volume / totalChainVolume) * 100 : 0
     }
-
-    // Compute HHI (Herfindahl-Hirschman Index) for concentration
     const hhi = exchanges.reduce((sum, ex) => sum + ex.share ** 2, 0)
-
     return { exchangeData: exchanges, totalChainVolume, hhi }
   }, [overview, selectedChain, hideNoToken])
+
+  // ── Historical time-series from totalDataChartBreakdown ──
+  // Extract per-chain daily volume for each exchange since 2023
+  const { timeSeries, timeSeriesNames } = useMemo(() => {
+    if (!overview?.totalDataChartBreakdown) return { timeSeries: [] as ChainTimeSeriesPoint[], timeSeriesNames: [] as string[] }
+
+    const breakdownRaw = overview.totalDataChartBreakdown
+    const chainLower = selectedChain.toLowerCase()
+
+    // Build a set of protocol names that operate on this chain
+    const chainProtocolNames = new Set<string>()
+    for (const protocol of overview.protocols) {
+      if (protocol.chains?.some((c) => c.toLowerCase() === chainLower)) {
+        chainProtocolNames.add(protocol.displayName || protocol.name)
+        chainProtocolNames.add(protocol.name)
+      }
+    }
+
+    // Accumulate per-exchange volume for this chain across all days
+    const exchangeTotals: Record<string, number> = {}
+    const rawPoints: { ts: number; exchanges: Record<string, number> }[] = []
+
+    for (const [timestamp, breakdown] of breakdownRaw) {
+      if (timestamp < SINCE_2023) continue
+
+      const dayExchanges: Record<string, number> = {}
+
+      for (const [protocolName, chains] of Object.entries(breakdown)) {
+        if (!chainProtocolNames.has(protocolName)) continue
+
+        let chainVol = 0
+        if (typeof chains === 'number') {
+          // Single value — include only if protocol is single-chain on this chain
+          const prot = overview.protocols.find(
+            (p) => (p.displayName || p.name) === protocolName || p.name === protocolName
+          )
+          if (prot?.chains?.length === 1 && prot.chains[0].toLowerCase() === chainLower) {
+            chainVol = chains
+          }
+        } else {
+          // Chain-level breakdown: look for matching chain name (case-insensitive)
+          for (const [cName, cVol] of Object.entries(chains)) {
+            if (cName.toLowerCase() === chainLower) {
+              chainVol += Number(cVol) || 0
+            }
+          }
+        }
+
+        if (chainVol > 0) {
+          dayExchanges[protocolName] = (dayExchanges[protocolName] || 0) + chainVol
+          exchangeTotals[protocolName] = (exchangeTotals[protocolName] || 0) + chainVol
+        }
+      }
+
+      rawPoints.push({ ts: timestamp * 1000, exchanges: dayExchanges })
+    }
+
+    // Pick top N exchanges by total volume across the period
+    const TOP_N = 8
+    const sortedNames = Object.entries(exchangeTotals)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, TOP_N)
+      .map(([name]) => name)
+
+    // Build time-series data with those top names + "Other"
+    const allNames = [...sortedNames, 'Other']
+
+    const series: ChainTimeSeriesPoint[] = rawPoints.map(({ ts, exchanges }) => {
+      const point: ChainTimeSeriesPoint = { date: ts }
+      let topSum = 0
+      let totalDay = 0
+      for (const [name, vol] of Object.entries(exchanges)) totalDay += vol
+
+      for (const name of sortedNames) {
+        point[name] = exchanges[name] || 0
+        topSum += point[name] as number
+      }
+      point['Other'] = Math.max(0, totalDay - topSum)
+      return point
+    })
+
+    return { timeSeries: series, timeSeriesNames: allNames }
+  }, [overview, selectedChain])
+
+  // Compute % share version of time-series
+  const timeSeriesPct = useMemo(() => {
+    if (timeSeries.length === 0) return []
+    const names = timeSeriesNames.filter((n) => n !== 'date')
+
+    return timeSeries.map((point) => {
+      const newPoint: ChainTimeSeriesPoint = { date: point.date }
+      let total = 0
+      for (const n of names) total += (point[n] as number) || 0
+      for (const n of names) {
+        newPoint[n] = total > 0 ? (((point[n] as number) || 0) / total) * 100 : 0
+      }
+      return newPoint
+    })
+  }, [timeSeries, timeSeriesNames])
+
+  // CSV export — daily, all exchanges, both raw and pct
+  const downloadCSV = useCallback(() => {
+    const names = timeSeriesNames
+    const header = ['Date', ...names.map((n) => `${n} (USD)`), ...names.map((n) => `${n} (%)`)].join(',')
+
+    const rows = timeSeries.map((point, i) => {
+      const date = new Date(point.date).toISOString().split('T')[0]
+      const pctPoint = timeSeriesPct[i]
+      const usdCols = names.map((n) => ((point[n] as number) || 0).toFixed(2))
+      const pctCols = names.map((n) => ((pctPoint?.[n] as number) || 0).toFixed(2))
+      return [date, ...usdCols, ...pctCols].join(',')
+    })
+
+    const csv = header + '\n' + rows.join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `chain_breakdown_${selectedChain.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [timeSeries, timeSeriesPct, timeSeriesNames, selectedChain])
 
   // Pie chart data — top 8 + "Others"
   const pieData = useMemo(() => {
     if (exchangeData.length === 0) return []
-
     const top = exchangeData.slice(0, 8)
     const others = exchangeData.slice(8)
     const othersVolume = others.reduce((sum, e) => sum + e.volume, 0)
-
-    const slices = top.map((e) => ({
-      name: e.name,
-      value: e.volume,
-      share: e.share,
-    }))
-
+    const slices = top.map((e) => ({ name: e.name, value: e.volume, share: e.share }))
     if (othersVolume > 0) {
       slices.push({
         name: `Others (${others.length})`,
@@ -212,7 +339,6 @@ export default function ChainBreakdownPage() {
         share: (othersVolume / totalChainVolume) * 100,
       })
     }
-
     return slices
   }, [exchangeData, totalChainVolume])
 
@@ -229,12 +355,11 @@ export default function ChainBreakdownPage() {
   if (error) return <ErrorDisplay message={error} />
   if (!overview) return <ErrorDisplay message="No data available" />
 
-  // Chain selector tabs: show TOP_CHAINS that exist + others via dropdown
+  // Chain selector tabs
   const visibleChains = TOP_CHAINS.filter((c) => allChains.includes(c))
   const otherChains = allChains.filter((c) => !TOP_CHAINS.includes(c))
   const showDropdown = otherChains.length > 0 || !visibleChains.includes(selectedChain)
 
-  // Concentration label
   const concentrationLabel = hhi > 5000
     ? 'Highly concentrated'
     : hhi > 2500
@@ -242,6 +367,8 @@ export default function ChainBreakdownPage() {
       : hhi > 1500
         ? 'Moderately competitive'
         : 'Competitive'
+
+  const activeSeriesData = seriesView === 'usd' ? timeSeries : timeSeriesPct
 
   return (
     <div className="min-h-screen bg-paper">
@@ -455,12 +582,7 @@ export default function ChainBreakdownPage() {
                       tick={AXIS_STYLE}
                       tickLine={false}
                       axisLine={{ stroke: COLORS.rule }}
-                      tickFormatter={(v: number) => {
-                        if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`
-                        if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`
-                        if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`
-                        return `$${v.toFixed(0)}`
-                      }}
+                      tickFormatter={fmtAxis}
                     />
                     <YAxis
                       type="category"
@@ -503,6 +625,129 @@ export default function ChainBreakdownPage() {
                 </ResponsiveContainer>
               </div>
             </div>
+
+            {/* ── Historical Line Series ── */}
+            {activeSeriesData.length > 0 && (
+              <div className="chart-container mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
+                  <div>
+                    <h3 className="chart-title">Historical Volume by Exchange</h3>
+                    <p className="chart-subtitle">
+                      {seriesView === 'usd'
+                        ? `Daily volume per exchange on ${selectedChain} since Jan 2023`
+                        : `Daily market share (%) per exchange on ${selectedChain} since Jan 2023`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-1">
+                      {(['usd', 'pct'] as SeriesView[]).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setSeriesView(v)}
+                          className={v === seriesView
+                            ? 'px-2.5 py-1 border bg-ink text-paper border-ink font-semibold font-sans text-xs'
+                            : 'px-2.5 py-1 border bg-paper text-ink-muted border-rule hover:border-ink font-sans text-xs cursor-pointer'}
+                          type="button"
+                        >
+                          {v === 'usd' ? 'USD' : '% Share'}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={downloadCSV}
+                      className="font-sans text-[11px] text-ink-muted border border-rule px-2.5 py-1 hover:bg-paper-alt transition-colors cursor-pointer"
+                      title="Download daily data as CSV (includes both USD and % columns)"
+                    >
+                      Export CSV
+                    </button>
+                  </div>
+                </div>
+
+                <ResponsiveContainer width="100%" height={440}>
+                  <LineChart data={activeSeriesData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid vertical={false} stroke={GRID_STYLE.stroke} strokeDasharray={GRID_STYLE.strokeDasharray} />
+                    <XAxis
+                      dataKey="date"
+                      type="number"
+                      domain={['dataMin', 'dataMax']}
+                      scale="time"
+                      tickFormatter={formatDateShort}
+                      tick={AXIS_STYLE}
+                      tickLine={false}
+                      axisLine={{ stroke: COLORS.rule }}
+                      minTickGap={60}
+                    />
+                    <YAxis
+                      tickFormatter={seriesView === 'usd' ? fmtAxis : (v: number) => `${v.toFixed(0)}%`}
+                      tick={AXIS_STYLE}
+                      tickLine={false}
+                      axisLine={false}
+                      width={seriesView === 'usd' ? 62 : 42}
+                      domain={seriesView === 'pct' ? [0, 100] : undefined}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }: any) => {
+                        if (!active || !payload?.length) return null
+                        const sorted = [...payload].sort((a: any, b: any) => (b.value || 0) - (a.value || 0))
+                        return (
+                          <div style={{ ...TOOLTIP_STYLE.contentStyle, lineHeight: 1.4, maxWidth: 280 }}>
+                            <p style={TOOLTIP_STYLE.labelStyle}>
+                              {label ? formatDateShort(label) : ''}
+                            </p>
+                            {sorted.map((entry: any) => (
+                              <div
+                                key={entry.name}
+                                style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: COLORS.inkLight, padding: '1px 0' }}
+                              >
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <span style={{ display: 'inline-block', width: 10, height: 2, backgroundColor: entry.color, flexShrink: 0 }} />
+                                  {entry.name}
+                                </span>
+                                <span style={{ fontFamily: 'Consolas, monospace', fontWeight: 600 }}>
+                                  {seriesView === 'usd'
+                                    ? formatUSD(entry.value, true)
+                                    : `${(entry.value || 0).toFixed(1)}%`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }}
+                      cursor={{ stroke: COLORS.ruleDark, strokeDasharray: '3 3' }}
+                    />
+                    {timeSeriesNames.map((name, i) => (
+                      <Line
+                        key={name}
+                        type="monotone"
+                        dataKey={name}
+                        stroke={PIE_COLORS[i % PIE_COLORS.length]}
+                        strokeWidth={name === 'Other' ? 1 : 2}
+                        dot={false}
+                        animationDuration={800}
+                        connectNulls
+                        strokeDasharray={name === 'Other' ? '4 3' : undefined}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+
+                {/* Legend */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+                  {timeSeriesNames.map((name, i) => (
+                    <div key={name} className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-4 h-0.5"
+                        style={{
+                          backgroundColor: PIE_COLORS[i % PIE_COLORS.length],
+                          ...(name === 'Other' ? { borderTop: '1px dashed', borderColor: PIE_COLORS[i % PIE_COLORS.length] } : {}),
+                        }}
+                      />
+                      <span className="font-sans text-[11px] text-ink-muted">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Full rankings table */}
             <div className="section-rule-heavy">
@@ -584,7 +829,8 @@ export default function ChainBreakdownPage() {
         <footer className="border-t border-rule mt-12 pt-4 pb-8">
           <p className="font-mono text-xs text-ink-muted text-center">
             Volume breakdown uses on-chain data from DefiLlama.
-            Multi-chain exchanges show estimated per-chain volume.
+            Historical series from Jan 2023 with daily granularity.
+            Multi-chain exchanges show per-chain volume where available.
           </p>
         </footer>
       </div>
