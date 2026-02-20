@@ -12,7 +12,7 @@ import {
   YAxis,
   CartesianGrid,
 } from 'recharts'
-import { fetchDerivativesOverview } from '../services/defillama'
+import { fetchDerivativesOverview, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
 import type { DexProtocol, DexOverview } from '../types'
 import { COLORS, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, CHART_PALETTE } from '../utils/chartTheme'
 import { formatUSD, formatPercent, classNames, percentClass } from '../utils/format'
@@ -42,6 +42,15 @@ interface ChainExchangeData {
   change1d: number | null
   change7d: number | null
   chains: string[]
+  hasToken: boolean
+}
+
+function protocolHasToken(slug: string): boolean {
+  const s = slug?.toLowerCase() || ''
+  if (SLUG_TO_GECKO_TOKEN[s]) return true
+  const stripped = s.replace(/-(perps?|perpetuals?|protocol|finance|exchange|dex|swap|v\d+|derivatives?|trade|pro|omni|markets?|interface|digital|terminal|labs)$/i, '').trim()
+  if (stripped !== s && SLUG_TO_GECKO_TOKEN[stripped]) return true
+  return false
 }
 
 // Popular chains sorted by typical volume
@@ -89,6 +98,7 @@ export default function ChainBreakdownPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedChain, setSelectedChain] = useState('Solana')
+  const [hideNoToken, setHideNoToken] = useState(false)
   const fetchedRef = useRef(false)
 
   useEffect(() => {
@@ -148,6 +158,11 @@ export default function ChainBreakdownPage() {
       const vol = getChainVolume(protocol, selectedChain)
       if (vol <= 0) continue
 
+      const hasToken = protocolHasToken(protocol.slug)
+
+      // Apply token filter
+      if (hideNoToken && !hasToken) continue
+
       exchanges.push({
         name: protocol.displayName || protocol.name,
         slug: protocol.slug,
@@ -156,6 +171,7 @@ export default function ChainBreakdownPage() {
         change1d: protocol.change_1d,
         change7d: protocol.change_7d,
         chains: protocol.chains || [],
+        hasToken,
       })
     }
 
@@ -173,7 +189,7 @@ export default function ChainBreakdownPage() {
     const hhi = exchanges.reduce((sum, ex) => sum + ex.share ** 2, 0)
 
     return { exchangeData: exchanges, totalChainVolume, hhi }
-  }, [overview, selectedChain])
+  }, [overview, selectedChain, hideNoToken])
 
   // Pie chart data — top 8 + "Others"
   const pieData = useMemo(() => {
@@ -250,7 +266,7 @@ export default function ChainBreakdownPage() {
           </p>
         </div>
 
-        {/* Chain selector */}
+        {/* Chain selector + filters */}
         <div className="mb-8">
           <div className="flex flex-wrap items-center gap-1.5">
             {visibleChains.map((chain) => (
@@ -283,6 +299,18 @@ export default function ChainBreakdownPage() {
                 ))}
               </select>
             )}
+
+            <span className="mx-2 hidden sm:inline" style={{ color: COLORS.rule }}>|</span>
+
+            <label className="flex items-center gap-1.5 font-sans text-sm text-ink-muted cursor-pointer px-3 py-2 border border-rule hover:border-ink transition-colors">
+              <input
+                type="checkbox"
+                checked={hideNoToken}
+                onChange={(e) => setHideNoToken(e.target.checked)}
+                className="accent-ink"
+              />
+              Token projects only
+            </label>
           </div>
         </div>
 
@@ -512,6 +540,11 @@ export default function ChainBreakdownPage() {
                           >
                             {ex.name}
                           </Link>
+                          {ex.hasToken && (
+                            <span className="ml-1.5 font-mono text-[9px] uppercase px-1 py-0.5 border border-rule text-ink-muted">
+                              TOKEN
+                            </span>
+                          )}
                         </td>
                         <td className="text-right">{formatUSD(ex.volume, true)}</td>
                         <td className="text-right">
