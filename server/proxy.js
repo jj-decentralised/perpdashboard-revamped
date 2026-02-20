@@ -20,8 +20,10 @@ const TT_KEY = process.env.VITE_TT_API_KEY || process.env.TT_API_KEY || ''
 const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
 
 // DefiLlama: free endpoints → api.llama.fi, paywalled → pro-api.llama.fi/{KEY}
+// Pro API has /api/ prefix for main endpoints, but NOT for yields/coins/stablecoins
 const LLAMA_FREE = 'https://api.llama.fi'
-const LLAMA_PRO = LLAMA_KEY ? `https://pro-api.llama.fi/${LLAMA_KEY}` : null
+const LLAMA_PRO = LLAMA_KEY ? `https://pro-api.llama.fi/${LLAMA_KEY}/api` : null
+const LLAMA_PRO_YIELDS = LLAMA_KEY ? `https://pro-api.llama.fi/${LLAMA_KEY}/yields` : null
 
 // Paywalled DefiLlama paths — these need the Pro API key
 const LLAMA_PRO_PATHS = [
@@ -37,7 +39,7 @@ const TARGETS = {
     ? 'https://pro-api.coingecko.com/api/v3'
     : 'https://api.coingecko.com/api/v3',
   // yields/perps and emissions are entirely paywalled
-  '/api/yields': LLAMA_PRO ? `${LLAMA_PRO}/yields` : 'https://yields.llama.fi',
+  '/api/yields': LLAMA_PRO_YIELDS || 'https://yields.llama.fi',
   '/api/emissions': LLAMA_PRO || LLAMA_FREE,
   ...(TT_KEY ? { '/api/tt': 'https://api.tokenterminal.com/v2' } : {}),
   ...(CG_KEY ? { '/api/coinglass': 'https://open-api-v4.coinglass.com/api' } : {}),
