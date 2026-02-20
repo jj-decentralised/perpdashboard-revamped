@@ -119,6 +119,7 @@ export default function ChainBreakdownPage() {
   const [selectedChain, setSelectedChain] = useState('Solana')
   const [hideNoToken, setHideNoToken] = useState(false)
   const [seriesView, setSeriesView] = useState<SeriesView>('usd')
+  const [seriesLoading, setSeriesLoading] = useState(false)
   const fetchedRef = useRef(false)
 
   useEffect(() => {
@@ -131,11 +132,30 @@ export default function ChainBreakdownPage() {
       try {
         setLoading(true)
         setError(null)
-        // Fetch WITH breakdown for historical time-series
-        const data = await fetchDerivativesOverview(false)
+        // Phase 1: Fast lightweight load (no breakdown — ~200KB)
+        const data = await fetchDerivativesOverview(true)
         if (!cancelled) {
           setOverview(data)
           setLoading(false)
+        }
+
+        // Phase 2: Lazy background fetch of full breakdown for time-series (~7MB)
+        if (!cancelled) {
+          setSeriesLoading(true)
+          try {
+            const fullData = await fetchDerivativesOverview(false)
+            if (!cancelled) {
+              // Merge breakdown into existing overview
+              setOverview((prev) => prev ? {
+                ...prev,
+                totalDataChartBreakdown: fullData.totalDataChartBreakdown,
+              } : fullData)
+            }
+          } catch {
+            // Breakdown fetch failed — page still works with snapshot data
+          } finally {
+            if (!cancelled) setSeriesLoading(false)
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -627,6 +647,13 @@ export default function ChainBreakdownPage() {
             </div>
 
             {/* ── Historical Line Series ── */}
+            {seriesLoading && activeSeriesData.length === 0 && (
+              <div className="chart-container mb-8">
+                <h3 className="chart-title">Historical Volume by Exchange</h3>
+                <p className="chart-subtitle">Loading historical breakdown data...</p>
+                <div className="loading-pulse h-96" />
+              </div>
+            )}
             {activeSeriesData.length > 0 && (
               <div className="chart-container mb-8">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
