@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { LoadingSkeleton, ErrorDisplay } from '../components/LoadingSkeleton'
 import { ErrorBoundary } from '../components/ErrorBoundary'
@@ -202,6 +203,15 @@ function MarketStructureTab({ data }: { data: any }) {
         <ErrorBoundary fallbackLabel="Volume by chain">
           <VolumeByChainChart exchanges={data.enrichedExchanges} />
         </ErrorBoundary>
+        <div className="mt-4 text-right">
+          <Link
+            to="/chains"
+            className="font-sans text-sm font-semibold hover:underline"
+            style={{ color: '#2e5e8e' }}
+          >
+            Explore per-chain exchange breakdown &rarr;
+          </Link>
+        </div>
       </section>
 
     </>

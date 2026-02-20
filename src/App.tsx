@@ -4,6 +4,7 @@ import { LoadingSkeleton } from './components/LoadingSkeleton'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ExchangeProfilePage = lazy(() => import('./pages/ExchangeProfilePage'))
+const ChainBreakdownPage = lazy(() => import('./pages/ChainBreakdownPage'))
 
 function NotFoundPage() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/exchange/:slug" element={<ExchangeProfilePage />} />
+        <Route path="/chains" element={<ChainBreakdownPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
