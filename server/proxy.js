@@ -19,28 +19,15 @@ const GECKO_KEY = process.env.VITE_COINGECKO_API_KEY || process.env.COINGECKO_AP
 const TT_KEY = process.env.VITE_TT_API_KEY || process.env.TT_API_KEY || ''
 const CG_KEY = process.env.COINGLASS_API_KEY || process.env.VITE_COINGLASS_API_KEY || ''
 
-// DefiLlama: free endpoints → api.llama.fi, paywalled → pro-api.llama.fi/{KEY}
-// Pro API has /api/ prefix for main endpoints, but NOT for yields/coins/stablecoins
-const LLAMA_FREE = 'https://api.llama.fi'
-const LLAMA_PRO = LLAMA_KEY ? `https://pro-api.llama.fi/${LLAMA_KEY}/api` : null
-const LLAMA_PRO_YIELDS = LLAMA_KEY ? `https://pro-api.llama.fi/${LLAMA_KEY}/yields` : null
-
-// Paywalled DefiLlama paths — these need the Pro API key
-const LLAMA_PRO_PATHS = [
-  /^\/overview\/derivatives/,    // derivatives volume overview
-  /^\/summary\/derivatives\//,   // per-protocol derivatives summary
-  /^\/overview\/options/,        // options overview
-  /^\/summary\/options\//,       // per-protocol options summary
-]
-
+// All DefiLlama endpoints (including derivatives, emissions, yields/perps)
+// are accessible on the free API. The Pro API key is NOT needed.
 const TARGETS = {
-  '/api/llama': LLAMA_FREE,
+  '/api/llama': 'https://api.llama.fi',
   '/api/gecko': GECKO_KEY
     ? 'https://pro-api.coingecko.com/api/v3'
     : 'https://api.coingecko.com/api/v3',
-  // yields/perps and emissions are entirely paywalled
-  '/api/yields': LLAMA_PRO_YIELDS || 'https://yields.llama.fi',
-  '/api/emissions': LLAMA_PRO || LLAMA_FREE,
+  '/api/yields': 'https://yields.llama.fi',
+  '/api/emissions': 'https://api.llama.fi',
   ...(TT_KEY ? { '/api/tt': 'https://api.tokenterminal.com/v2' } : {}),
   ...(CG_KEY ? { '/api/coinglass': 'https://open-api-v4.coinglass.com/api' } : {}),
 }
@@ -76,15 +63,6 @@ function resolveTarget(reqPath) {
   for (const [prefix, target] of Object.entries(TARGETS)) {
     if (reqPath.startsWith(prefix)) {
       const stripped = reqPath.slice(prefix.length)
-
-      // For /api/llama paths: route paywalled endpoints through Pro API
-      if (prefix === '/api/llama' && LLAMA_PRO) {
-        const isPro = LLAMA_PRO_PATHS.some((p) => p.test(stripped))
-        if (isPro) {
-          return { target: LLAMA_PRO, path: stripped }
-        }
-      }
-
       return { target, path: stripped }
     }
   }

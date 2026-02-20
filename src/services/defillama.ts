@@ -274,7 +274,16 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   // Phase 1: Fetch all data sources in parallel
   // Use lightweight overview (exclude breakdown) for enrichment — breakdown fetched lazily
   const [derivativesOverview, protocols, feeOverview, cgExchanges, btcPrice, cgTickers, coinsList, oiOverview, fundingRateData, spotDexOverview, globalData] = await Promise.all([
-    fetchDerivativesOverview(true),
+    fetchDerivativesOverview(true).catch((err) => {
+      console.warn('[dashboard] derivatives overview failed, retrying in 3s...', err.message)
+      return new Promise<DexOverview>((resolve) =>
+        setTimeout(() => resolve(fetchDerivativesOverview(true)), 3000)
+      ).catch((err2) => {
+        console.warn('[dashboard] derivatives retry failed:', err2.message)
+        // Return minimal structure so dashboard can render with partial data
+        return { protocols: [], totalDataChart: [] } as unknown as DexOverview
+      })
+    }),
     fetchProtocols(),
     fetchFeeOverview(),
     fetchCGDerivativesExchanges(),
