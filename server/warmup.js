@@ -5,11 +5,12 @@
  * Key design:
  * - 15s initial delay on startup — lets rate limits from previous deploy expire
  * - URLs grouped by upstream domain to respect per-domain rate limits
- * - DefiLlama: sequential, 8s apart (~4 req/30s, well under the ~5/30s limit)
+ * - DefiLlama split into two phases to stay under rate limits:
+ *   Phase 1: 6 critical lightweight endpoints (8s apart, ~48s total)
+ *   Phase 2: heavy full endpoints after 45s cooldown (lazy-loaded by clients)
  * - CoinGecko, CoinGlass: sequential with shorter delays
  * - Different domain groups run in parallel
- * - Two-pass: pass 1 tries all, pass 2 retries failures after 65s cooldown
- *   (DefiLlama rate limit window is >35s based on production logs)
+ * - Each phase has two-pass retry: pass 2 retries failures after 65s cooldown
  */
 
 import { proxyRequest } from './proxy.js'
@@ -17,22 +18,27 @@ import { proxyRequest } from './proxy.js'
 const REFRESH_INTERVAL = 5 * 60 * 1000 // 5 minutes
 const INITIAL_DELAY = 15_000 // 15s — let previous deploy's rate limits expire
 const LLAMA_DELAY = 8_000 // 8s between DefiLlama requests
+const DEFERRED_WAIT = 45_000 // 45s — cooldown before heavy endpoints
 const PASS2_WAIT = 65_000 // 65s — DefiLlama rate limit window is >35s
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// ── DefiLlama FREE endpoints (api.llama.fi + yields.llama.fi) ──
-// All these return 200 on the free API. Ordered: critical first, heavy last.
-const LLAMA_URLS = [
-  // Critical for dashboard rendering
+// ── Phase 1: Critical lightweight endpoints (needed for dashboard render) ──
+// 6 requests at 8s = 48s — stays well under DefiLlama's rate limit
+const LLAMA_CRITICAL = [
   '/api/llama/overview/derivatives?excludeTotalDataChartBreakdown=true',
   '/api/llama/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true',
   '/api/llama/overview/open-interest?excludeTotalDataChartBreakdown=true',
   '/api/llama/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true',
   '/api/llama/protocols',
   '/api/yields/perps',
+]
+
+// ── Phase 2: Heavy endpoints (5-15MB each, lazy-loaded by charts) ──
+// These include chain/protocol breakdown data for volume share, DEX/CEX, HL builders.
+// Warmed in a separate phase after rate limit cooldown.
+const LLAMA_DEFERRED = [
   '/api/llama/overview/dexs',
-  // Heavy endpoint last — chain breakdown line charts
   '/api/llama/overview/derivatives',
 ]
 
@@ -133,17 +139,26 @@ export async function warmupCache(isInitial = false) {
   console.log('[warmup] Pre-warming cache...')
   const start = Date.now()
 
-  // Warm all domain groups in parallel — they don't share rate limits
-  // Note: LLAMA_PRO_URLS share rate limits with LLAMA_URLS, so they run sequentially after
-  const allLlamaUrls = [...LLAMA_URLS, ...LLAMA_PRO_URLS]
+  // Phase 1: Critical lightweight endpoints + non-DefiLlama groups in parallel
+  // 6 DefiLlama requests at 8s = 48s — stays under rate limit
   if (LLAMA_PRO_URLS.length > 0) {
     console.log(`  [warmup] DefiLlama Pro key detected — will also warm ${LLAMA_PRO_URLS.length} paywalled endpoint(s)`)
   }
   await Promise.all([
-    warmDomainGroup(allLlamaUrls, 'DefiLlama', LLAMA_DELAY),
+    warmDomainGroup(LLAMA_CRITICAL, 'DefiLlama (critical)', LLAMA_DELAY),
     warmDomainGroup(GECKO_URLS, 'CoinGecko', 1000),
     warmDomainGroup(COINGLASS_URLS, 'CoinGlass', 500),
   ])
+
+  // Phase 2: Heavy + Pro endpoints after rate limit cooldown
+  // These are lazy-loaded by charts, not needed for initial dashboard render
+  const deferredUrls = [...LLAMA_DEFERRED, ...LLAMA_PRO_URLS]
+  if (deferredUrls.length > 0) {
+    const waitSec = Math.round(DEFERRED_WAIT / 1000)
+    console.log(`  [warmup] Waiting ${waitSec}s before heavy/pro endpoints...`)
+    await sleep(DEFERRED_WAIT)
+    await warmDomainGroup(deferredUrls, 'DefiLlama (deferred)', LLAMA_DELAY)
+  }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1)
   console.log(`[warmup] Done in ${elapsed}s`)

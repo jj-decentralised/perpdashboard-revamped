@@ -940,7 +940,7 @@ const TREASURY_SLUGS = new Set([
   'mux-protocol', 'rabbitx', 'bluefin',
 ])
 
-function getBaseTreasurySlug(slug: string): string | null {
+export function getBaseTreasurySlug(slug: string): string | null {
   const lower = slug?.toLowerCase() || ''
   if (TREASURY_SLUGS.has(lower)) return lower
   // Strip perp-specific suffixes to find the base protocol

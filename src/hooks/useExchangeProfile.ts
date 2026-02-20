@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ExchangeProfileData, TokenInfo, HistoricalPEPoint, QuarterlyData, TreasuryInfo, ComparableExchange, HoldersRevenueData, MarketSharePoint, BuilderVolumeData } from '../types/profile'
 import type { HistoricalDataPoint, EnrichedExchange } from '../types'
-import { fetchDerivativesSummary, fetchExchangeVolumeFromOverview, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, SLUG_TO_GECKO_TOKEN } from '../services/defillama'
+import { fetchDerivativesSummary, fetchExchangeVolumeFromOverview, fetchFeeSummary, fetchRevenueSummary, fetchTreasury, fetchHoldersRevenueSummary, fetchDerivativesOverview, fetchFeeOverview, fetchHLBuilderVolume, SLUG_TO_GECKO_TOKEN, getBaseTreasurySlug } from '../services/defillama'
 import { fetchCGExchangeDetail, fetchCGDerivativesExchanges, fetchCoinMarketChart, fetchCoinDetail, fetchCachedCoinsList, fetchCoinMarkets, fetchBTCPrice } from '../services/coingecko'
 import type { CoinListEntry } from '../services/coingecko'
 import { buildCGExchangeMap, matchCGExchange } from '../utils/merge'
@@ -360,12 +360,13 @@ export function useExchangeProfile(
         // Phase 1: Core data (parallel)
         // Use lightweight derivatives overview (excludeBreakdown) for comparables — saves ~7MB vs old approach
         const isHyperliquid = slug!.toLowerCase() === 'hyperliquid-perps'
+        const treasurySlug = getBaseTreasurySlug(slug!)
         const [summary, cgDetailDirect, feeSummary, revenueSummary, treasuryData, holdersRevRaw, derivativesOverview, feeOverview, cgExchangesList, btcPrice, hlSummary] = await Promise.all([
           fetchDerivativesSummary(slug!).catch(() => null),
           cgId ? fetchCGExchangeDetail(cgId).catch(() => null) : Promise.resolve(null),
           fetchFeeSummary(slug!).catch(() => null),
           fetchRevenueSummary(slug!).catch(() => null),
-          fetchTreasury(slug!).catch(() => null),
+          treasurySlug ? fetchTreasury(treasurySlug).catch(() => null) : Promise.resolve(null),
           fetchHoldersRevenueSummary(slug!).catch(() => null),
           fetchDerivativesOverview(true).catch(() => null),
           fetchFeeOverview().catch(() => null),
