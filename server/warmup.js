@@ -30,6 +30,9 @@ const WARMUP_URLS = [
 
   // Lazy-loaded but important
   '/api/llama/overview/dexs',
+
+  // Chain breakdown page — full derivatives overview with per-protocol breakdown
+  '/api/llama/overview/derivatives',
 ]
 
 // CoinGlass endpoints (only if API key is set)
