@@ -27,6 +27,7 @@ import { ValuationChecker } from '../components/charts/ValuationChecker'
 import { PerpRevenueBreakdownChart } from '../components/charts/PerpRevenueBreakdownChart'
 import { PerpFeeShareHistoryChart } from '../components/charts/PerpFeeShareHistoryChart'
 import { TVLShareChart } from '../components/charts/TVLShareChart'
+import { HistoricalTVLChart } from '../components/charts/HistoricalTVLChart'
 import { MetricExplorer } from '../components/charts/MetricExplorer'
 import { CommandPalette } from '../components/CommandPalette'
 import { DataMethodology } from '../components/DataMethodology'
@@ -204,6 +205,12 @@ function MarketStructureTab({ data }: { data: any }) {
       <section className="section-rule">
         <ErrorBoundary fallbackLabel="TVL distribution">
           <TVLShareChart exchanges={data.enrichedExchanges} />
+        </ErrorBoundary>
+      </section>
+
+      <section className="section-rule">
+        <ErrorBoundary fallbackLabel="Historical TVL">
+          <HistoricalTVLChart exchanges={data.enrichedExchanges} />
         </ErrorBoundary>
       </section>
 
