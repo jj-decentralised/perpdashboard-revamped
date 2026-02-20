@@ -97,7 +97,7 @@ class DomainRateLimiter {
   }
 }
 
-const llamaLimiter = new DomainRateLimiter(2000)  // 1 req / 2s for all DefiLlama
+const llamaLimiter = new DomainRateLimiter(3000)  // 1 req / 3s for all DefiLlama
 const geckoLimiter = new DomainRateLimiter(500)    // 1 req / 500ms for CoinGecko
 
 function getLimiter(url) {
